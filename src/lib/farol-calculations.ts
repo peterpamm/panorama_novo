@@ -144,6 +144,33 @@ export function buscarMetaComFallback(
   return buscarMeta(metasManual, params)
 }
 
+export interface SeriePontoMensal {
+  mes: number
+  avr: number
+  meta: number | null
+}
+
+/**
+ * Série mensal (só os meses presentes no ano) de AVR realizado x meta, para
+ * alimentar o gráfico de tendência de um indicador. A meta de cada ponto usa
+ * sempre a regra do modo Mensal (AVO do próprio mês, com fallback pra tabela
+ * manual) — nunca a do modo YTD, mesmo que o Farol esteja em modo YTD.
+ */
+export function calcularSerieAnual(
+  rowsAno: DreLongoRow[],
+  metasManual: Meta[],
+  params: { unidade: string; negocio: string; ano: number; codigo: string; prefixos: string | string[] },
+): SeriePontoMensal[] {
+  const mensal = rowsAno.filter(r => r.tipo_periodo === 'MENSAL')
+  const meses = Array.from(new Set(mensal.map(r => r.mes))).sort((a, b) => a - b)
+  return meses.map(mes => {
+    const calc = normalizarParaCalculo(mensal.filter(r => r.mes === mes))
+    const avr = avrPorPrefixo(calc, params.prefixos)
+    const meta = buscarMetaComFallback(calc, metasManual, { ...params, isYtd: false, mes })
+    return { mes, avr, meta }
+  })
+}
+
 export interface EstouroZeroResultado {
   real: number
   remun: number
