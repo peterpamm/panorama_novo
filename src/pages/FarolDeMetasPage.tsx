@@ -6,6 +6,7 @@ import { useMetas } from '@/hooks/useMetas'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { MetaCard } from '@/components/farol/MetaCard'
+import { IndicadorChartCard } from '@/components/farol/IndicadorChartCard'
 import { EstouroZeroCard } from '@/components/farol/EstouroZeroCard'
 import { ReducaoCard } from '@/components/farol/ReducaoCard'
 import { FarolFilters } from '@/components/farol/FarolFilters'
@@ -120,24 +121,27 @@ export function FarolDeMetasPage() {
     if (lista.length === 0) {
       return <p className="text-sm text-muted-foreground">Nenhum indicador selecionado para esta categoria.</p>
     }
+    const indicadores = lista.map(codigo => ({ codigo, ...calcularIndicador(codigo) }))
     return (
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {lista.map(codigo => {
-          const { info, avr, meta, semaforo, impacto, serie } = calcularIndicador(codigo)
-          return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {indicadores.map(({ codigo, info, avr, meta, semaforo, impacto }) => (
             <MetaCard
               key={codigo}
-              codigo={codigo}
               nome={info.nome}
               periodoTexto={periodoTexto}
               avr={avr}
               meta={meta}
               impacto={impacto}
               semaforo={semaforo}
-              serie={serie}
             />
-          )
-        })}
+          ))}
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {indicadores.map(({ codigo, info, serie }) => (
+            <IndicadorChartCard key={codigo} codigo={codigo} nome={info.nome} serie={serie} />
+          ))}
+        </div>
       </div>
     )
   }
