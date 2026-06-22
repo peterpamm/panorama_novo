@@ -15,7 +15,7 @@ import {
 } from '@/lib/constants'
 import {
   avrPorPrefixo, buscarMetaComFallback, calcularEstouroZero, calcularImpactoFinanceiro,
-  calcularReceita, calcularReducaoCustos, calcularSemaforo, normalizarParaCalculo,
+  calcularReceita, calcularReducaoCustos, calcularSemaforo, calcularSerieAnual, normalizarParaCalculo,
 } from '@/lib/farol-calculations'
 import type { DreLongoRow } from '@/types'
 
@@ -109,7 +109,10 @@ export function FarolDeMetasPage() {
       : buscarMetaComFallback(calcBase, metas, { unidade: selUnidade, negocio: selNegocio, ano: selAno, codigo, isYtd, mes: selMes, prefixos: info.prefixos })
     const semaforo = calcularSemaforo(avr, meta, info.natureza)
     const impacto = calcularImpactoFinanceiro(avr, meta, receita, info.natureza)
-    return { info, avr, meta, semaforo, impacto }
+    const serie = selAno === null
+      ? []
+      : calcularSerieAnual(rowsAno, metas, { unidade: selUnidade, negocio: selNegocio, ano: selAno, codigo, prefixos: info.prefixos })
+    return { info, avr, meta, semaforo, impacto, serie }
   }
 
   function renderCards(codigos: string[], mostrarTodos = false) {
@@ -118,18 +121,20 @@ export function FarolDeMetasPage() {
       return <p className="text-sm text-muted-foreground">Nenhum indicador selecionado para esta categoria.</p>
     }
     return (
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {lista.map(codigo => {
-          const { info, avr, meta, semaforo, impacto } = calcularIndicador(codigo)
+          const { info, avr, meta, semaforo, impacto, serie } = calcularIndicador(codigo)
           return (
             <MetaCard
               key={codigo}
+              codigo={codigo}
               nome={info.nome}
               periodoTexto={periodoTexto}
               avr={avr}
               meta={meta}
               impacto={impacto}
               semaforo={semaforo}
+              serie={serie}
             />
           )
         })}
