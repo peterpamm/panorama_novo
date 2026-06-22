@@ -8,6 +8,7 @@ import {
   calcularReceita,
   calcularReducaoCustos,
   calcularSemaforo,
+  calcularSerieAnual,
   metaPorPrefixoAvo,
   normalizarParaCalculo,
 } from './farol-calculations'
@@ -275,5 +276,33 @@ describe('buscarMetaComFallback', () => {
       unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '999', isYtd: false, mes: 1, prefixos: '999',
     })
     expect(meta).toBeNull()
+  })
+})
+
+describe('calcularSerieAnual', () => {
+  it('monta 1 ponto por mês presente, com avr e meta (avo do mês, modo mensal)', () => {
+    const rowsAno: DreLongoRow[] = [
+      ...JAN_MENSAL,
+      linha('021', 2, 'MENSAL', -1000000, -900000, 100000, -90, -85),
+    ]
+    const serie = calcularSerieAnual(rowsAno, [], { unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '021', prefixos: '021' })
+    expect(serie.map(p => p.mes)).toEqual([1, 2])
+    expect(serie[0].avr).toBeCloseTo(77.83, 2) // janeiro, do JAN_MENSAL
+    expect(serie[0].meta).toBeNull()           // janeiro não tem avo no fixture
+    expect(serie[1].avr).toBeCloseTo(90, 2)
+    expect(serie[1].meta).toBeCloseTo(85, 2)   // fevereiro tem avo
+  })
+
+  it('ignora linhas ACUMULADO_ANO ao montar a série (só meses MENSAL)', () => {
+    const rowsAno: DreLongoRow[] = [...JAN_MENSAL, ...TOTAL_ACUMULADO]
+    const serie = calcularSerieAnual(rowsAno, [], { unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '021', prefixos: '021' })
+    expect(serie.map(p => p.mes)).toEqual([1])
+  })
+
+  it('cai para a meta manual (mes=0) quando o mês não tem avo', () => {
+    const rowsAno: DreLongoRow[] = [linha('021', 3, 'MENSAL', -1000000, -800000, 200000, -80)]
+    const metasManuais: Meta[] = [{ unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '021', mes: 0, meta_avr: 70 }]
+    const serie = calcularSerieAnual(rowsAno, metasManuais, { unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '021', prefixos: '021' })
+    expect(serie[0].meta).toBe(70)
   })
 })

@@ -1,6 +1,7 @@
 import { Card } from '@/components/ui/card'
 import { cn, formatCurrencyCompact, formatPercent, formatPercentSigned } from '@/lib/utils'
-import type { Semaforo } from '@/lib/farol-calculations'
+import type { Semaforo, SeriePontoMensal } from '@/lib/farol-calculations'
+import { IndicadorChart } from '@/components/farol/IndicadorChart'
 
 const BORDA: Record<Semaforo['corClasse'], string> = {
   positivo: 'border-l-farol-positivo',
@@ -21,9 +22,11 @@ interface MetaCardProps {
   meta: number | null
   impacto: number
   semaforo: Semaforo
+  serie: SeriePontoMensal[]
+  codigo: string
 }
 
-export function MetaCard({ nome, periodoTexto, avr, meta, impacto, semaforo }: MetaCardProps) {
+export function MetaCard({ nome, periodoTexto, avr, meta, impacto, semaforo, serie, codigo }: MetaCardProps) {
   const corImpacto = meta === null ? 'semCor' : impacto >= 0 ? 'positivo' : 'negativo'
 
   return (
@@ -45,6 +48,9 @@ export function MetaCard({ nome, periodoTexto, avr, meta, impacto, semaforo }: M
         <span className={cn('font-medium', TEXTO[semaforo.corClasse])}>
           {semaforo.delta === null ? 'N/A' : formatPercentSigned(semaforo.delta)}
         </span>
+      </div>
+      <div className="-mx-1 mt-2 border-t pt-1">
+        <IndicadorChart serie={serie} gradientId={`grad-${codigo}`} />
       </div>
     </Card>
   )
