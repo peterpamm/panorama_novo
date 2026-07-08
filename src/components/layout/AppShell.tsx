@@ -1,12 +1,22 @@
+import { useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
+import { useTheme } from '@/hooks/useTheme'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 const PAGE_TITLES: Record<string, string> = {
-  '/':           'Farol de Metas',
-  '/metas':      'Metas',
-  '/importacao': 'Importação de DRE',
-  '/admin':      'Administração',
+  '/':              'Farol de Metas',
+  '/analise-conta': 'Análise por Conta',
+  '/ranking':       'Ranking',
+  '/painel-perdas': 'Painel de Perdas',
+  '/metas':         'Metas',
+  '/importacao':    'Importação de DRE',
+  '/admin':         'Administração',
+}
+
+function getSidebarDefault(): boolean {
+  return localStorage.getItem('pf-sidebar') !== 'closed'
 }
 
 export function AppShell() {
@@ -14,15 +24,29 @@ export function AppShell() {
   const basePath = '/' + (pathname.split('/')[1] ?? '')
   const title = PAGE_TITLES[basePath] ?? 'Panorama Financeiro'
 
+  const { isDark, toggleTheme } = useTheme()
+
+  const [sidebarOpen, setSidebarOpen] = useState(getSidebarDefault)
+
+  function handleToggleSidebar() {
+    setSidebarOpen(prev => {
+      const next = !prev
+      localStorage.setItem('pf-sidebar', next ? 'open' : 'closed')
+      return next
+    })
+  }
+
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Header title={title} />
-        <main className="flex-1 overflow-auto p-6">
-          <Outlet />
-        </main>
+    <TooltipProvider>
+      <div className="flex h-screen overflow-hidden bg-background">
+        <Sidebar open={sidebarOpen} onToggle={handleToggleSidebar} />
+        <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+          <Header title={title} isDark={isDark} onToggleTheme={toggleTheme} />
+          <main className="flex-1 overflow-auto p-6">
+            <Outlet />
+          </main>
+        </div>
       </div>
-    </div>
+    </TooltipProvider>
   )
 }

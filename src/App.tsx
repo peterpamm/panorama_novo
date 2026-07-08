@@ -4,9 +4,12 @@ import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/pages/LoginPage'
 import { FarolDeMetasPage } from '@/pages/FarolDeMetasPage'
+import { AnalisePorContaPage } from '@/pages/AnalisePorContaPage'
+import { RankingPage } from '@/pages/RankingPage'
 import { MetasPage } from '@/pages/MetasPage'
 import { ImportacaoDrePage } from '@/pages/ImportacaoDrePage'
 import { AdministracaoPage } from '@/pages/AdministracaoPage'
+import { PainelPerdasPage } from '@/pages/PainelPerdasPage'
 
 export default function App() {
   return (
@@ -23,6 +26,9 @@ export default function App() {
             }
           >
             <Route index element={<FarolDeMetasPage />} />
+            <Route path="analise-conta" element={<AnalisePorContaPage />} />
+            <Route path="ranking" element={<RankingPage />} />
+            <Route path="painel-perdas" element={<PainelPerdasPage />} />
             <Route
               path="metas"
               element={

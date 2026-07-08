@@ -24,25 +24,38 @@ interface ReducaoCardProps {
   nome: string
   periodoTexto: string
   resultado: ReducaoCustosResultado
+  /** Ano anterior sem nenhum ajuste (DRE bruto importado) — só é exibido quando difere de `resultado.realAnterior` (ex: AMBEV com unidades novas, ou a própria unidade nova). */
+  realAnteriorBruto?: number
 }
 
-export function ReducaoCard({ nome, periodoTexto, resultado }: ReducaoCardProps) {
+export function ReducaoCard({ nome, periodoTexto, resultado, realAnteriorBruto }: ReducaoCardProps) {
+  const mostrarBruto = realAnteriorBruto !== undefined && Math.round(realAnteriorBruto) !== Math.round(resultado.realAnterior)
+
   return (
     <Card className={cn('border-l-4 p-4', BORDA[resultado.corClasse])}>
-      <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
         {nome}
-        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[0.65rem] font-medium text-gray-500">
+        <span className="rounded-full bg-muted px-2 py-0.5 text-[0.65rem] font-medium text-muted-foreground">
           {periodoTexto}
         </span>
       </div>
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-2xl font-bold text-gray-900">{formatCurrencyCompact(resultado.realAtual)}</span>
+        <span className="text-2xl font-bold text-foreground">{formatCurrencyCompact(resultado.realAtual)}</span>
         <span className={cn('text-lg font-semibold', TEXTO[resultado.corClasse])}>
           {formatPercentSigned(resultado.variacaoPct, 1)}
         </span>
       </div>
-      <div className="mt-3 flex justify-between border-t pt-3 text-sm text-gray-500">
-        <span>Ano ant: {formatCurrencyCompact(resultado.realAnterior)}</span>
+      <div className="mt-3 flex items-start justify-between border-t pt-3 text-sm text-muted-foreground">
+        <div className="space-y-0.5">
+          {mostrarBruto ? (
+            <>
+              <div>Ano ant. (DRE): {formatCurrencyCompact(realAnteriorBruto)}</div>
+              <div>Ano ant. (ajustado): {formatCurrencyCompact(resultado.realAnterior)}</div>
+            </>
+          ) : (
+            <div>Ano ant: {formatCurrencyCompact(resultado.realAnterior)}</div>
+          )}
+        </div>
         <span>Meta (-15%): {formatCurrencyCompact(resultado.metaValor)}</span>
       </div>
       <div className={cn('mt-1 text-xs font-medium', TEXTO[resultado.corClasse])}>

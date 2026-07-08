@@ -35,6 +35,17 @@ export const PACOTES_ADM       = ['159', '190', '217', '218']
 
 /** Código da conta "Receita Líquida Operacional", usado como base de todo cálculo de % de faturamento e impacto financeiro. */
 export const CONTA_RECEITA = '002'
+export const NOME_RECEITA = 'Receita Líquida Operacional'
+
+/**
+ * Indicadores das abas Performance e Custos da página Ranking, espelhando
+ * 1:1 as listas hardcoded de dashboard/pages/03_Ranking.py (linha ~237) do
+ * Panorama Financeiro original. Cada código já existe em `PACOTES` (reaproveitado
+ * pra natureza/prefixos) — mantido como lista separada porque é um recorte
+ * diferente de PACOTES_RESUMO (usado no Farol).
+ */
+export const RANKING_PERFORMANCE = ['232', '275']
+export const RANKING_CUSTOS = ['900', '021', '158', '113', '157', '074', '075']
 
 /**
  * Contas cujo AVR (%) do GInfo NÃO é invertido ao normalizar (mantém o sinal
@@ -64,3 +75,18 @@ export const REDUCAO_CUSTOS_CARDS = [
   { nome: 'Despesas Frota Leve', contas: ['217'] },
   { nome: 'Despesas com Viagem', contas: ['147', '192'] },
 ]
+
+/**
+ * Faixas numéricas "Pacote DRE" da aba Abertura de Contas, espelhando 1:1 o
+ * dict PACOTES de dashboard/pages/04_Analise_por_Conta.py (linha ~264) do
+ * Panorama Financeiro original. Usado só nessa aba (não confundir com
+ * PACOTES, os indicadores do Farol de Metas).
+ */
+export const PACOTES_DRE: Record<string, [number, number]> = {
+  'Receita': [1, 20],
+  'Custo Operacional Geral': [21, 32],
+  'Pacote de Gente Operacional': [33, 112],
+  'Frota': [113, 156],
+  'Despesa Administrativa': [157, 227],
+  'Contas Finais do DRE': [228, 282],
+}

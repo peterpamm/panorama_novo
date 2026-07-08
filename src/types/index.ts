@@ -52,10 +52,48 @@ export interface Meta {
   meta_avr: number
 }
 
+/** Meta de Perdas — só por unidade + ano (sempre consolidado, sem quebra mensal), base do futuro Painel de Perdas. */
+export interface MetaPerdas {
+  id?: string
+  unidade: string
+  ano: number
+  /** % de perdas sobre o faturamento, negativo (ex: -2.42). */
+  meta_pct: number
+  /** Meta financeira anual em R$, negativo. */
+  meta_anual: number
+}
+
 export interface Unidade {
   id: string
   nome: string
   codigo: string
+  /** Nome completo usado pelo GInfo no arquivo de download (ex: "FOZ_DO_IGUACU"), pra reconhecimento automático na importação em massa. */
+  nome_ginfo: string | null
+  /** Data (YYYY-MM-DD) em que a unidade começou a operar — null se já existia antes de qualquer dado importado. Usado pra ajustar a meta de Redução de Custos em anos em que a unidade só tem histórico parcial. */
+  data_entrada: string | null
+}
+
+/** Alteração retroativa detectada num mês já encerrado ao reimportar uma unidade/negócio/ano (espelha importacoes_alteracoes). */
+export interface AlteracaoRetroativa {
+  id?: string
+  importacao_id: string
+  unidade: string
+  negocio: string
+  ano: number
+  conta_codigo: string
+  campo: string
+  valor_antigo: number | null
+  valor_novo: number | null
+}
+
+/** Registro de Indisponibilidade ou Devolução no Painel de Perdas (fonte AUX — não vem da DRE). */
+export interface PainelPerdasAux {
+  id?: string
+  unidade: string
+  ano: number
+  mes: number
+  indicador: 'indisponibilidade' | 'devolucao'
+  valor: number
 }
 
 export interface Negocio {

@@ -30,7 +30,7 @@ export function normalizarParaCalculo(rows: DreLongoRow[]): DreCalculoRow[] {
   }))
 }
 
-function somaReal(rows: DreCalculoRow[], prefixos: string[]): number {
+export function somaReal(rows: DreCalculoRow[], prefixos: string[]): number {
   return rows
     .filter(r => startsWithAny(r.conta_codigo, prefixos))
     .reduce((acc, r) => acc + r.real, 0)
@@ -125,9 +125,13 @@ export function metaPorPrefixoAvo(rows: DreCalculoRow[], prefixos: string | stri
 }
 
 /**
- * Meta do pacote: no modo Mensal, prioriza o AVO do próprio mês importado
- * (meta mensal real, vinda do GInfo), caindo para a tabela `metas` quando o
- * período não tem AVO. No modo YTD, usa sempre a meta cadastrada manualmente
+ * Meta do pacote: no modo Mensal de anos >=2026 (regime novo, com meta por
+ * mês), prioriza o AVO do próprio mês importado (meta mensal real, vinda do
+ * GInfo), caindo para a tabela `metas` quando o período não tem AVO. Em anos
+ * anteriores a 2026 não existia meta mensal — só a anual — então o AVO
+ * daquele período (quando presente) é ignorado de propósito, e a busca usa
+ * sempre a tabela `metas` (que por sua vez, via `buscarMeta`, já resolve pra
+ * mes=0 nesse caso). No modo YTD, idem: sempre a meta cadastrada manualmente
  * (mes=0, "Anual") — o total_avo da view é só o orçado acumulado até o
  * último mês importado, não a meta fixa do ano inteiro, então não serve como
  * substituto da meta anual.
@@ -137,7 +141,7 @@ export function buscarMetaComFallback(
   metasManual: Meta[],
   params: { unidade: string; negocio: string; ano: number; codigo: string; isYtd: boolean; mes: number; prefixos: string | string[] },
 ): number | null {
-  if (!params.isYtd) {
+  if (!params.isYtd && params.ano >= 2026) {
     const metaAvo = metaPorPrefixoAvo(calcRows, params.prefixos)
     if (metaAvo !== null) return metaAvo
   }
@@ -171,6 +175,66 @@ export function calcularSerieAnual(
   })
 }
 
+export interface SeriePontoCaptura {
+  mes: number
+  /** AVR do próprio mês (mesmo valor do gráfico de Acompanhamento mensal) — só nos meses já realizados. */
+  avrRealizado: number | null
+  /** Ritmo médio necessário nos meses restantes pra fechar o ano na meta — só nos meses futuros (mais o mês de transição, igual ao avrRealizado, pra a linha conectar sem buraco). */
+  avrNecessario: number | null
+  metaAnual: number | null
+}
+
+/**
+ * "Curva de captura": nos meses já realizados, mostra o AVR do próprio mês
+ * (mesmo cálculo e mesmo valor de calcularSerieAnual — não é uma média
+ * acumulada, senão os dois gráficos mostrariam números diferentes pro mesmo
+ * mês). Nos meses futuros, mostra o ritmo médio necessário pros meses
+ * restantes pra fechar o ano exatamente na meta anual (cadastro manual,
+ * mes=0):
+ *   ritmo = (meta_anual × 12 − soma do AVR mês a mês já realizado) / meses restantes
+ * Sem meta anual cadastrada, não há o que projetar — retorna só os meses
+ * já realizados (sem avrNecessario).
+ */
+export function calcularSerieCaptura(
+  rowsAno: DreLongoRow[],
+  metasManual: Meta[],
+  params: { unidade: string; negocio: string; ano: number; codigo: string; prefixos: string | string[] },
+): SeriePontoCaptura[] {
+  const mensal = rowsAno.filter(r => r.tipo_periodo === 'MENSAL')
+  const mesesRealizados = Array.from(new Set(mensal.map(r => r.mes))).sort((a, b) => a - b)
+  if (mesesRealizados.length === 0) return []
+
+  const metaAnual = buscarMeta(metasManual, {
+    unidade: params.unidade, negocio: params.negocio, ano: params.ano, codigo: params.codigo, isYtd: true, mes: 0,
+  })
+
+  const avrPorMes = new Map(mesesRealizados.map(mes => {
+    const calc = normalizarParaCalculo(mensal.filter(r => r.mes === mes))
+    return [mes, avrPorPrefixo(calc, params.prefixos)] as const
+  }))
+
+  const ultimoMes = mesesRealizados[mesesRealizados.length - 1]
+  const mesesRestantes = 12 - ultimoMes
+  const somaAvrMensal = [...avrPorMes.values()].reduce((acc, v) => acc + v, 0)
+  const ritmoNecessario = metaAnual === null || mesesRestantes <= 0
+    ? null
+    : (metaAnual * 12 - somaAvrMensal) / mesesRestantes
+
+  const pontos: SeriePontoCaptura[] = mesesRealizados.map(mes => ({
+    mes,
+    avrRealizado: avrPorMes.get(mes)!,
+    // ponto de conexão com a linha do necessário, só quando existe projeção futura
+    avrNecessario: mes === ultimoMes && ritmoNecessario !== null ? avrPorMes.get(mes)! : null,
+    metaAnual,
+  }))
+  if (ritmoNecessario !== null) {
+    for (let mes = ultimoMes + 1; mes <= 12; mes++) {
+      pontos.push({ mes, avrRealizado: null, avrNecessario: ritmoNecessario, metaAnual })
+    }
+  }
+  return pontos
+}
+
 export interface EstouroZeroResultado {
   real: number
   remun: number
@@ -195,10 +259,8 @@ export interface ReducaoCustosResultado {
   corClasse: 'positivo' | 'atencao' | 'negativo'
 }
 
-/** Redução de Custos -15%: compara o REAL (magnitude) do período atual com o mesmo período do ano anterior. */
-export function calcularReducaoCustos(rowsAtual: DreCalculoRow[], rowsAnterior: DreCalculoRow[], contas: string[]): ReducaoCustosResultado {
-  const realAtual = somaReal(rowsAtual, contas)
-  const realAnterior = somaReal(rowsAnterior, contas)
+/** Redução de Custos -15%: compara o REAL (magnitude) do período atual com o do ano anterior (já ajustado pra `data_entrada`, ver somaRealAnoAnteriorComMedia). */
+export function calcularReducaoCustos(realAtual: number, realAnterior: number): ReducaoCustosResultado {
   const variacaoPct = realAnterior !== 0 ? ((realAtual - realAnterior) / realAnterior) * 100 : 0
   const metaValor = realAnterior * 0.85
 
@@ -209,4 +271,225 @@ export function calcularReducaoCustos(rowsAtual: DreCalculoRow[], rowsAnterior: 
     return { realAtual, realAnterior, variacaoPct, metaValor, status: 'reduziu_nao_bateu', corClasse: 'atencao' }
   }
   return { realAtual, realAnterior, variacaoPct, metaValor, status: 'aumentou', corClasse: 'negativo' }
+}
+
+/** Mês (1-12) em que a unidade já estava operando, dentro do `ano` informado — `null` se a unidade nem existia nesse ano (sem base pra estimar nada). */
+export function mesEntradaNoAno(dataEntrada: string | null, ano: number): number | null {
+  if (!dataEntrada) return 1
+  const [anoEntradaStr, mesEntradaStr] = dataEntrada.split('-')
+  const anoEntrada = Number(anoEntradaStr)
+  if (anoEntrada > ano) return null
+  if (anoEntrada < ano) return 1
+  return Number(mesEntradaStr)
+}
+
+/**
+ * Soma do REAL no `ano` informado pra um conjunto de `meses`, ajustando pra
+ * `dataEntrada` da unidade: meses anteriores à entrada (unidade ainda não
+ * existia) usam a média mensal do período em que ela já operava nesse mesmo
+ * ano, em vez de ficarem sem comparação ou contarem como zero — caso de
+ * unidade que começou a operar no meio do ano anterior (ex: Petrópolis em
+ * jul/2025). Meses a partir da entrada usam o REAL de verdade, mesmo que
+ * seja zero (a comparação com `dataEntrada`, não com a presença de linha,
+ * é o que distingue "gasto real zero" de "ainda não operava") — e se algum
+ * mês dentro do período operacional não tiver linha por outro motivo
+ * (ex: import faltando), conta como 0, igual a uma soma direta normal, sem
+ * cair na média (a média só serve pra cobrir o período anterior à entrada).
+ * Sem `dataEntrada`, o comportamento é idêntico a uma soma direta de sempre.
+ * Retorna `null` quando a unidade nem existia no `ano` informado.
+ *
+ * Quando `meses` é um intervalo contínuo a partir de 1 (YTD ou ano completo) e
+ * a unidade já operava desde o início do `ano`, prefere o bloco ACUMULADO_ANO
+ * oficial no último mês do intervalo (quando existir) em vez de somar os
+ * meses individuais — evita divergir do total oficial do GInfo em anos já
+ * encerrados, que às vezes só trazem o acumulado fechado (ex: só dezembro),
+ * sem um snapshot mês a mês como o ano em andamento tem.
+ */
+export function somaRealAnoAnteriorComMedia(
+  rowsNegocio: DreLongoRow[],
+  dataEntrada: string | null,
+  ano: number,
+  contas: string[],
+  meses: number[],
+): number | null {
+  const mesEntrada = mesEntradaNoAno(dataEntrada, ano)
+  if (mesEntrada === null) return null
+
+  const mesesOrdenados = [...meses].sort((a, b) => a - b)
+  const ehIntervaloDesdeInicio = mesEntrada === 1 && mesesOrdenados[0] === 1 && mesesOrdenados.every((m, i) => m === i + 1)
+  if (ehIntervaloDesdeInicio) {
+    const ultimoMes = mesesOrdenados[mesesOrdenados.length - 1]
+    const linhaAcumulado = rowsNegocio.filter(r =>
+      r.tipo_periodo === 'ACUMULADO_ANO' && r.ano === ano && r.mes === ultimoMes && contas.some(c => r.conta_codigo.startsWith(c)),
+    )
+    if (linhaAcumulado.length > 0) return somaReal(normalizarParaCalculo(linhaAcumulado), contas)
+  }
+
+  const linhasOperacionais = rowsNegocio.filter(r =>
+    r.tipo_periodo === 'MENSAL' && r.ano === ano && r.mes >= mesEntrada && contas.some(c => r.conta_codigo.startsWith(c)),
+  )
+  const mesesComDado = Array.from(new Set(linhasOperacionais.map(r => r.mes)))
+  if (mesesComDado.length === 0) return null
+
+  const mediaMensal = somaReal(normalizarParaCalculo(linhasOperacionais), contas) / mesesComDado.length
+
+  return meses.reduce((acc, mes) => {
+    if (mes < mesEntrada) return acc + mediaMensal
+    const linhasMes = linhasOperacionais.filter(r => r.mes === mes)
+    return acc + (linhasMes.length > 0 ? somaReal(normalizarParaCalculo(linhasMes), contas) : 0)
+  }, 0)
+}
+
+/** Unidade com histórico parcial (tem `dataEntrada`) cujo incremento estimado deve ser somado ao histórico de outra unidade — caso da AMBEV (consolidado), que precisa incluir a estimativa de cada unidade que entrou no meio do ano. */
+export interface UnidadeIncremento {
+  dataEntrada: string | null
+  /** Linhas de vw_dre_longo já filtradas pra essa unidade + negócio. */
+  rows: DreLongoRow[]
+}
+
+/**
+ * Soma, pra cada unidade em `unidades`, a diferença entre o valor ajustado
+ * por `dataEntrada` (média pro período pré-entrada) e o valor bruto (sem
+ * ajuste) — ou seja, só o "extra" que a estimativa adiciona. Usado pra
+ * incrementar o histórico de uma unidade consolidadora (AMBEV) com a
+ * estimativa de cada unidade parcial que a compõe.
+ */
+export function calcularIncrementoUnidadesNovas(unidades: UnidadeIncremento[], ano: number, contas: string[], meses: number[]): number {
+  return unidades.reduce((acc, u) => {
+    const ajustado = somaRealAnoAnteriorComMedia(u.rows, u.dataEntrada, ano, contas, meses) ?? 0
+    const bruto = somaRealAnoAnteriorComMedia(u.rows, null, ano, contas, meses) ?? 0
+    return acc + (ajustado - bruto)
+  }, 0)
+}
+
+/**
+ * Acompanhamento mensal pra um card de Redução de Custos (-15% vs ano
+ * anterior): em cada mês, o REALIZADO (R$) do ano atual contra a meta do
+ * mesmo mês no ano anterior já com -15% aplicado. Reaproveita o tipo
+ * SeriePontoMensal (campo `avr` aqui carrega o realizado, não um AVR
+ * percentual) pra poder reaproveitar o mesmo gráfico IndicadorChart.
+ * `unidadesIncremento` soma a estimativa de unidades parciais (ver
+ * calcularIncrementoUnidadesNovas) — só usado quando a unidade selecionada é
+ * uma consolidadora (AMBEV); vazio não muda o comportamento.
+ */
+export function calcularSerieReducaoCustos(
+  rowsNegocio: DreLongoRow[],
+  dataEntrada: string | null,
+  ano: number,
+  contas: string[],
+  unidadesIncremento: UnidadeIncremento[] = [],
+): SeriePontoMensal[] {
+  const mensalAtual = rowsNegocio.filter(r => r.tipo_periodo === 'MENSAL' && r.ano === ano)
+  const meses = Array.from(new Set(mensalAtual.map(r => r.mes))).sort((a, b) => a - b)
+
+  return meses.map(mes => {
+    const realizadoAtual = somaReal(normalizarParaCalculo(mensalAtual.filter(r => r.mes === mes)), contas)
+    const realizadoAnterior = somaRealAnoAnteriorComMedia(rowsNegocio, dataEntrada, ano - 1, contas, [mes])
+    const incremento = calcularIncrementoUnidadesNovas(unidadesIncremento, ano - 1, contas, [mes])
+    const meta = realizadoAnterior === null ? null : (realizadoAnterior + incremento) * 0.85
+    return { mes, avr: realizadoAtual, meta }
+  })
+}
+
+const TODOS_MESES = Array.from({ length: 12 }, (_, i) => i + 1)
+
+/**
+ * Curva de captura pra um card de Redução de Custos: meta anual = REALIZADO
+ * total do ano anterior já com -15% aplicado (ajustado pra `data_entrada` e
+ * pro incremento de unidades parciais, ver somaRealAnoAnteriorComMedia e
+ * calcularIncrementoUnidadesNovas); ritmo necessário pros meses restantes
+ * pra fechar o ano dentro dessa meta. O campo `metaAnual` de cada ponto
+ * retornado carrega a MÉDIA MENSAL desse total (`/12`), não o total cheio —
+ * fica na mesma escala das outras duas linhas do gráfico (realizado e
+ * necessário, ambas por mês); o `ritmoNecessario` interno continua usando o
+ * valor anual de verdade, sem dividir por 12.
+ */
+export function calcularSerieCapturaReducaoCustos(
+  rowsNegocio: DreLongoRow[],
+  dataEntrada: string | null,
+  ano: number,
+  contas: string[],
+  unidadesIncremento: UnidadeIncremento[] = [],
+): SeriePontoCaptura[] {
+  const mensalAtual = rowsNegocio.filter(r => r.tipo_periodo === 'MENSAL' && r.ano === ano)
+  const mesesRealizados = Array.from(new Set(mensalAtual.map(r => r.mes))).sort((a, b) => a - b)
+  if (mesesRealizados.length === 0) return []
+
+  const totalAnteriorAjustado = somaRealAnoAnteriorComMedia(rowsNegocio, dataEntrada, ano - 1, contas, TODOS_MESES)
+  const incrementoAnual = calcularIncrementoUnidadesNovas(unidadesIncremento, ano - 1, contas, TODOS_MESES)
+  const metaAnual = totalAnteriorAjustado === null ? null : (totalAnteriorAjustado + incrementoAnual) * 0.85
+  const metaMensalRef = metaAnual === null ? null : metaAnual / 12
+
+  const realizadoPorMes = new Map(mesesRealizados.map(mes => {
+    const calc = normalizarParaCalculo(mensalAtual.filter(r => r.mes === mes))
+    return [mes, somaReal(calc, contas)] as const
+  }))
+
+  const ultimoMes = mesesRealizados[mesesRealizados.length - 1]
+  const mesesRestantes = 12 - ultimoMes
+  const somaRealizado = [...realizadoPorMes.values()].reduce((acc, v) => acc + v, 0)
+  const ritmoNecessario = metaAnual === null || mesesRestantes <= 0
+    ? null
+    : (metaAnual - somaRealizado) / mesesRestantes
+
+  const pontos: SeriePontoCaptura[] = mesesRealizados.map(mes => ({
+    mes,
+    avrRealizado: realizadoPorMes.get(mes)!,
+    avrNecessario: mes === ultimoMes && ritmoNecessario !== null ? realizadoPorMes.get(mes)! : null,
+    metaAnual: metaMensalRef,
+  }))
+  if (ritmoNecessario !== null) {
+    for (let mes = ultimoMes + 1; mes <= 12; mes++) {
+      pontos.push({ mes, avrRealizado: null, avrNecessario: ritmoNecessario, metaAnual: metaMensalRef })
+    }
+  }
+  return pontos
+}
+
+export interface PontoEvolucaoReducao {
+  mes: number
+  resultado: ReducaoCustosResultado
+}
+
+export interface LinhaEvolucaoReducao {
+  /** Um ponto por mês já realizado no ano (não inclui meses futuros). */
+  meses: PontoEvolucaoReducao[]
+  /** Acumulado do ano até o último mês realizado dessa própria unidade — null se não há nenhum mês realizado. */
+  anual: ReducaoCustosResultado | null
+}
+
+/**
+ * Evolução mês a mês de Redução de Custos pra uma unidade (linha da tabela
+ * "Evolução por unidade"): em cada mês já realizado, compara o REAL do ano
+ * atual com -15% do REAL do mesmo mês no ano anterior (ajustado por
+ * `dataEntrada` e, quando informado, pelo incremento de unidades parciais —
+ * usado só pra montar a linha totalizadora da AMBEV). `anual` é o mesmo
+ * cálculo acumulado até o último mês realizado.
+ */
+export function calcularEvolucaoReducaoCustos(
+  rowsUnidade: DreLongoRow[],
+  dataEntrada: string | null,
+  ano: number,
+  contas: string[],
+  unidadesIncremento: UnidadeIncremento[] = [],
+): LinhaEvolucaoReducao {
+  const mensalAtual = rowsUnidade.filter(r => r.tipo_periodo === 'MENSAL' && r.ano === ano)
+  const mesesRealizados = Array.from(new Set(mensalAtual.map(r => r.mes))).sort((a, b) => a - b)
+
+  const meses: PontoEvolucaoReducao[] = mesesRealizados.map(mes => {
+    const realAtual = somaReal(normalizarParaCalculo(mensalAtual.filter(r => r.mes === mes)), contas)
+    const incremento = calcularIncrementoUnidadesNovas(unidadesIncremento, ano - 1, contas, [mes])
+    const realAnterior = (somaRealAnoAnteriorComMedia(rowsUnidade, dataEntrada, ano - 1, contas, [mes]) ?? 0) + incremento
+    return { mes, resultado: calcularReducaoCustos(realAtual, realAnterior) }
+  })
+
+  if (mesesRealizados.length === 0) return { meses, anual: null }
+
+  const ultimoMes = mesesRealizados[mesesRealizados.length - 1]
+  const mesesAno = Array.from({ length: ultimoMes }, (_, i) => i + 1)
+  const realAtualAno = somaRealAnoAnteriorComMedia(rowsUnidade, null, ano, contas, mesesAno) ?? 0
+  const incrementoAno = calcularIncrementoUnidadesNovas(unidadesIncremento, ano - 1, contas, mesesAno)
+  const realAnteriorAno = (somaRealAnoAnteriorComMedia(rowsUnidade, dataEntrada, ano - 1, contas, mesesAno) ?? 0) + incrementoAno
+
+  return { meses, anual: calcularReducaoCustos(realAtualAno, realAnteriorAno) }
 }

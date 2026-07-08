@@ -1,8 +1,6 @@
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
-import { Checkbox } from '@/components/ui/checkbox'
-import { PACOTES } from '@/lib/constants'
 
 interface Opcao {
   value: string
@@ -19,19 +17,17 @@ interface FarolFiltersProps {
   selAno: number
   selMes: number
   isYtd: boolean
-  selectedPacotes: Set<string>
   onUnidadeChange: (v: string) => void
   onNegocioChange: (v: string) => void
   onAnoChange: (v: number) => void
   onMesChange: (v: number) => void
   onModoChange: (isYtd: boolean) => void
-  onTogglePacote: (codigo: string) => void
 }
 
 export function FarolFilters({
   unidades, negocios, anos, meses,
-  selUnidade, selNegocio, selAno, selMes, isYtd, selectedPacotes,
-  onUnidadeChange, onNegocioChange, onAnoChange, onMesChange, onModoChange, onTogglePacote,
+  selUnidade, selNegocio, selAno, selMes, isYtd,
+  onUnidadeChange, onNegocioChange, onAnoChange, onMesChange, onModoChange,
 }: FarolFiltersProps) {
   return (
     <div className="space-y-6">
@@ -88,19 +84,6 @@ export function FarolFilters({
           <Label htmlFor="modo-ytd">YTD (acumulado do ano)</Label>
         </div>
       </RadioGroup>
-
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
-        {Object.entries(PACOTES).map(([codigo, info]) => (
-          <div key={codigo} className="flex items-center gap-2">
-            <Checkbox
-              id={`pacote-${codigo}`}
-              checked={selectedPacotes.has(codigo)}
-              onCheckedChange={() => onTogglePacote(codigo)}
-            />
-            <Label htmlFor={`pacote-${codigo}`} className="text-sm font-normal">{info.nome}</Label>
-          </div>
-        ))}
-      </div>
     </div>
   )
 }

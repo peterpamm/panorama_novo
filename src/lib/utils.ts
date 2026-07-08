@@ -13,6 +13,16 @@ export function formatCurrency(value: number | null | undefined): string {
   }).format(value)
 }
 
+/** Valor monetário inteiro, sem casas decimais e sem abreviação K/M — ex: "R$ 1.234.567". */
+export function formatCurrencyInteiro(value: number | null | undefined): string {
+  if (value == null) return '—'
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    maximumFractionDigits: 0,
+  }).format(value)
+}
+
 /** Espelha formatar_valor_monetario do Python: R$ X.XK / R$ X.XM, ou inteiro com separador de milhar. */
 export function formatCurrencyCompact(value: number | null | undefined): string {
   if (value == null) return '—'
@@ -32,6 +42,12 @@ export function formatPercentSigned(value: number | null | undefined, digits = 2
   if (value == null) return '—'
   const sinal = value >= 0 ? '+' : ''
   return `${sinal}${value.toFixed(digits)}%`
+}
+
+/** Número puro no formato pt-BR (ex: "1.252.522,80" ou "-77,83"), sem moeda/% — o valor exatamente como vem da planilha. */
+export function formatNumeroPtBr(value: number | null | undefined): string {
+  if (value == null) return '—'
+  return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)
 }
 
 /** Converte número formatado em pt-BR (ex: "1.252.522,80" ou "-77,83") para number. */

@@ -28,19 +28,19 @@ export function MetaCard({ nome, periodoTexto, avr, meta, impacto, semaforo }: M
 
   return (
     <Card className={cn('border-l-4 p-4', BORDA[semaforo.corClasse])}>
-      <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
         {nome}
-        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[0.65rem] font-medium text-gray-500">
+        <span className="rounded-full bg-muted px-2 py-0.5 text-[0.65rem] font-medium text-muted-foreground">
           {periodoTexto}
         </span>
       </div>
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-2xl font-bold text-gray-900">{formatPercent(avr, 2)}</span>
+        <span className="text-2xl font-bold text-foreground">{formatPercent(avr, 2)}</span>
         <span className={cn('text-lg font-semibold', TEXTO[corImpacto])}>
           {meta === null ? 'R$ 0' : formatCurrencyCompact(impacto)}
         </span>
       </div>
-      <div className="mt-3 flex justify-between border-t pt-3 text-sm text-gray-500">
+      <div className="mt-3 flex justify-between border-t pt-3 text-sm text-muted-foreground">
         <span>Meta: {meta === null ? 'N/A' : formatPercent(meta, 2)}</span>
         <span className={cn('font-medium', TEXTO[semaforo.corClasse])}>
           {semaforo.delta === null ? 'N/A' : formatPercentSigned(semaforo.delta)}
