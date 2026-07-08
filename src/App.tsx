@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthContext'
+import { DataProvider } from '@/context/DataContext'
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/pages/LoginPage'
@@ -21,7 +22,9 @@ export default function App() {
           <Route
             element={
               <ProtectedRoute>
-                <AppShell />
+                <DataProvider>
+                  <AppShell />
+                </DataProvider>
               </ProtectedRoute>
             }
           >
