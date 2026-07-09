@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
+import { useData } from '@/context/DataContext'
 import { useUnidades } from '@/hooks/useUnidades'
 import { parseDreXlsx, type ParseDreResult } from '@/lib/dre-xlsx-parser'
 import { parseDreFilename, type DreFilenameInfo } from '@/lib/dre-filename-parser'
@@ -37,6 +38,7 @@ function unicos<T>(valores: T[]): T[] {
 export function ImportacaoDrePage() {
   const { user } = useAuth()
   const { toast } = useToast()
+  const { revalidarAposImport } = useData()
   const { unidades, loading: loadingUnidades } = useUnidades()
 
   const [stage, setStage] = useState<Stage>('idle')
@@ -205,6 +207,10 @@ export function ImportacaoDrePage() {
         totalAlteracoes += ap.alteracoes.length
         setProgresso(Math.round(((i + 1) / arquivosProcessados.length) * 100))
       }
+
+      // Atualiza a view materializada no Supabase e recarrega o cache local
+      setProgressoLabel('Atualizando cache dos dados...')
+      await revalidarAposImport()
 
       setResumo({ arquivos: arquivosProcessados.length, contas: totalContas, alteracoes: totalAlteracoes })
       setStage('done')
