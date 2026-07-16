@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { selectGlamour } from '@/components/ui/field-styles'
 import type { Conta } from '@/types'
 
 interface ContaComboboxProps {
@@ -23,11 +24,18 @@ export function ContaCombobox({ contas, value, onChange }: ContaComboboxProps) {
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-full justify-between font-normal"
+          className={cn('w-full justify-between font-normal', selectGlamour)}
         >
-          <span className="truncate">
-            {selecionada ? `${selecionada.codigo} — ${selecionada.descricao}` : 'Selecione uma conta...'}
-          </span>
+          {selecionada ? (
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="shrink-0 rounded-md bg-blue-500/10 px-1.5 py-0.5 font-mono text-xs font-semibold text-blue-600 dark:text-blue-400">
+                {selecionada.codigo}
+              </span>
+              <span className="truncate">{selecionada.descricao}</span>
+            </span>
+          ) : (
+            <span className="truncate text-muted-foreground">Selecione uma conta...</span>
+          )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>

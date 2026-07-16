@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { PillToggle } from '@/components/ui/pill-toggle'
+import { selectGlamour } from '@/components/ui/field-styles'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TableCard } from '@/components/ui/table-card'
 import { cn, formatCurrencyCompact, formatPercent } from '@/lib/utils'
 import { PACOTES_DRE } from '@/lib/constants'
 import {
@@ -28,84 +29,82 @@ interface TabelaResumoProps {
   nomesPorCodigo: Map<string, string>
 }
 
+// Cor sólida (equivalente ao início do gradiente navy) pros th sticky, que precisam
+// de fundo próprio ao rolar dentro do container com scroll.
+const stickyTh = 'sticky top-0 z-10 h-9 py-1.5 bg-[hsl(222,45%,20%)] dark:bg-[hsl(224,28%,14%)]'
+
 function TabelaResumo({ titulo, contas, nomesPorCodigo }: TabelaResumoProps) {
   return (
-    <Card>
-      <CardContent className="p-4">
-        <h4 className="mb-3 text-sm font-semibold text-foreground">{titulo}</h4>
-        {contas.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhuma conta</p>
-        ) : (
-          <div className="max-h-[368px] overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="sticky top-0 h-9 bg-card py-1.5">Conta</TableHead>
-                  <TableHead className="sticky top-0 h-9 bg-card py-1.5 text-right">Remunerado</TableHead>
-                  <TableHead className="sticky top-0 h-9 bg-card py-1.5 text-right">Realizado</TableHead>
-                  <TableHead className="sticky top-0 h-9 bg-card py-1.5 text-right">Gap</TableHead>
+    <TableCard titulo={titulo} subtitulo={`${contas.length} contas`}>
+      {contas.length === 0 ? (
+        <p className="p-6 text-center text-sm text-muted-foreground">Nenhuma conta</p>
+      ) : (
+        <div className="max-h-[368px] overflow-y-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className={stickyTh}>Conta</TableHead>
+                <TableHead className={cn(stickyTh, 'text-center')}>Remunerado</TableHead>
+                <TableHead className={cn(stickyTh, 'text-center')}>Realizado</TableHead>
+                <TableHead className={cn(stickyTh, 'text-center')}>Gap</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {contas.map(c => (
+                <TableRow key={c.codigo} className="border-gray-200/30 dark:border-gray-700/30 hover:bg-gray-50/50 dark:hover:bg-gray-700/30">
+                  <TableCell className="max-w-[180px] truncate px-3 py-1.5 text-xs font-medium">{nomesPorCodigo.get(c.codigo) ?? c.codigo}</TableCell>
+                  <TableCell className="px-3 py-1.5 text-center text-xs">{formatCurrencyCompact(c.remunerado)}</TableCell>
+                  <TableCell className="px-3 py-1.5 text-center text-xs">{formatCurrencyCompact(c.realizado)}</TableCell>
+                  <TableCell className={cn('px-3 py-1.5 text-center text-xs font-medium', TEXTO[corClasseGap(c.gap)])}>
+                    {formatCurrencyCompact(c.gap)}
+                  </TableCell>
                 </TableRow>
-              </TableHeader>
-              <TableBody>
-                {contas.map(c => (
-                  <TableRow key={c.codigo}>
-                    <TableCell className="max-w-[180px] truncate px-3 py-1.5 text-xs">{nomesPorCodigo.get(c.codigo) ?? c.codigo}</TableCell>
-                    <TableCell className="px-3 py-1.5 text-right text-xs">{formatCurrencyCompact(c.remunerado)}</TableCell>
-                    <TableCell className="px-3 py-1.5 text-right text-xs">{formatCurrencyCompact(c.realizado)}</TableCell>
-                    <TableCell className={cn('px-3 py-1.5 text-right text-xs font-medium', TEXTO[corClasseGap(c.gap)])}>
-                      {formatCurrencyCompact(c.gap)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </TableCard>
   )
 }
 
 function TabelaDetalheConta({ detalhe, nome }: { detalhe: AberturaContaDetalhe; nome: string }) {
   return (
-    <Card>
-      <CardContent className="p-4">
-        <h4 className="mb-3 truncate text-sm font-semibold text-foreground">{nome}</h4>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Mês</TableHead>
-              <TableHead className="text-right">Remunerado</TableHead>
-              <TableHead className="text-right">Realizado</TableHead>
-              <TableHead className="text-right">Gap</TableHead>
-              <TableHead className="text-right">AVR</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {detalhe.meses.map(m => (
-              <TableRow key={m.mes}>
-                <TableCell className="text-xs">{MES_ABREV[m.mes] ?? m.mes}</TableCell>
-                <TableCell className="text-right text-xs">{formatCurrencyCompact(m.remunerado)}</TableCell>
-                <TableCell className="text-right text-xs">{formatCurrencyCompact(m.realizado)}</TableCell>
-                <TableCell className={cn('text-right text-xs font-medium', TEXTO[corClasseGap(m.gap)])}>
-                  {formatCurrencyCompact(m.gap)}
-                </TableCell>
-                <TableCell className="text-right text-xs">{formatPercent(m.avr, 1)}</TableCell>
-              </TableRow>
-            ))}
-            <TableRow className="bg-muted/50 font-semibold">
-              <TableCell className="text-xs">TOTAL</TableCell>
-              <TableCell className="text-right text-xs">{formatCurrencyCompact(detalhe.total.remunerado)}</TableCell>
-              <TableCell className="text-right text-xs">{formatCurrencyCompact(detalhe.total.realizado)}</TableCell>
-              <TableCell className={cn('text-right text-xs', TEXTO[corClasseGap(detalhe.total.gap)])}>
-                {formatCurrencyCompact(detalhe.total.gap)}
+    <TableCard titulo={nome} subtitulo="Detalhamento mensal">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Mês</TableHead>
+            <TableHead className="text-center">Remunerado</TableHead>
+            <TableHead className="text-center">Realizado</TableHead>
+            <TableHead className="text-center">Gap</TableHead>
+            <TableHead className="text-center">AVR</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {detalhe.meses.map(m => (
+            <TableRow key={m.mes} className="border-gray-200/30 dark:border-gray-700/30 hover:bg-gray-50/50 dark:hover:bg-gray-700/30">
+              <TableCell className="text-xs font-medium">{MES_ABREV[m.mes] ?? m.mes}</TableCell>
+              <TableCell className="text-center text-xs">{formatCurrencyCompact(m.remunerado)}</TableCell>
+              <TableCell className="text-center text-xs">{formatCurrencyCompact(m.realizado)}</TableCell>
+              <TableCell className={cn('text-center text-xs font-medium', TEXTO[corClasseGap(m.gap)])}>
+                {formatCurrencyCompact(m.gap)}
               </TableCell>
-              <TableCell className="text-right text-xs">{formatPercent(detalhe.total.avr, 1)}</TableCell>
+              <TableCell className="text-center text-xs">{formatPercent(m.avr, 1)}</TableCell>
             </TableRow>
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+          ))}
+          <TableRow className="bg-muted/50 font-semibold">
+            <TableCell className="text-xs">TOTAL</TableCell>
+            <TableCell className="text-center text-xs">{formatCurrencyCompact(detalhe.total.remunerado)}</TableCell>
+            <TableCell className="text-center text-xs">{formatCurrencyCompact(detalhe.total.realizado)}</TableCell>
+            <TableCell className={cn('text-center text-xs', TEXTO[corClasseGap(detalhe.total.gap)])}>
+              {formatCurrencyCompact(detalhe.total.gap)}
+            </TableCell>
+            <TableCell className="text-center text-xs">{formatPercent(detalhe.total.avr, 1)}</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </TableCard>
   )
 }
 
@@ -168,7 +167,7 @@ export function AberturaContas({ rowsNegocioAno, nomesPorCodigo }: AberturaConta
         <div className="space-y-1.5">
           <Label>Pacote DRE</Label>
           <Select value={selPacote} onValueChange={setSelPacote}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger className={selectGlamour}><SelectValue /></SelectTrigger>
             <SelectContent>
               {pacotes.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
             </SelectContent>
@@ -177,23 +176,23 @@ export function AberturaContas({ rowsNegocioAno, nomesPorCodigo }: AberturaConta
 
         <div className="space-y-1.5">
           <Label>Período</Label>
-          <RadioGroup className="flex h-10 items-center gap-6" value={tipoPeriodo} onValueChange={v => setTipoPeriodo(v as 'Mensal' | 'Acumulado')}>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="Mensal" id="periodo-mensal" />
-              <Label htmlFor="periodo-mensal" className="font-normal">Mensal</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="Acumulado" id="periodo-acumulado" />
-              <Label htmlFor="periodo-acumulado" className="font-normal">Acumulado</Label>
-            </div>
-          </RadioGroup>
+          <div>
+            <PillToggle
+              opcoes={[
+                { value: 'Mensal',    label: 'Mensal'    },
+                { value: 'Acumulado', label: 'Acumulado' },
+              ] as const}
+              value={tipoPeriodo}
+              onChange={setTipoPeriodo}
+            />
+          </div>
         </div>
 
         {tipoPeriodo === 'Mensal' && (
           <div className="space-y-1.5">
             <Label>Mês</Label>
             <Select value={String(selMes ?? '')} onValueChange={v => setSelMes(Number(v))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger className={selectGlamour}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {mesesDisponiveis.map(m => <SelectItem key={m} value={String(m)}>{MES_ABREV[m] ?? m}</SelectItem>)}
               </SelectContent>

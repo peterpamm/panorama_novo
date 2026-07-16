@@ -1,4 +1,4 @@
-import { LogOut, Moon, Sun, User } from 'lucide-react'
+import { LogOut, Moon, Sun } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/button'
 import {
@@ -14,10 +14,13 @@ interface HeaderProps {
 
 export function Header({ title, isDark, onToggleTheme }: HeaderProps) {
   const { user, role, unidade, signOut } = useAuth()
+  const inicial = user?.email?.[0]?.toUpperCase() ?? '?'
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b bg-background/80 px-6 backdrop-blur-sm">
-      <h1 className="text-base font-semibold text-foreground">{title}</h1>
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200/30 bg-white/60 px-6 shadow-sm backdrop-blur-xl dark:border-white/5 dark:bg-gray-800/60">
+      <h1 className="bg-gradient-to-br from-foreground to-muted-foreground bg-clip-text text-base font-semibold text-transparent">
+        {title}
+      </h1>
 
       <div className="flex items-center gap-1">
         {/* Dark mode toggle */}
@@ -38,8 +41,8 @@ export function Header({ title, isDark, onToggleTheme }: HeaderProps) {
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="sm" className="ml-1 gap-2 text-muted-foreground hover:text-foreground">
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-primary">
-                <User className="h-3.5 w-3.5" />
+              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-500 text-[11px] font-bold text-white shadow-sm">
+                {inicial}
               </div>
               <span className="hidden text-sm sm:inline">{user?.email}</span>
             </Button>

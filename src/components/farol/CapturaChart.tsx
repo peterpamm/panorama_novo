@@ -1,4 +1,4 @@
-import { CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { SeriePontoCaptura } from '@/lib/farol-calculations'
 import type { Natureza } from '@/types'
 import { COR_AVR, COR_META, COR_NECESSARIO, MES_ABREV, PontoDot, PontoLabel, getChartColors } from '@/components/farol/chart-shared'
@@ -82,7 +82,7 @@ export function CapturaChart({ serie, natureza, nomeSerie = 'AVR Realizado', nom
     )
   }
 
-  const { grid, axis, legend } = getChartColors()
+  const { axis, legend } = getChartColors()
   const ultimoRealizadoIndex = serie.reduce((acc, p, i) => (p.avrRealizado !== null ? i : acc), -1)
   const primeiroFuturoIndex = serie.findIndex((p, i) => i > ultimoRealizadoIndex && p.avrNecessario !== null)
   const valoresRealizado = serie.map(p => ({ avr: p.avrRealizado, meta: p.metaAnual }))
@@ -92,7 +92,6 @@ export function CapturaChart({ serie, natureza, nomeSerie = 'AVR Realizado', nom
     <div className="h-[320px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={serie} margin={{ top: 28, right: 16, bottom: 0, left: 0 }}>
-          <CartesianGrid vertical={false} stroke={grid} />
           <XAxis
             dataKey="mes"
             tickFormatter={m => MES_ABREV[m] ?? m}

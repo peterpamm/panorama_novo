@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Download } from 'lucide-react'
-import { Bar, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis, BarChart as RechartsBarChart } from 'recharts'
+import { Bar, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis, BarChart as RechartsBarChart } from 'recharts'
 import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { PillToggle } from '@/components/ui/pill-toggle'
+import { selectGlamour } from '@/components/ui/field-styles'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TableCard, tableCardActionClass } from '@/components/ui/table-card'
 import { Button } from '@/components/ui/button'
 import { cn, formatCurrencyCompact } from '@/lib/utils'
 import { calcularComparativoAnual, corClasseGap, corClasseGapReal, type PontoComparativoAnual } from '@/lib/analise-conta-calculations'
-import { COR_AVR, COR_META, MES_ABREV, getChartColors } from '@/components/farol/chart-shared'
+import { COR_AVR, COR_META, GapPill, MES_ABREV, getChartColors } from '@/components/farol/chart-shared'
 import type { DreLongoRow } from '@/types'
 
 const TEXTO = { positivo: 'text-farol-positivo', negativo: 'text-farol-negativo' } as const
@@ -93,7 +95,23 @@ export function AnoVsAnoPanel({ rowsContaTodosAnos, nomeConta }: AnoVsAnoPanelPr
     [serie, metrica],
   )
 
-  const { grid, axis, legend } = getChartColors()
+  const { axis, legend, cursor } = getChartColors()
+
+  /**
+   * Pílula com a diferença do mês (anoRecente − anoAntigo) acima do par de barras.
+   * Cor segue a métrica exibida: Remunerado usa corClasseGap, Realizado usa
+   * corClasseGapReal (invertido — gastar menos que o ano anterior é verde).
+   */
+  function DiffLabel({ x, y, width, index }: { x?: number | string; y?: number | string; width?: number | string; index?: number }) {
+    if (x === undefined || y === undefined || width === undefined || index === undefined) return null
+    const p = serie[index]
+    if (!p) return null
+    const valor = metrica === 'Remunerado' ? p.gapRemun : p.gapReal
+    const positivo = (metrica === 'Remunerado' ? corClasseGap(p.gapRemun) : corClasseGapReal(p.gapReal)) === 'positivo'
+    // Centro do grupo: a barra do ano recente é a 2ª do par (barGap padrão = 4px).
+    const cx = Number(x) - 2
+    return <GapPill x={cx} y={Number(y) - 14} value={valor} positivo={positivo} />
+  }
 
   if (anosDisponiveis.length < 2 || anoAntigo === null || anoRecente === null) {
     return <p className="text-sm text-muted-foreground">Essa conta tem menos de 2 anos com dado importado — sem como comparar.</p>
@@ -105,7 +123,7 @@ export function AnoVsAnoPanel({ rowsContaTodosAnos, nomeConta }: AnoVsAnoPanelPr
         <div className="space-y-1.5">
           <Label>Ano</Label>
           <Select value={String(selAno1 ?? '')} onValueChange={v => setSelAno1(Number(v))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger className={selectGlamour}><SelectValue /></SelectTrigger>
             <SelectContent>
               {anosDisponiveis.map(a => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
             </SelectContent>
@@ -114,7 +132,7 @@ export function AnoVsAnoPanel({ rowsContaTodosAnos, nomeConta }: AnoVsAnoPanelPr
         <div className="space-y-1.5">
           <Label>Ano</Label>
           <Select value={String(selAno2 ?? '')} onValueChange={v => setSelAno2(Number(v))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectTrigger className={selectGlamour}><SelectValue /></SelectTrigger>
             <SelectContent>
               {anosDisponiveis.map(a => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
             </SelectContent>
@@ -122,16 +140,16 @@ export function AnoVsAnoPanel({ rowsContaTodosAnos, nomeConta }: AnoVsAnoPanelPr
         </div>
         <div className="space-y-1.5">
           <Label>Métrica do gráfico</Label>
-          <RadioGroup className="flex h-10 items-center gap-6" value={metrica} onValueChange={v => setMetrica(v as 'Remunerado' | 'Realizado')}>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="Remunerado" id="metrica-remunerado" />
-              <Label htmlFor="metrica-remunerado" className="font-normal">Remunerado</Label>
-            </div>
-            <div className="flex items-center gap-2">
-              <RadioGroupItem value="Realizado" id="metrica-realizado" />
-              <Label htmlFor="metrica-realizado" className="font-normal">Realizado</Label>
-            </div>
-          </RadioGroup>
+          <div>
+            <PillToggle
+              opcoes={[
+                { value: 'Remunerado', label: 'Remunerado' },
+                { value: 'Realizado',  label: 'Realizado'  },
+              ] as const}
+              value={metrica}
+              onChange={setMetrica}
+            />
+          </div>
         </div>
       </div>
 
@@ -139,75 +157,78 @@ export function AnoVsAnoPanel({ rowsContaTodosAnos, nomeConta }: AnoVsAnoPanelPr
         <CardContent className="p-4">
           <div className="h-[320px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <RechartsBarChart data={dadosGrafico} margin={{ top: 24, right: 16, bottom: 0, left: 0 }}>
-                <CartesianGrid vertical={false} stroke={grid} />
+              <RechartsBarChart data={dadosGrafico} margin={{ top: 36, right: 16, bottom: 0, left: 0 }}>
                 <XAxis dataKey="mes" tickFormatter={m => MES_ABREV[m] ?? m} tickLine={false} axisLine={false} fontSize={12} stroke={axis} />
                 <YAxis hide />
-                <Tooltip formatter={(value: number) => formatCurrencyCompact(value)} labelFormatter={m => MES_ABREV[m as number] ?? m} />
+                <Tooltip formatter={(value: number) => formatCurrencyCompact(value)} labelFormatter={m => MES_ABREV[m as number] ?? m} cursor={{ fill: cursor }} />
                 <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: 12, color: legend }} />
                 <Bar dataKey="anoAntigo" name={String(anoAntigo)} fill={COR_META} radius={[3, 3, 0, 0]} barSize={20} />
-                <Bar dataKey="anoRecente" name={String(anoRecente)} fill={COR_AVR} radius={[3, 3, 0, 0]} barSize={20} />
+                <Bar dataKey="anoRecente" name={String(anoRecente)} fill={COR_AVR} radius={[3, 3, 0, 0]} barSize={20} label={<DiffLabel />} />
               </RechartsBarChart>
             </ResponsiveContainer>
           </div>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="space-y-3 p-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground">Comparativo {anoAntigo} vs {anoRecente}</h3>
-            <Button variant="outline" size="sm" className="gap-2" onClick={() => exportarCsv(serie, total, nomeConta, anoAntigo, anoRecente)}>
-              <Download className="h-4 w-4" />
-              Exportar CSV
-            </Button>
-          </div>
-
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Mês</TableHead>
-                <TableHead className="text-right">REAL {anoAntigo}</TableHead>
-                <TableHead className="text-right">REAL {anoRecente}</TableHead>
-                <TableHead className="text-right">GAP REAL</TableHead>
-                <TableHead className="text-right">REMUN {anoAntigo}</TableHead>
-                <TableHead className="text-right">REMUN {anoRecente}</TableHead>
-                <TableHead className="text-right">GAP REMUN</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {serie.map(p => (
-                <TableRow key={p.mes}>
-                  <TableCell className="text-xs">{MES_ABREV[p.mes] ?? p.mes}</TableCell>
-                  <TableCell className="text-right text-xs">{formatCurrencyCompact(p.realA)}</TableCell>
-                  <TableCell className="text-right text-xs">{formatCurrencyCompact(p.realB)}</TableCell>
-                  <TableCell className={cn('text-right text-xs font-medium', TEXTO[corClasseGapReal(p.gapReal)])}>
-                    {formatCurrencyCompact(p.gapReal)}
-                  </TableCell>
-                  <TableCell className="text-right text-xs">{formatCurrencyCompact(p.remunA)}</TableCell>
-                  <TableCell className="text-right text-xs">{formatCurrencyCompact(p.remunB)}</TableCell>
-                  <TableCell className={cn('text-right text-xs font-medium', TEXTO[corClasseGap(p.gapRemun)])}>
-                    {formatCurrencyCompact(p.gapRemun)}
-                  </TableCell>
-                </TableRow>
-              ))}
-              <TableRow className="bg-muted/50 font-semibold">
-                <TableCell className="text-xs">TOTAL</TableCell>
-                <TableCell className="text-right text-xs">{formatCurrencyCompact(total.realA)}</TableCell>
-                <TableCell className="text-right text-xs">{formatCurrencyCompact(total.realB)}</TableCell>
-                <TableCell className={cn('text-right text-xs', TEXTO[corClasseGapReal(total.gapReal)])}>
-                  {formatCurrencyCompact(total.gapReal)}
+      <TableCard
+        titulo={`Comparativo ${anoAntigo} vs ${anoRecente}`}
+        subtitulo={nomeConta}
+        acoes={
+          <Button
+            variant="outline"
+            size="sm"
+            className={cn('gap-2', tableCardActionClass)}
+            onClick={() => exportarCsv(serie, total, nomeConta, anoAntigo, anoRecente)}
+          >
+            <Download className="h-4 w-4" />
+            Exportar CSV
+          </Button>
+        }
+      >
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Mês</TableHead>
+              <TableHead className="text-center">REAL {anoAntigo}</TableHead>
+              <TableHead className="text-center">REAL {anoRecente}</TableHead>
+              <TableHead className="text-center">GAP REAL</TableHead>
+              <TableHead className="text-center">REMUN {anoAntigo}</TableHead>
+              <TableHead className="text-center">REMUN {anoRecente}</TableHead>
+              <TableHead className="text-center">GAP REMUN</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {serie.map(p => (
+              <TableRow key={p.mes} className="border-gray-200/30 dark:border-gray-700/30 hover:bg-gray-50/50 dark:hover:bg-gray-700/30">
+                <TableCell className="text-xs font-medium">{MES_ABREV[p.mes] ?? p.mes}</TableCell>
+                <TableCell className="text-center text-xs">{formatCurrencyCompact(p.realA)}</TableCell>
+                <TableCell className="text-center text-xs">{formatCurrencyCompact(p.realB)}</TableCell>
+                <TableCell className={cn('text-center text-xs font-medium', TEXTO[corClasseGapReal(p.gapReal)])}>
+                  {formatCurrencyCompact(p.gapReal)}
                 </TableCell>
-                <TableCell className="text-right text-xs">{formatCurrencyCompact(total.remunA)}</TableCell>
-                <TableCell className="text-right text-xs">{formatCurrencyCompact(total.remunB)}</TableCell>
-                <TableCell className={cn('text-right text-xs', TEXTO[corClasseGap(total.gapRemun)])}>
-                  {formatCurrencyCompact(total.gapRemun)}
+                <TableCell className="text-center text-xs">{formatCurrencyCompact(p.remunA)}</TableCell>
+                <TableCell className="text-center text-xs">{formatCurrencyCompact(p.remunB)}</TableCell>
+                <TableCell className={cn('text-center text-xs font-medium', TEXTO[corClasseGap(p.gapRemun)])}>
+                  {formatCurrencyCompact(p.gapRemun)}
                 </TableCell>
               </TableRow>
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            ))}
+            <TableRow className="bg-muted/50 font-semibold">
+              <TableCell className="text-xs">TOTAL</TableCell>
+              <TableCell className="text-center text-xs">{formatCurrencyCompact(total.realA)}</TableCell>
+              <TableCell className="text-center text-xs">{formatCurrencyCompact(total.realB)}</TableCell>
+              <TableCell className={cn('text-center text-xs', TEXTO[corClasseGapReal(total.gapReal)])}>
+                {formatCurrencyCompact(total.gapReal)}
+              </TableCell>
+              <TableCell className="text-center text-xs">{formatCurrencyCompact(total.remunA)}</TableCell>
+              <TableCell className="text-center text-xs">{formatCurrencyCompact(total.remunB)}</TableCell>
+              <TableCell className={cn('text-center text-xs', TEXTO[corClasseGap(total.gapRemun)])}>
+                {formatCurrencyCompact(total.gapRemun)}
+              </TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </TableCard>
     </div>
   )
 }

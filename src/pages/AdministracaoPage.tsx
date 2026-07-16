@@ -20,6 +20,7 @@ function LinhaUnidade({ unidade, unidades, onAtualizado }: LinhaUnidadeProps) {
   const { toast } = useToast()
   const [nome, setNome] = useState(unidade.nome)
   const [dataEntrada, setDataEntrada] = useState(unidade.data_entrada ?? '')
+  const [apelidos, setApelidos] = useState((unidade.apelidos ?? []).join(', '))
   const [destino, setDestino] = useState('')
   const [processando, setProcessando] = useState(false)
 
@@ -34,6 +35,17 @@ function LinhaUnidade({ unidade, unidades, onAtualizado }: LinhaUnidadeProps) {
     if (dataEntrada === (unidade.data_entrada ?? '')) return
     const { error } = await supabase.from('unidades').update({ data_entrada: dataEntrada || null }).eq('codigo', unidade.codigo)
     if (error) { toast({ title: 'Erro ao salvar data de entrada', description: error.message, variant: 'destructive' }); return }
+    onAtualizado()
+  }
+
+  async function handleSalvarApelidos() {
+    const lista = apelidos
+      .split(',')
+      .map(a => a.trim().toUpperCase())
+      .filter(a => a !== '')
+    if (lista.join(', ') === (unidade.apelidos ?? []).join(', ')) return
+    const { error } = await supabase.from('unidades').update({ apelidos: lista }).eq('codigo', unidade.codigo)
+    if (error) { toast({ title: 'Erro ao salvar apelidos', description: error.message, variant: 'destructive' }); return }
     onAtualizado()
   }
 
@@ -89,6 +101,16 @@ function LinhaUnidade({ unidade, unidades, onAtualizado }: LinhaUnidadeProps) {
       <TableCell className="font-mono text-xs text-muted-foreground">{unidade.nome_ginfo ?? '—'}</TableCell>
       <TableCell>
         <Input
+          value={apelidos}
+          onChange={e => setApelidos(e.target.value)}
+          onBlur={handleSalvarApelidos}
+          placeholder="CDD ARACAJU, CD ARACAJU..."
+          className="h-8 min-w-[220px] text-xs"
+          title="Nomes alternativos vindos do BI da Ambev, separados por vírgula"
+        />
+      </TableCell>
+      <TableCell>
+        <Input
           type="date"
           value={dataEntrada}
           onChange={e => setDataEntrada(e.target.value)}
@@ -131,6 +153,8 @@ export function AdministracaoPage() {
             podem ser mescladas — os lançamentos da unidade da esquerda são movidos pra unidade escolhida em "Mesclar com" e a duplicada é removida.
             "Data de entrada" é opcional — só preencha pra unidades que começaram a operar no meio de algum ano com dado no banco (ex: 2025-07);
             isso ajusta a meta de Redução de Custos pra usar a média do período em que já operava no lugar dos meses em que ainda não existia.
+            {' '}"Apelidos (BI)" são os nomes alternativos que a unidade recebe em arquivos externos (BI da Ambev) — separe por vírgula
+            (ex: em Camaçari, <span className="font-mono text-xs">CDL CAMAÇARI, CDR BAHIA</span>); as importações de Gente usam esses apelidos pra reconhecer a unidade.
           </p>
         </CardHeader>
         <CardContent>
@@ -143,6 +167,7 @@ export function AdministracaoPage() {
                   <TableHead>Nome</TableHead>
                   <TableHead>Código</TableHead>
                   <TableHead>Nome no GInfo</TableHead>
+                  <TableHead>Apelidos (BI)</TableHead>
                   <TableHead>Data de entrada</TableHead>
                   <TableHead>Mesclar duplicada</TableHead>
                   <TableHead />

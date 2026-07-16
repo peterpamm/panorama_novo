@@ -111,6 +111,29 @@ export function buscarMeta(
 }
 
 /**
+ * Meta semestral: mes=13 na tabela `metas` = 1º semestre, mes=14 = 2º.
+ * A meta do S1 é gravada automaticamente na importação do DRE de junho
+ * (snapshot do total_avo acumulado Jan–Jun, que o arquivo de julho
+ * sobrescreveria). Fallback: meta anual (mes=0) — comparável porque ambas
+ * são % da receita.
+ */
+export function buscarMetaSemestral(
+  metas: Meta[],
+  params: { unidade: string; negocio: string; ano: number; codigo: string; semestre: 1 | 2 },
+): number | null {
+  const { unidade, negocio, ano, codigo, semestre } = params
+  const mesBusca = semestre === 1 ? 13 : 14
+  const semestral = metas.find(
+    m => m.unidade === unidade && m.negocio === negocio && m.ano === ano && m.codigo === codigo && m.mes === mesBusca,
+  )
+  if (semestral) return semestral.meta_avr
+  const anual = metas.find(
+    m => m.unidade === unidade && m.negocio === negocio && m.ano === ano && m.codigo === codigo && m.mes === 0,
+  )
+  return anual ? anual.meta_avr : null
+}
+
+/**
  * Meta derivada do AVO (% orçado por conta, já exportado pelo GInfo), para um
  * pacote (1 ou mais prefixos de conta). Soma direta dos avo das contas do
  * pacote, já no período filtrado (mensal ou ACUMULADO_ANO). Retorna null

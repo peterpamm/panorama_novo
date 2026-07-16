@@ -9,7 +9,37 @@ export function getChartColors() {
     axis:   isDark ? '#64748b' : '#94a3b8',
     legend: isDark ? '#94a3b8' : '#6b7280',
     dotStroke: isDark ? '#161d2d' : 'white',
+    /** Fundo do cursor de hover do Tooltip em gráficos de barra — sutil nos dois temas. */
+    cursor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
   }
+}
+
+/**
+ * Rótulo de gap em pílula, nos tons dos badges dos cards (emerald/red suaves),
+ * com fundo sólido pra ficar legível sobre barras. Número inteiro pt-BR, sem R$.
+ * `positivo` decide a cor (nem sempre é value >= 0 — ex: GAP REAL invertido).
+ */
+export function GapPill({ x, y, value, positivo }: { x: number; y: number; value: number; positivo: boolean }) {
+  const isDark = document.documentElement.classList.contains('dark')
+  const bg = positivo
+    ? (isDark ? '#064e3b' : '#d1fae5')   // emerald-900 / emerald-100
+    : (isDark ? '#7f1d1d' : '#fee2e2')   // red-900 / red-100
+  const fg = positivo
+    ? (isDark ? '#6ee7b7' : '#047857')   // emerald-300 / emerald-700
+    : (isDark ? '#fca5a5' : '#b91c1c')   // red-300 / red-700
+
+  const texto = Math.round(value).toLocaleString('pt-BR')
+  const largura = texto.length * 6.4 + 12
+  const altura = 17
+
+  return (
+    <g>
+      <rect x={x - largura / 2} y={y - altura / 2} width={largura} height={altura} rx={altura / 2} fill={bg} />
+      <text x={x} y={y + 3.5} textAnchor="middle" fontSize={10.5} fontWeight={600} fill={fg}>
+        {texto}
+      </text>
+    </g>
+  )
 }
 
 export const MES_ABREV: Record<number, string> = {
@@ -19,8 +49,9 @@ export const MES_ABREV: Record<number, string> = {
 
 export const COR_AVR = '#4f46e5'
 export const COR_META = '#94a3b8'
-export const COR_POSITIVO = '#16a34a'
-export const COR_NEGATIVO = '#dc2626'
+// Mesmos tons dos cards (emerald-500 / red-500, ver CORES_FAROL) — ficam bem no light e no dark.
+export const COR_POSITIVO = '#10b981'
+export const COR_NEGATIVO = '#ef4444'
 export const COR_NECESSARIO = '#f59e0b'
 
 /** Cor do ponto/rótulo conforme a meta foi batida (verde), perdida (vermelho) ou inexistente (indigo neutro). */

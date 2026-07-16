@@ -12,13 +12,13 @@ import { EstouroZeroCard } from '@/components/farol/EstouroZeroCard'
 import { ReducaoCard } from '@/components/farol/ReducaoCard'
 import { ReducaoEvolucaoTable } from '@/components/farol/ReducaoEvolucaoTable'
 import type { LinhaTabelaReducao } from '@/components/farol/ReducaoEvolucaoTable'
-import { FarolFilters } from '@/components/farol/FarolFilters'
+import { FarolFilters, type PeriodoFarol } from '@/components/farol/FarolFilters'
 import {
   PACOTES, PACOTES_RESUMO, PACOTES_GENTE, PACOTES_FROTA, PACOTES_SEGURANCA, PACOTES_ADM,
   ESTOURO_ZERO_CARDS, REDUCAO_CUSTOS_CARDS,
 } from '@/lib/constants'
 import {
-  avrPorPrefixo, buscarMetaComFallback, calcularEstouroZero, calcularEvolucaoReducaoCustos, calcularImpactoFinanceiro,
+  avrPorPrefixo, buscarMetaComFallback, buscarMetaSemestral, calcularEstouroZero, calcularEvolucaoReducaoCustos, calcularImpactoFinanceiro,
   calcularIncrementoUnidadesNovas, calcularReceita, calcularReducaoCustos, calcularSemaforo, calcularSerieAnual,
   calcularSerieCaptura, calcularSerieCapturaReducaoCustos, calcularSerieReducaoCustos, normalizarParaCalculo,
   somaReal, somaRealAnoAnteriorComMedia,
@@ -50,17 +50,10 @@ export function FarolDeMetasPage() {
     [unidadesDisponiveis, selUnidade],
   )
 
-  // Unidades com data_entrada cadastrada (entraram no meio de algum ano) — usadas pra
-  // incrementar o "ano anterior" da AMBEV (consolidado) com a média estimada dessas
-  // unidades nos meses em que ainda não existiam — tanto no card/gráficos principais
-  // quanto na linha totalizadora da tabela de evolução por unidade, abaixo.
   const unidadesComEntrada = useMemo(
     () => todasUnidades.filter(u => u.data_entrada && u.codigo !== 'AMBEV'),
     [todasUnidades],
   )
-  // Busca o DRE de todas as unidades visíveis ao usuário (RLS já restringe: admin vê
-  // todas, usuário comum só vê a própria + AMBEV) — usado pro incremento da AMBEV e
-  // pra montar a tabela de evolução por unidade.
   const { rows: rowsTodasUnidades } = useDreLongoTodasUnidades()
 
   const { rows: rowsUnidade, loading: loadingDre } = useDreLongo(selUnidade || null)
@@ -76,11 +69,6 @@ export function FarolDeMetasPage() {
 
   const rowsNegocio = useMemo(() => rowsUnidade.filter(r => r.negocio === selNegocio), [rowsUnidade, selNegocio])
 
-  // Estimativa de cada unidade parcial (data_entrada), pronta pra somar no histórico
-  // de uma consolidadora (AMBEV) — calcularIncrementoUnidadesNovas soma o "extra" de
-  // cada uma. Sempre calculado (usado pela linha totalizadora da tabela de evolução);
-  // `unidadesIncremento` só aplica isso no card/gráficos quando a unidade selecionada
-  // no filtro principal é a própria AMBEV.
   const unidadesParciais = useMemo<UnidadeIncremento[]>(() => {
     return unidadesComEntrada.map(u => ({
       dataEntrada: u.data_entrada,
@@ -89,8 +77,6 @@ export function FarolDeMetasPage() {
   }, [unidadesComEntrada, rowsTodasUnidades, selNegocio])
   const unidadesIncremento = selUnidade === 'AMBEV' ? unidadesParciais : []
 
-  // Card (Frota Leve / Despesas com Viagem) atualmente selecionado no dropdown do
-  // gráfico — a tabela de evolução por unidade abaixo acompanha a mesma seleção.
   const [cardEvolucao, setCardEvolucao] = useState(REDUCAO_CUSTOS_CARDS[0]?.nome ?? '')
 
   const anosDisponiveis = useMemo(() => unicos(rowsNegocio.map(r => r.ano)).sort((a, b) => a - b), [rowsNegocio])
@@ -114,7 +100,8 @@ export function FarolDeMetasPage() {
     setSelMes(mesesDisponiveis[mesesDisponiveis.length - 1])
   }, [mesesDisponiveis, selMes])
 
-  const [isYtd, setIsYtd] = useState(false)
+  const [periodo, setPeriodo] = useState<PeriodoFarol>('mensal')
+  const isYtd = periodo === 'ytd'
 
   const mesAcumMax = useMemo(() => {
     const acumRows = rowsAno.filter(r => r.tipo_periodo === 'ACUMULADO_ANO')
@@ -129,9 +116,20 @@ export function FarolDeMetasPage() {
     () => (mesAcumMax === null ? [] : rowsAno.filter(r => r.tipo_periodo === 'ACUMULADO_ANO' && r.mes === mesAcumMax)),
     [rowsAno, mesAcumMax],
   )
+  // 1º semestre: enquanto o acumulado do banco ainda é Jan–Jun (mesAcumMax <= 6), usa
+  // ele direto (número exato do GInfo). Depois de julho importado, reconstrói com os
+  // meses Jan–Jun (soma exata pra R$; AVR de pacote mono-prefixo vira média ponderada).
+  const dfBaseS1 = useMemo(() => {
+    if (mesAcumMax !== null && mesAcumMax <= 6) return dfBaseYtd
+    return rowsAno.filter(r => r.tipo_periodo === 'MENSAL' && r.mes <= 6)
+  }, [rowsAno, mesAcumMax, dfBaseYtd])
 
-  const dfBase = isYtd ? dfBaseYtd : dfBaseMensal
-  const periodoTexto = isYtd ? `YTD (M${mesAcumMax ?? '-'})` : `Mensal (M${selMes ?? '-'})`
+  const dfBase = periodo === 'ytd' ? dfBaseYtd : periodo === 's1' ? dfBaseS1 : dfBaseMensal
+  const periodoTexto = periodo === 'ytd'
+    ? `YTD (M${mesAcumMax ?? '-'})`
+    : periodo === 's1'
+      ? '1º Semestre'
+      : `Mensal (M${selMes ?? '-'})`
 
   const calcBase = useMemo(() => normalizarParaCalculo(dfBase), [dfBase])
   const receita = useMemo(() => calcularReceita(calcBase), [calcBase])
@@ -141,7 +139,9 @@ export function FarolDeMetasPage() {
     const avr = avrPorPrefixo(calcBase, info.prefixos)
     const meta = selAno === null || selMes === null
       ? null
-      : buscarMetaComFallback(calcBase, metas, { unidade: selUnidade, negocio: selNegocio, ano: selAno, codigo, isYtd, mes: selMes, prefixos: info.prefixos })
+      : periodo === 's1'
+        ? buscarMetaSemestral(metas, { unidade: selUnidade, negocio: selNegocio, ano: selAno, codigo, semestre: 1 })
+        : buscarMetaComFallback(calcBase, metas, { unidade: selUnidade, negocio: selNegocio, ano: selAno, codigo, isYtd, mes: selMes, prefixos: info.prefixos })
     const semaforo = calcularSemaforo(avr, meta, info.natureza)
     const impacto = calcularImpactoFinanceiro(avr, meta, receita, info.natureza)
     const serieAnual = selAno === null
@@ -159,7 +159,7 @@ export function FarolDeMetasPage() {
 
   function renderCardsGrid(indicadores: ReturnType<typeof calcularIndicador>[]) {
     if (indicadores.length === 0) {
-      return <p className="text-sm text-muted-foreground">Nenhum indicador selecionado para esta categoria.</p>
+      return <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum indicador selecionado para esta categoria.</p>
     }
     return (
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -179,10 +179,15 @@ export function FarolDeMetasPage() {
   }
 
   function rowsParaReducao(ano: number, contas: string[], mesLimite: number): DreLongoRow[] {
-    // No YTD usa o bloco ACUMULADO_ANO (TOTAL) que já vem pronto do GInfo, em vez de
-    // somar os meses individuais — igual ao resto do painel (ver dfBaseYtd acima),
-    // pra não divergir de eventuais ajustes que só aparecem no acumulado oficial.
-    const tipo = isYtd ? 'ACUMULADO_ANO' : 'MENSAL'
+    // 1º semestre com julho+ já importado: o acumulado do banco passou de junho,
+    // então reconstrói somando os meses Jan..mesLimite.
+    if (periodo === 's1' && (mesAcumMax ?? 0) > 6) {
+      return rowsNegocio.filter(r =>
+        r.tipo_periodo === 'MENSAL' && r.ano === ano && r.mes <= mesLimite
+        && contas.some(c => r.conta_codigo.startsWith(c)),
+      )
+    }
+    const tipo = periodo === 'mensal' ? 'MENSAL' : 'ACUMULADO_ANO'
     return rowsNegocio.filter(r =>
       r.tipo_periodo === tipo && r.ano === ano && r.mes === mesLimite
       && contas.some(c => r.conta_codigo.startsWith(c)),
@@ -206,9 +211,6 @@ export function FarolDeMetasPage() {
     }))
   }
 
-  // Evolução mês a mês de cada unidade (linhas da tabela abaixo do gráfico, só na aba
-  // Redução de Custos) — uma linha por unidade que o usuário tem acesso (admin: todas;
-  // usuário comum: só a própria), mais a AMBEV como linha totalizadora ao final.
   function paraTabelaEvolucaoReducao(): { meses: number[]; linhas: LinhaTabelaReducao[] } {
     const card = REDUCAO_CUSTOS_CARDS.find(c => c.nome === cardEvolucao)
     if (selAno === null || !card) return { meses: [], linhas: [] }
@@ -252,121 +254,197 @@ export function FarolDeMetasPage() {
 
   if (carregando && !selUnidade) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-64 w-full" />
+      <div className="space-y-6 p-4 md:p-6 relative">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -right-40 w-96 h-96 bg-gray-200/20 dark:bg-white/5 rounded-full blur-3xl" />
+          <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-gray-200/20 dark:bg-white/5 rounded-full blur-3xl" />
+        </div>
+        <div className="relative z-10 space-y-4">
+          <Skeleton className="h-24 w-full bg-gray-200/50 dark:bg-gray-700/50 rounded-2xl" />
+          <Skeleton className="h-64 w-full bg-gray-200/50 dark:bg-gray-700/50 rounded-2xl" />
+        </div>
       </div>
     )
   }
 
   if (unidadesDisponiveis.length === 0) {
-    return <p className="text-sm text-muted-foreground">Nenhuma unidade disponível para o seu usuário.</p>
+    return (
+      <div className="p-4 md:p-6 relative">
+        <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-2xl border border-gray-200/30 dark:border-gray-700/30 shadow-xl shadow-gray-200/20 dark:shadow-black/20 p-8 text-center">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Nenhuma unidade disponível para o seu usuário.</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-6">
-      <FarolFilters
-        unidades={unidadesDisponiveis.map(u => ({ value: u.codigo, label: u.nome }))}
-        negocios={negociosDisponiveis.map(n => ({ value: n, label: n }))}
-        anos={anosDisponiveis}
-        meses={mesesDisponiveis}
-        selUnidade={selUnidade}
-        selNegocio={selNegocio}
-        selAno={selAno ?? 0}
-        selMes={selMes ?? 0}
-        isYtd={isYtd}
-        onUnidadeChange={v => { setSelUnidade(v); setSelNegocio(''); setSelAno(null); setSelMes(null) }}
-        onNegocioChange={v => { setSelNegocio(v); setSelAno(null); setSelMes(null) }}
-        onAnoChange={setSelAno}
-        onMesChange={setSelMes}
-        onModoChange={setIsYtd}
-      />
+    <div className="p-4 md:p-6 relative">
+      {/* Elementos decorativos sutis */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-gray-200/20 dark:bg-white/5 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-gray-200/20 dark:bg-white/5 rounded-full blur-3xl" />
+      </div>
 
-      {dfBase.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nenhum DRE importado para esse período ainda.</p>
-      ) : (
-        <Tabs defaultValue="resumo">
-          <TabsList>
-            <TabsTrigger value="resumo">Resumo Geral</TabsTrigger>
-            <TabsTrigger value="gente">Pacote de Gente</TabsTrigger>
-            <TabsTrigger value="frota">Pacote de Frota</TabsTrigger>
-            <TabsTrigger value="seguranca">Pacote de Segurança</TabsTrigger>
-            <TabsTrigger value="adm">Pacote ADM</TabsTrigger>
-            <TabsTrigger value="reducao">Redução de Custos</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="resumo" className="space-y-6 pt-4">
-            {renderCardsGrid(indicadoresResumo)}
-            <IndicadorPainel indicadores={paraPainel(indicadoresResumo)} ano={selAno ?? 0} />
-          </TabsContent>
-
-          <TabsContent value="gente" className="space-y-6 pt-4">
-            {renderCardsGrid(indicadoresGente)}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-              {ESTOURO_ZERO_CARDS.map(card => (
-                <EstouroZeroCard
-                  key={card.nome}
-                  nome={card.nome}
-                  periodoTexto={periodoTexto}
-                  resultado={calcularEstouroZero(calcBase, card.prefixos)}
-                />
-              ))}
-            </div>
-            <IndicadorPainel indicadores={paraPainel(indicadoresGente)} ano={selAno ?? 0} />
-          </TabsContent>
-
-          <TabsContent value="frota" className="space-y-6 pt-4">
-            {renderCardsGrid(indicadoresFrota)}
-            <IndicadorPainel indicadores={paraPainel(indicadoresFrota)} ano={selAno ?? 0} />
-          </TabsContent>
-
-          <TabsContent value="seguranca" className="space-y-6 pt-4">
-            {renderCardsGrid(indicadoresSeguranca)}
-            <IndicadorPainel indicadores={paraPainel(indicadoresSeguranca)} ano={selAno ?? 0} />
-          </TabsContent>
-
-          <TabsContent value="adm" className="space-y-6 pt-4">
-            {renderCardsGrid(indicadoresAdm)}
-            <IndicadorPainel indicadores={paraPainel(indicadoresAdm)} ano={selAno ?? 0} />
-          </TabsContent>
-
-          <TabsContent value="reducao" className="space-y-6 pt-4">
-            {selAno !== null && (mesAcumMax !== null || selMes !== null) ? (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                {REDUCAO_CUSTOS_CARDS.map(card => {
-                  const mesLimite = isYtd ? (mesAcumMax ?? 0) : (selMes ?? 0)
-                  const mesesComparar = isYtd ? Array.from({ length: mesLimite }, (_, i) => i + 1) : [mesLimite]
-                  const realAtual = somaReal(normalizarParaCalculo(rowsParaReducao(selAno, card.contas, mesLimite)), card.contas)
-                  const realAnteriorBruto = somaRealAnoAnteriorComMedia(rowsNegocio, null, selAno - 1, card.contas, mesesComparar) ?? 0
-                  const ajusteIndividual = (somaRealAnoAnteriorComMedia(rowsNegocio, dataEntradaUnidade, selAno - 1, card.contas, mesesComparar) ?? 0) - realAnteriorBruto
-                  const extraAmbev = calcularIncrementoUnidadesNovas(unidadesIncremento, selAno - 1, card.contas, mesesComparar)
-                  const realAnterior = realAnteriorBruto + ajusteIndividual + extraAmbev
-                  return (
-                    <ReducaoCard
-                      key={card.nome}
-                      nome={card.nome}
-                      periodoTexto={periodoTexto}
-                      resultado={calcularReducaoCustos(realAtual, realAnterior)}
-                      realAnteriorBruto={realAnteriorBruto}
-                    />
-                  )
-                })}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Nenhum indicador selecionado para esta categoria.</p>
-            )}
-            <IndicadorPainel
-              indicadores={paraPainelReducao()}
-              ano={selAno ?? 0}
-              nomeSerie="Realizado"
-              nomeMeta="Meta Mensal (méd.)"
-              formatter={formatCurrencyInteiro}
-              onSelecionadoChange={setCardEvolucao}
+      <div className="relative z-10 space-y-6">
+        {/* BLOCO 1: Filtros com fundo azul gradiente */}
+        <div className="rounded-2xl border border-white/10 bg-gradient-to-r from-[hsl(222,45%,20%)] to-[hsl(222,35%,30%)] dark:from-[hsl(224,28%,14%)] dark:to-[hsl(224,22%,20%)] shadow-xl shadow-blue-900/20 overflow-hidden">
+          <div className="p-4 md:p-6">
+            <FarolFilters
+              unidades={unidadesDisponiveis.map(u => ({ value: u.codigo, label: u.nome }))}
+              negocios={negociosDisponiveis.map(n => ({ value: n, label: n }))}
+              anos={anosDisponiveis}
+              meses={mesesDisponiveis}
+              selUnidade={selUnidade}
+              selNegocio={selNegocio}
+              selAno={selAno ?? 0}
+              selMes={selMes ?? 0}
+              periodo={periodo}
+              onUnidadeChange={v => { setSelUnidade(v); setSelNegocio(''); setSelAno(null); setSelMes(null) }}
+              onNegocioChange={v => { setSelNegocio(v); setSelAno(null); setSelMes(null) }}
+              onAnoChange={setSelAno}
+              onMesChange={setSelMes}
+              onPeriodoChange={setPeriodo}
             />
-            <ReducaoEvolucaoTable {...paraTabelaEvolucaoReducao()} nomeCard={cardEvolucao} />
-          </TabsContent>
-        </Tabs>
-      )}
+          </div>
+        </div>
+
+        {/* CONTEÚDO: Direto no fundo, sem container extra */}
+        {dfBase.length === 0 ? (
+          <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl border border-gray-200/30 dark:border-gray-700/30 shadow-xl shadow-gray-200/20 dark:shadow-black/20 p-8 text-center">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum DRE importado para esse período ainda.</p>
+          </div>
+        ) : (
+          <Tabs defaultValue="resumo" className="w-full">
+            <TabsList className="bg-gray-200/70 dark:bg-gray-700/70 p-1 rounded-xl inline-flex w-full md:w-auto">
+              <TabsTrigger 
+                value="resumo" 
+                className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
+              >
+                Resumo Geral
+              </TabsTrigger>
+              <TabsTrigger 
+                value="gente" 
+                className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
+              >
+                Pacote de Gente
+              </TabsTrigger>
+              <TabsTrigger 
+                value="frota" 
+                className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
+              >
+                Pacote de Frota
+              </TabsTrigger>
+              <TabsTrigger 
+                value="seguranca" 
+                className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
+              >
+                Pacote de Segurança
+              </TabsTrigger>
+              <TabsTrigger 
+                value="adm" 
+                className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
+              >
+                Pacote ADM
+              </TabsTrigger>
+              <TabsTrigger 
+                value="reducao" 
+                className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
+              >
+                Redução de Custos
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="resumo" className="space-y-6 pt-6">
+              {renderCardsGrid(indicadoresResumo)}
+              <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl border border-gray-200/30 dark:border-gray-700/30 shadow-xl shadow-gray-200/20 dark:shadow-black/20 p-4">
+                <IndicadorPainel indicadores={paraPainel(indicadoresResumo)} ano={selAno ?? 0} />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="gente" className="space-y-6 pt-6">
+              {renderCardsGrid(indicadoresGente)}
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {ESTOURO_ZERO_CARDS.map(card => (
+                  <EstouroZeroCard
+                    key={card.nome}
+                    nome={card.nome}
+                    periodoTexto={periodoTexto}
+                    resultado={calcularEstouroZero(calcBase, card.prefixos)}
+                  />
+                ))}
+              </div>
+              <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl border border-gray-200/30 dark:border-gray-700/30 shadow-xl shadow-gray-200/20 dark:shadow-black/20 p-4">
+                <IndicadorPainel indicadores={paraPainel(indicadoresGente)} ano={selAno ?? 0} />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="frota" className="space-y-6 pt-6">
+              {renderCardsGrid(indicadoresFrota)}
+              <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl border border-gray-200/30 dark:border-gray-700/30 shadow-xl shadow-gray-200/20 dark:shadow-black/20 p-4">
+                <IndicadorPainel indicadores={paraPainel(indicadoresFrota)} ano={selAno ?? 0} />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="seguranca" className="space-y-6 pt-6">
+              {renderCardsGrid(indicadoresSeguranca)}
+              <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl border border-gray-200/30 dark:border-gray-700/30 shadow-xl shadow-gray-200/20 dark:shadow-black/20 p-4">
+                <IndicadorPainel indicadores={paraPainel(indicadoresSeguranca)} ano={selAno ?? 0} />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="adm" className="space-y-6 pt-6">
+              {renderCardsGrid(indicadoresAdm)}
+              <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl border border-gray-200/30 dark:border-gray-700/30 shadow-xl shadow-gray-200/20 dark:shadow-black/20 p-4">
+                <IndicadorPainel indicadores={paraPainel(indicadoresAdm)} ano={selAno ?? 0} />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="reducao" className="space-y-6 pt-6">
+              {selAno !== null && (mesAcumMax !== null || selMes !== null) ? (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  {REDUCAO_CUSTOS_CARDS.map(card => {
+                    const mesLimite = periodo === 'ytd'
+                      ? (mesAcumMax ?? 0)
+                      : periodo === 's1'
+                        ? Math.min(mesAcumMax ?? 0, 6)
+                        : (selMes ?? 0)
+                    const mesesComparar = periodo === 'mensal' ? [mesLimite] : Array.from({ length: mesLimite }, (_, i) => i + 1)
+                    const realAtual = somaReal(normalizarParaCalculo(rowsParaReducao(selAno, card.contas, mesLimite)), card.contas)
+                    const realAnteriorBruto = somaRealAnoAnteriorComMedia(rowsNegocio, null, selAno - 1, card.contas, mesesComparar) ?? 0
+                    const ajusteIndividual = (somaRealAnoAnteriorComMedia(rowsNegocio, dataEntradaUnidade, selAno - 1, card.contas, mesesComparar) ?? 0) - realAnteriorBruto
+                    const extraAmbev = calcularIncrementoUnidadesNovas(unidadesIncremento, selAno - 1, card.contas, mesesComparar)
+                    const realAnterior = realAnteriorBruto + ajusteIndividual + extraAmbev
+                    return (
+                      <ReducaoCard
+                        key={card.nome}
+                        nome={card.nome}
+                        periodoTexto={periodoTexto}
+                        resultado={calcularReducaoCustos(realAtual, realAnterior)}
+                        realAnteriorBruto={realAnteriorBruto}
+                      />
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum indicador selecionado para esta categoria.</p>
+              )}
+              <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl border border-gray-200/30 dark:border-gray-700/30 shadow-xl shadow-gray-200/20 dark:shadow-black/20 p-4">
+                <IndicadorPainel
+                  indicadores={paraPainelReducao()}
+                  ano={selAno ?? 0}
+                  nomeSerie="Realizado"
+                  nomeMeta="Meta Mensal (méd.)"
+                  formatter={formatCurrencyInteiro}
+                  onSelecionadoChange={setCardEvolucao}
+                />
+              </div>
+              <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl border border-gray-200/30 dark:border-gray-700/30 shadow-xl shadow-gray-200/20 dark:shadow-black/20 p-4">
+                <ReducaoEvolucaoTable {...paraTabelaEvolucaoReducao()} nomeCard={cardEvolucao} />
+              </div>
+            </TabsContent>
+          </Tabs>
+        )}
+      </div>
     </div>
   )
 }

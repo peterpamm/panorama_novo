@@ -10,6 +10,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/analise-conta': 'Análise por Conta',
   '/ranking':       'Ranking',
   '/painel-perdas': 'Painel de Perdas',
+  '/remuneracao-variavel': 'Remuneração Variável',
   '/metas':         'Metas',
   '/importacao':    'Importação de DRE',
   '/admin':         'Administração',
@@ -38,7 +39,7 @@ export function AppShell() {
 
   return (
     <TooltipProvider>
-      <div className="flex h-screen overflow-hidden bg-background">
+      <div className="flex h-screen overflow-hidden bg-gradient-to-br from-slate-100 via-gray-100/80 to-slate-200/80 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
         <Sidebar open={sidebarOpen} onToggle={handleToggleSidebar} />
         <div className="flex flex-1 flex-col overflow-hidden min-w-0">
           <Header title={title} isDark={isDark} onToggleTheme={toggleTheme} />

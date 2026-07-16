@@ -8,6 +8,10 @@ import { useMetasPerdas } from '@/hooks/useMetasPerdas'
 import { CONTA_RECEITA, NOME_RECEITA, PACOTES } from '@/lib/constants'
 import { ImportarMetasDialog } from '@/components/metas/ImportarMetasDialog'
 import { ImportarMetasPerdasDialog } from '@/components/metas/ImportarMetasPerdasDialog'
+import { MetasGenteTab } from '@/components/metas/MetasGenteTab'
+import { MetasFinanceiroTab } from '@/components/metas/MetasFinanceiroTab'
+import { MetasFrotaTab } from '@/components/metas/MetasFrotaTab'
+import { MetasSegurancaTab } from '@/components/metas/MetasSegurancaTab'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,6 +28,7 @@ import { formatCurrencyInteiro } from '@/lib/utils'
 const MESES_LABEL: Record<number, string> = {
   0: 'Anual', 1: 'Janeiro', 2: 'Fevereiro', 3: 'Março', 4: 'Abril', 5: 'Maio', 6: 'Junho',
   7: 'Julho', 8: 'Agosto', 9: 'Setembro', 10: 'Outubro', 11: 'Novembro', 12: 'Dezembro',
+  13: '1º Semestre', 14: '2º Semestre',
 }
 
 const FORM_INICIAL = {
@@ -384,12 +389,28 @@ export function MetasPage() {
         <TabsList>
           <TabsTrigger value="gerais">Metas Gerais</TabsTrigger>
           <TabsTrigger value="perdas">Metas de Perdas</TabsTrigger>
+          <TabsTrigger value="gente">Metas de Gente</TabsTrigger>
+          <TabsTrigger value="financeiro">Metas do Financeiro</TabsTrigger>
+          <TabsTrigger value="frota">Metas de Frota</TabsTrigger>
+          <TabsTrigger value="seguranca">Metas de Segurança</TabsTrigger>
         </TabsList>
         <TabsContent value="gerais" className="pt-4">
           <MetasGeraisTab />
         </TabsContent>
         <TabsContent value="perdas" className="pt-4">
           <MetasPerdasTab />
+        </TabsContent>
+        <TabsContent value="gente" className="pt-4">
+          <MetasGenteTab />
+        </TabsContent>
+        <TabsContent value="financeiro" className="pt-4">
+          <MetasFinanceiroTab />
+        </TabsContent>
+        <TabsContent value="frota" className="pt-4">
+          <MetasFrotaTab />
+        </TabsContent>
+        <TabsContent value="seguranca" className="pt-4">
+          <MetasSegurancaTab />
         </TabsContent>
       </Tabs>
       <Toaster />

@@ -71,6 +71,25 @@ export interface Unidade {
   nome_ginfo: string | null
   /** Data (YYYY-MM-DD) em que a unidade começou a operar — null se já existia antes de qualquer dado importado. Usado pra ajustar a meta de Redução de Custos em anos em que a unidade só tem histórico parcial. */
   data_entrada: string | null
+  /** Nomes alternativos vindos de arquivos externos (BI da Ambev etc) — ex: CAMACARI ← ["CDL CAMAÇARI", "CDR BAHIA"]. */
+  apelidos?: string[] | null
+}
+
+/** Meta de gente (BI da Ambev): indicador × operação do BI × ano × mês, valor em %. */
+export interface MetaGente {
+  id?: string
+  indicador: string
+  /** Unidade resolvida pelos apelidos — pode repetir entre operações (ex: CDL CAMAÇARI e CDR BAHIA → CAMACARI). */
+  unidade: string
+  /** Nome original da operação no BI — parte da chave, preserva metas distintas da mesma unidade (rota vs empurrada). */
+  operacao_bi: string
+  /** Negócio da operação (ROTA/ARMAZEM/...) — auto-sugerido pelo prefixo (CDL→ROTA, CDR→ARMAZEM), editável na tela. */
+  negocio: string
+  /** Peso (%) desse indicador na RV dessa operação — cadastro manual (varia por operação: ex. rota de Camaçari 30%, Foz 15%+15%). */
+  peso: number
+  ano: number
+  mes: number
+  valor: number
 }
 
 /** Alteração retroativa detectada num mês já encerrado ao reimportar uma unidade/negócio/ano (espelha importacoes_alteracoes). */
@@ -84,6 +103,29 @@ export interface AlteracaoRetroativa {
   campo: string
   valor_antigo: number | null
   valor_novo: number | null
+}
+
+/** RV (remuneração variável) por liderança — cadastro corrente, atualizado por upsert no nome. */
+export interface RvLideranca {
+  id?: string
+  operacao: string
+  /** ROTA / ARMAZEM / EMPURRADA etc — usado depois pra puxar o resultado separado do DRE. */
+  negocio: string
+  setor: string
+  funcao: string
+  nome: string
+  valor: number
+}
+
+/** Resultado mensal (realizado) de um indicador de gente, importado do BI pelo corporativo. */
+export interface ResultadoGente {
+  id?: string
+  indicador: string
+  unidade: string
+  operacao_bi: string
+  ano: number
+  mes: number
+  valor: number
 }
 
 /** Registro de Indisponibilidade ou Devolução no Painel de Perdas (fonte AUX — não vem da DRE). */

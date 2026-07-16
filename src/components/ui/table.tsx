@@ -10,9 +10,19 @@ const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableE
 )
 Table.displayName = 'Table'
 
+// Padrão do design system LOG20: cabeçalho de tabela sempre no gradiente navy
+// (token table-header-gradient), com texto claro — ver TableHead abaixo.
 const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
   ({ className, ...props }, ref) => (
-    <thead ref={ref} className={cn('[&_tr]:border-b', className)} {...props} />
+    <thead
+      ref={ref}
+      className={cn(
+        'bg-gradient-to-r from-[hsl(222,45%,20%)] to-[hsl(222,35%,30%)] dark:from-[hsl(224,28%,14%)] dark:to-[hsl(224,22%,20%)]',
+        '[&_tr]:border-b [&_tr]:border-white/10 [&_tr:hover]:bg-transparent',
+        className,
+      )}
+      {...props}
+    />
   ),
 )
 TableHeader.displayName = 'TableHeader'
@@ -46,7 +56,7 @@ const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<
   ({ className, ...props }, ref) => (
     <th
       ref={ref}
-      className={cn('h-12 px-4 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0', className)}
+      className={cn('h-11 px-4 text-left align-middle text-xs font-semibold text-white/80 [&:has([role=checkbox])]:pr-0', className)}
       {...props}
     />
   ),

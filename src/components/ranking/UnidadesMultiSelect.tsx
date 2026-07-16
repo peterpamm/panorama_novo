@@ -16,10 +16,12 @@ interface UnidadesMultiSelectProps {
   onToggle: (codigo: string) => void
   onSelecionarTodas: () => void
   onLimpar: () => void
+  /** Classes extras do botão (ex: estilo translúcido pro bloco de filtros navy). */
+  className?: string
 }
 
 /** Dropdown com checkbox por unidade (não fecha ao marcar, pra selecionar várias de uma vez). */
-export function UnidadesMultiSelect({ opcoes, selecionadas, onToggle, onSelecionarTodas, onLimpar }: UnidadesMultiSelectProps) {
+export function UnidadesMultiSelect({ opcoes, selecionadas, onToggle, onSelecionarTodas, onLimpar, className }: UnidadesMultiSelectProps) {
   const [open, setOpen] = useState(false)
 
   const label = selecionadas.size === 0
@@ -31,7 +33,7 @@ export function UnidadesMultiSelect({ opcoes, selecionadas, onToggle, onSelecion
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between font-normal sm:w-72">
+        <Button variant="outline" role="combobox" aria-expanded={open} className={cn('w-full justify-between font-normal', className)}>
           <span className="truncate">{label}</span>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>

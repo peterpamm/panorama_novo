@@ -70,6 +70,62 @@ export const ESTOURO_ZERO_CARDS = [
   { nome: 'Benefícios', prefixos: ['055', '171'] },
 ]
 
+/** Indicador de RV com origem no DRE — 'avr' compara com a meta do Farol; 'dispersao' usa a coluna DIFERENÇA (≥ 0 = bateu). */
+export interface RvIndicadorDre {
+  /** Chave do peso na tabela de pesos do setor (rv_gente_pesos_dre / rv_financeiro_pesos_dre). */
+  id: string
+  nome: string
+  tipo: 'avr' | 'dispersao'
+  prefixos: string[]
+}
+
+/**
+ * Indicadores de gente com origem no DRE que compõem a RV das lideranças.
+ * - 'avr': AVR mensal vs meta do Farol (pacote 158).
+ * - 'dispersao': coluna DIFERENÇA do DRE (REAL−REMUN) somada nas contas —
+ *   meta implícita é não estourar (dispersão ≥ 0 = verde).
+ * O `id` é a chave do peso em rv_gente_pesos_dre.
+ */
+export const RV_GENTE_DRE: RvIndicadorDre[] = [
+  { id: '158',        nome: 'Pacote de Gente',      tipo: 'avr',       prefixos: ['158', '033'] },
+  { id: 'SALARIOS',   nome: 'Salários',             tipo: 'dispersao', prefixos: ['035', '160'] },
+  { id: 'BENEFICIOS', nome: 'Pacote de Benefícios', tipo: 'dispersao', prefixos: ['055', '171'] },
+]
+
+/**
+ * Indicadores do setor financeiro — todos com origem no DRE, sem importação
+ * de metas (AVR usa a meta do Farol; dispersão usa as contas do Painel de
+ * Perdas). O `id` é a chave do peso em rv_financeiro_pesos_dre.
+ */
+export const RV_FINANCEIRO_DRE: RvIndicadorDre[] = [
+  { id: '157',    nome: 'Despesa Administrativa', tipo: 'avr',       prefixos: ['157'] },
+  { id: '021',    nome: 'Custo Operacional',      tipo: 'avr',       prefixos: ['021'] },
+  { id: 'VALES',  nome: 'Gastos com Vales',       tipo: 'dispersao', prefixos: ['051', '052'] },
+  { id: 'MULTAS', nome: 'Multas',                 tipo: 'dispersao', prefixos: ['137', '222'] },
+]
+
+/**
+ * Indicadores de frota com origem no DRE — AVR mensal vs meta do Farol
+ * (pacotes de custo). Os indicadores de frota de fora do DRE entram depois,
+ * quando a importação deles for estruturada. O `id` é a chave do peso em
+ * rv_frota_pesos_dre.
+ */
+export const RV_FROTA_DRE: RvIndicadorDre[] = [
+  { id: '117', nome: 'Manutenção',            tipo: 'avr', prefixos: ['117'] },
+  { id: '131', nome: 'Pneus',                 tipo: 'avr', prefixos: ['131'] },
+  { id: '115', nome: 'Diesel (Combustíveis)', tipo: 'avr', prefixos: ['115'] },
+]
+
+/**
+ * Indicadores de segurança com origem no DRE — EPI's (074) e Uniformes (075),
+ * os mesmos acompanhados no Farol de Metas, por AVR mensal vs meta do Farol.
+ * O `id` é a chave do peso em rv_seguranca_pesos_dre.
+ */
+export const RV_SEGURANCA_DRE: RvIndicadorDre[] = [
+  { id: '074', nome: "EPI's",     tipo: 'avr', prefixos: ['074'] },
+  { id: '075', nome: 'Uniformes', tipo: 'avr', prefixos: ['075'] },
+]
+
 /** Cards "Redução de Custos -15%" da aba ADM. */
 export const REDUCAO_CUSTOS_CARDS = [
   { nome: 'Despesas Frota Leve', contas: ['217'] },

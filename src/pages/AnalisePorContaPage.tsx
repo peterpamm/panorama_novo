@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ContaCombobox } from '@/components/analise-conta/ContaCombobox'
+import { FilterLabel, filterTriggerClass } from '@/components/farol/FarolFilters'
 import { ResumoCards } from '@/components/analise-conta/ResumoCards'
 import { EvolucaoChart } from '@/components/analise-conta/EvolucaoChart'
 import { DetalhesTable } from '@/components/analise-conta/DetalhesTable'
@@ -87,85 +88,148 @@ export function AnalisePorContaPage() {
 
   if (carregando && !selUnidade) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-64 w-full" />
+      <div className="space-y-6 p-4 md:p-6 relative">
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -right-40 w-96 h-96 bg-gray-200/20 dark:bg-white/5 rounded-full blur-3xl" />
+          <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-gray-200/20 dark:bg-white/5 rounded-full blur-3xl" />
+        </div>
+        <div className="relative z-10 space-y-4">
+          <Skeleton className="h-24 w-full bg-gray-200/50 dark:bg-gray-700/50 rounded-2xl" />
+          <Skeleton className="h-64 w-full bg-gray-200/50 dark:bg-gray-700/50 rounded-2xl" />
+        </div>
       </div>
     )
   }
 
   if (unidadesDisponiveis.length === 0) {
-    return <p className="text-sm text-muted-foreground">Nenhuma unidade disponível para o seu usuário.</p>
+    return (
+      <div className="p-4 md:p-6 relative">
+        <div className="bg-white/60 dark:bg-gray-800/60 backdrop-blur-xl rounded-2xl border border-gray-200/30 dark:border-gray-700/30 shadow-xl shadow-gray-200/20 dark:shadow-black/20 p-8 text-center">
+          <p className="text-sm text-gray-500 dark:text-gray-400">Nenhuma unidade disponível para o seu usuário.</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-        <div className="space-y-1.5">
-          <Label>Unidade</Label>
-          <Select value={selUnidade} onValueChange={v => { setSelUnidade(v); setSelNegocio(''); setSelAno(null) }}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {unidadesDisponiveis.map(u => <SelectItem key={u.codigo} value={u.codigo}>{u.nome}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>Negócio</Label>
-          <Select value={selNegocio} onValueChange={v => { setSelNegocio(v); setSelAno(null) }}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {negociosDisponiveis.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>Ano</Label>
-          <Select value={String(selAno ?? '')} onValueChange={v => setSelAno(Number(v))}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {anosDisponiveis.map(a => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
+    <div className="p-4 md:p-6 relative">
+      {/* Elementos decorativos sutis */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-gray-200/20 dark:bg-white/5 rounded-full blur-3xl" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-gray-200/20 dark:bg-white/5 rounded-full blur-3xl" />
       </div>
 
-      <Tabs defaultValue="conta">
-        <TabsList>
-          <TabsTrigger value="conta">Visão da conta</TabsTrigger>
-          <TabsTrigger value="anovsano">Ano vs Ano</TabsTrigger>
-          <TabsTrigger value="abertura">Abertura de Contas</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="conta" className="space-y-6 pt-4">
-          <div className="max-w-md space-y-1.5">
-            <Label>Conta</Label>
-            <ContaCombobox contas={contas} value={selConta} onChange={setSelConta} />
+      <div className="relative z-10 space-y-6">
+        {/* BLOCO 1: Filtros com fundo azul gradiente */}
+        <div className="rounded-2xl border border-white/10 bg-gradient-to-r from-[hsl(222,45%,20%)] to-[hsl(222,35%,30%)] dark:from-[hsl(224,28%,14%)] dark:to-[hsl(224,22%,20%)] shadow-xl shadow-blue-900/20 overflow-hidden">
+          <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-3 md:p-6">
+            <div className="space-y-1.5">
+              <FilterLabel>Unidade</FilterLabel>
+              <Select value={selUnidade} onValueChange={v => { setSelUnidade(v); setSelNegocio(''); setSelAno(null) }}>
+                <SelectTrigger className="bg-white/10 border-white/20 text-white hover:bg-white/20 focus:ring-white/30">
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl border border-gray-200/30 dark:border-gray-700/30">
+                  {unidadesDisponiveis.map(u => <SelectItem key={u.codigo} value={u.codigo}>{u.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <FilterLabel>Negócio</FilterLabel>
+              <Select value={selNegocio} onValueChange={v => { setSelNegocio(v); setSelAno(null) }}>
+                <SelectTrigger className="bg-white/10 border-white/20 text-white hover:bg-white/20 focus:ring-white/30">
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl border border-gray-200/30 dark:border-gray-700/30">
+                  {negociosDisponiveis.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <FilterLabel>Ano</FilterLabel>
+              <Select value={String(selAno ?? '')} onValueChange={v => setSelAno(Number(v))}>
+                <SelectTrigger className="bg-white/10 border-white/20 text-white hover:bg-white/20 focus:ring-white/30">
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent className="bg-white/90 dark:bg-gray-800/90 backdrop-blur-xl border border-gray-200/30 dark:border-gray-700/30">
+                  {anosDisponiveis.map(a => <SelectItem key={a} value={String(a)}>{a}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+        </div>
 
-          {rowsContaAtual.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhum dado importado para essa conta neste período.</p>
-          ) : (
-            <>
-              <ResumoCards resumo={resumo} />
-              <EvolucaoChart serie={serieMensal} />
-              <DetalhesTable serie={serieMensal} nomeConta={nomeConta} ano={selAno ?? 0} />
-            </>
-          )}
-        </TabsContent>
+        {/* CONTEÚDO: Abas com estilo premium */}
+        <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl rounded-2xl border border-gray-200/30 dark:border-gray-700/30 shadow-xl shadow-gray-200/20 dark:shadow-black/20 overflow-hidden">
+          <div className="p-4 md:p-6">
+            <Tabs defaultValue="conta" className="w-full">
+              <TabsList className="bg-gray-200/70 dark:bg-gray-700/70 p-1 rounded-xl inline-flex w-full md:w-auto">
+                <TabsTrigger
+                  value="conta"
+                  className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
+                >
+                  Visão da conta
+                </TabsTrigger>
+                <TabsTrigger
+                  value="anovsano"
+                  className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
+                >
+                  Ano vs Ano
+                </TabsTrigger>
+                <TabsTrigger
+                  value="abertura"
+                  className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
+                >
+                  Abertura de Contas
+                </TabsTrigger>
+              </TabsList>
 
-        <TabsContent value="anovsano" className="space-y-6 pt-4">
-          <div className="max-w-md space-y-1.5">
-            <Label>Conta</Label>
-            <ContaCombobox contas={contas} value={selContaAnoVsAno} onChange={setSelContaAnoVsAno} />
+              <TabsContent value="conta" className="space-y-6 pt-6">
+                <div className="max-w-md space-y-1.5">
+                  <Label className="text-gray-700 dark:text-gray-300">Conta</Label>
+                  <ContaCombobox 
+                    contas={contas} 
+                    value={selConta} 
+                    onChange={setSelConta}
+                  />
+                </div>
+
+                {rowsContaAtual.length === 0 ? (
+                  <div className="bg-white/50 dark:bg-gray-800/50 rounded-xl border border-gray-200/30 dark:border-gray-700/30 p-8 text-center">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum dado importado para essa conta neste período.</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="rounded-xl border border-gray-200/30 dark:border-gray-700/30 bg-white/50 dark:bg-gray-800/50 p-4">
+                      <ResumoCards resumo={resumo} />
+                    </div>
+                    <div className="rounded-xl border border-gray-200/30 dark:border-gray-700/30 bg-white/50 dark:bg-gray-800/50 p-4">
+                      <EvolucaoChart serie={serieMensal} />
+                    </div>
+                    <DetalhesTable serie={serieMensal} nomeConta={nomeConta} ano={selAno ?? 0} />
+                  </>
+                )}
+              </TabsContent>
+
+              <TabsContent value="anovsano" className="space-y-6 pt-6">
+                <div className="max-w-md space-y-1.5">
+                  <Label className="text-gray-700 dark:text-gray-300">Conta</Label>
+                  <ContaCombobox 
+                    contas={contas} 
+                    value={selContaAnoVsAno} 
+                    onChange={setSelContaAnoVsAno}
+                  />
+                </div>
+                <AnoVsAnoPanel rowsContaTodosAnos={rowsContaTodosAnos} nomeConta={nomeContaAnoVsAno} />
+              </TabsContent>
+
+              <TabsContent value="abertura" className="pt-6">
+                <AberturaContas rowsNegocioAno={rowsNegocioAno} nomesPorCodigo={nomesPorCodigo} />
+              </TabsContent>
+            </Tabs>
           </div>
-          <AnoVsAnoPanel rowsContaTodosAnos={rowsContaTodosAnos} nomeConta={nomeContaAnoVsAno} />
-        </TabsContent>
-
-        <TabsContent value="abertura" className="pt-4">
-          <AberturaContas rowsNegocioAno={rowsNegocioAno} nomesPorCodigo={nomesPorCodigo} />
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
     </div>
   )
 }

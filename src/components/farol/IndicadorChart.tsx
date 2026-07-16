@@ -1,4 +1,4 @@
-import { Area, CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Area, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { formatPercent } from '@/lib/utils'
 import type { SeriePontoMensal } from '@/lib/farol-calculations'
 import type { Natureza } from '@/types'
@@ -25,7 +25,7 @@ export function IndicadorChart({ serie, gradientId, natureza, nomeSerie = 'AVR R
 
   const ultimoIndex = serie.length - 1
   const valores = serie.map(p => ({ avr: p.avr, meta: p.meta }))
-  const { grid, axis, legend } = getChartColors()
+  const { axis, legend } = getChartColors()
 
   return (
     <div className="h-[320px] w-full">
@@ -37,7 +37,6 @@ export function IndicadorChart({ serie, gradientId, natureza, nomeSerie = 'AVR R
               <stop offset="100%" stopColor={COR_AVR} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid vertical={false} stroke={grid} />
           <XAxis
             dataKey="mes"
             tickFormatter={m => MES_ABREV[m] ?? m}
