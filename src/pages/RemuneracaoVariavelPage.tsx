@@ -1,9 +1,12 @@
 import { Link } from 'react-router-dom'
-import { ChevronRight, Landmark, Truck, Users } from 'lucide-react'
+import { ChevronRight, Landmark, ShieldCheck, Truck, Users, Warehouse, Boxes, LayoutDashboard, Table2 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
+import { useAuth } from '@/context/AuthContext'
+import type { PaginaChave } from '@/lib/permissoes'
 
 interface SetorCard {
   to: string
+  pagina: PaginaChave
   titulo: string
   descricao: string
   icone: React.ReactNode
@@ -12,7 +15,16 @@ interface SetorCard {
 
 const SETORES: SetorCard[] = [
   {
+    to: '/remuneracao-variavel/painel-geral',
+    pagina: 'rv_painel_geral',
+    titulo: 'Painel Geral',
+    descricao: 'Visão do gerente da unidade — acompanhamento e valor a receber de todas as lideranças da sua unidade, por setor ou por liderança.',
+    icone: <LayoutDashboard className="h-6 w-6 text-violet-500" />,
+    corIcone: 'bg-violet-500/10',
+  },
+  {
     to: '/remuneracao-variavel/gente',
+    pagina: 'rv_gente',
     titulo: 'RV de Gente',
     descricao: 'Disponibilidade, presenteísmo e demais indicadores de gente — acompanhamento mensal vs meta por operação.',
     icone: <Users className="h-6 w-6 text-blue-500" />,
@@ -20,6 +32,7 @@ const SETORES: SetorCard[] = [
   },
   {
     to: '/remuneracao-variavel/financeiro',
+    pagina: 'rv_financeiro',
     titulo: 'RV do Financeiro',
     descricao: 'Despesa ADM, Custo Operacional, Vales e Multas — indicadores 100% do DRE, acompanhamento e apuração mensal.',
     icone: <Landmark className="h-6 w-6 text-emerald-500" />,
@@ -27,18 +40,56 @@ const SETORES: SetorCard[] = [
   },
   {
     to: '/remuneracao-variavel/frota',
+    pagina: 'rv_frota',
     titulo: 'RV de Frota',
     descricao: 'Manutenção, Pneus e Diesel — AVR vs meta do Farol, acompanhamento e apuração mensal.',
     icone: <Truck className="h-6 w-6 text-amber-500" />,
     corIcone: 'bg-amber-500/10',
+  },
+  {
+    to: '/remuneracao-variavel/seguranca',
+    pagina: 'rv_seguranca',
+    titulo: 'RV de Segurança',
+    descricao: "EPI's e Uniformes — AVR vs meta do Farol, acompanhamento e apuração mensal.",
+    icone: <ShieldCheck className="h-6 w-6 text-rose-500" />,
+    corIcone: 'bg-rose-500/10',
+  },
+  {
+    to: '/remuneracao-variavel/distribuicao',
+    pagina: 'rv_distribuicao',
+    titulo: 'RV de Distribuição',
+    descricao: 'Indisponibilidade — mesmo dado do Painel de Perdas, acompanhamento e apuração mensal.',
+    icone: <Warehouse className="h-6 w-6 text-cyan-500" />,
+    corIcone: 'bg-cyan-500/10',
+  },
+  {
+    to: '/remuneracao-variavel/armazem',
+    pagina: 'rv_armazem',
+    titulo: 'RV de Armazém',
+    descricao: 'T2 (EFC, TMA, Presenteísmo AL, Refugo, Quebras) e T1 (Estância/CDR Bahia) — acompanhamento e apuração mensal.',
+    icone: <Boxes className="h-6 w-6 text-teal-500" />,
+    corIcone: 'bg-teal-500/10',
+  },
+  {
+    to: '/remuneracao-variavel/matriz',
+    pagina: 'rv_matriz',
+    titulo: 'Matriz',
+    descricao: 'Todas as lideranças dos 6 setores numa lista só, com o valor final a receber no mês — exportável em Excel.',
+    icone: <Table2 className="h-6 w-6 text-indigo-500" />,
+    corIcone: 'bg-indigo-500/10',
   },
 ]
 
 /**
  * Hub da Remuneração Variável: uma subpágina por setor, cada corporativo
  * controla as metas e resultados do seu — novos setores entram como novos cards.
+ * Cards filtrados por `permissoes_paginas` (ver AuthContext) — um gerente de
+ * unidade só vê o card de Painel Geral, por exemplo.
  */
 export function RemuneracaoVariavelPage() {
+  const { podeAcessarPagina } = useAuth()
+  const setoresVisiveis = SETORES.filter(s => podeAcessarPagina(s.pagina))
+
   return (
     <div className="space-y-6">
       <p className="max-w-2xl text-sm text-muted-foreground">
@@ -47,7 +98,7 @@ export function RemuneracaoVariavelPage() {
       </p>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {SETORES.map(s => (
+        {setoresVisiveis.map(s => (
           <Link
             key={s.to}
             to={s.to}
@@ -64,11 +115,6 @@ export function RemuneracaoVariavelPage() {
           </Link>
         ))}
 
-        {/* Espaço reservado pros próximos setores */}
-        <div className="flex min-h-[150px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-200 p-5 text-center dark:border-gray-700/50">
-          <p className="text-sm font-medium text-gray-400 dark:text-gray-500">Novos setores em breve</p>
-          <p className="mt-1 text-xs text-gray-400/80 dark:text-gray-600">Segurança...</p>
-        </div>
       </div>
 
       <Toaster />

@@ -1,4 +1,4 @@
-import type { DreLongoRow, MetaPerdas, PainelPerdasAux } from '@/types'
+import type { DreLongoRow, MetaPerdaIndicador, PainelPerdasAux } from '@/types'
 
 // ─── Configuração dos indicadores ───────────────────────────────────────────
 
@@ -52,14 +52,17 @@ function somaAux(rows: PainelPerdasAux[], unidade: string | null, indicador: Pai
  *
  * @param rowsDre  Todas as linhas de vw_dre_longo disponíveis (sem pré-filtro).
  * @param rowsAux  Todos os registros de painel_perdas_aux disponíveis.
- * @param metas    Todos os registros de metas_perdas.
+ * @param metasPerdasIndicadores Todos os registros de metas_perdas_indicadores
+ *   pro `ano` exibido (Metas > Metas de Perdas — meta anual por indicador,
+ *   sem quebra mensal). META (%) e META (R$) somam os 8 indicadores em vez de
+ *   usar o total único da tabela `metas_perdas` (antiga, cadastro manual).
  * @param ano      Ano a exibir.
  * @param meses    Meses selecionados (ex: [1, 2, 3]).
  */
 export function calcularMatrizPerdas(
   rowsDre: DreLongoRow[],
   rowsAux: PainelPerdasAux[],
-  metas: MetaPerdas[],
+  metasPerdasIndicadores: MetaPerdaIndicador[],
   ano: number,
   meses: number[],
 ): MatrizPerdas {
@@ -132,13 +135,24 @@ export function calcularMatrizPerdas(
     perdasPctValores[u] = total / fat
   }
 
-  // ── META (%) e META (R$) — da tabela metas_perdas
+  // ── META (%) e META (R$) — soma dos 8 indicadores de metas_perdas_indicadores
+  // (meta_anual, distribuída linearmente pelos meses selecionados, igual
+  // metaPerdasMensal em PainelPerdasPage.tsx). AMBEV soma a meta de cada
+  // unidade individual (não tem linha própria na planilha importada). META
+  // (%) deriva do mesmo faturamento acumulado usado em PERDAS ACUMULADAS
+  // (%), pra as duas serem comparáveis (ver classeCelula).
   const metaPctValores: Record<string, number | null> = {}
   const metaRsValores: Record<string, number | null> = {}
   for (const u of unidades) {
-    const m = metas.find(x => x.unidade === u && x.ano === ano)
-    metaPctValores[u] = m ? m.meta_pct / 100 : null // converter % para decimal
-    metaRsValores[u] = m ? (m.meta_anual / 12) * meses.length : null
+    const rows = u === 'AMBEV'
+      ? metasPerdasIndicadores.filter(m => m.unidade !== 'AMBEV' && m.ano === ano)
+      : metasPerdasIndicadores.filter(m => m.unidade === u && m.ano === ano)
+    if (rows.length === 0) { metaPctValores[u] = null; metaRsValores[u] = null; continue }
+    const metaAnualTotal = rows.reduce((acc, r) => acc + r.meta_anual, 0)
+    const metaRs = (metaAnualTotal / 12) * meses.length
+    metaRsValores[u] = metaRs
+    const fat = fatValores[u]
+    metaPctValores[u] = fat === null || fat === 0 ? null : metaRs / fat
   }
 
   return {

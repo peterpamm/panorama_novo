@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Pencil, Search, Trash2, Upload } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { parseRvLiderancasFile, type ParsedRvLiderancaRow } from '@/lib/rv-liderancas-csv-parser'
-import { FileDropzone } from '@/components/importacao/FileDropzone'
+import { FilePickerButton } from '@/components/importacao/FilePickerButton'
 import { ImportarResultadosGente } from '@/components/importacao/ImportarResultadosGente'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { TableCard } from '@/components/ui/table-card'
@@ -216,40 +216,39 @@ export function ImportacaoGentePanel() {
 
   return (
     <div className="space-y-6">
-      {/* ── Upload ── */}
-      <div className="max-w-xl space-y-3">
-        <h2 className="text-base font-semibold">RV das Lideranças</h2>
-        <p className="text-sm text-muted-foreground">
-          Suba a planilha de RV (Excel ou CSV) com as colunas{' '}
-          <span className="font-mono text-xs">OPERAÇÃO · NEGOCIO · SETOR · FUNÇÃO · NOME · VALOR</span>.
-          O cadastro é atualizado pelo <strong>nome</strong> da liderança — reimportar substitui os valores existentes.
-        </p>
-        <FileDropzone label="Planilha de RV (.xlsx ou .csv)" accept=".xlsx,.xls,.csv,.txt" file={file} onFile={handleFile} />
+      {/* ── Upload (duas colunas) ── */}
+      <div className="grid grid-cols-1 gap-8 border-b pb-6 md:grid-cols-2">
+        <div className="space-y-3">
+          <h2 className="text-base font-semibold">RV das Lideranças</h2>
+          <p className="text-sm text-muted-foreground">
+            Suba a planilha de RV (Excel ou CSV) com as colunas{' '}
+            <span className="font-mono text-xs">OPERAÇÃO · NEGOCIO · SETOR · FUNÇÃO · NOME · VALOR</span>.
+            O cadastro é atualizado pelo <strong>nome</strong> da liderança — reimportar substitui os valores existentes.
+          </p>
+          <FilePickerButton label="Planilha de RV (.xlsx ou .csv)" accept=".xlsx,.xls,.csv,.txt" file={file} onFile={handleFile} />
 
-        {errosParse.length > 0 && (
-          <div className="rounded-lg border border-amber-300/50 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400">
-            <p className="mb-1 font-semibold">{errosParse.length} linha(s) ignorada(s):</p>
-            <ul className="max-h-32 space-y-0.5 overflow-y-auto">
-              {errosParse.map((e, i) => <li key={i}>{e}</li>)}
-            </ul>
-          </div>
-        )}
+          {errosParse.length > 0 && (
+            <div className="rounded-lg border border-amber-300/50 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400">
+              <p className="mb-1 font-semibold">{errosParse.length} linha(s) ignorada(s):</p>
+              <ul className="max-h-32 space-y-0.5 overflow-y-auto">
+                {errosParse.map((e, i) => <li key={i}>{e}</li>)}
+              </ul>
+            </div>
+          )}
 
-        {file && (
-          <div className="flex items-center gap-3">
-            <Button onClick={handleImportar} disabled={linhas.length === 0 || importando} className="gap-2">
-              {importando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-              Importar {linhas.length} liderança(s)
-            </Button>
-            <Button variant="outline" onClick={() => { setFile(null); setLinhas([]); setErrosParse([]) }} disabled={importando}>
-              Cancelar
-            </Button>
-          </div>
-        )}
-      </div>
+          {file && (
+            <div className="flex items-center gap-3">
+              <Button onClick={handleImportar} disabled={linhas.length === 0 || importando} className="gap-2">
+                {importando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                Importar {linhas.length} liderança(s)
+              </Button>
+              <Button variant="outline" onClick={() => { setFile(null); setLinhas([]); setErrosParse([]) }} disabled={importando}>
+                Cancelar
+              </Button>
+            </div>
+          )}
+        </div>
 
-      {/* ── Resultados mensais dos indicadores ── */}
-      <div className="border-t pt-6">
         <ImportarResultadosGente />
       </div>
 

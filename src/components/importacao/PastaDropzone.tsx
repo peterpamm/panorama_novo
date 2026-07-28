@@ -25,30 +25,24 @@ export function PastaDropzone({ arquivos, onArquivos }: PastaDropzoneProps) {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-muted-foreground/25 p-8 text-center">
+    <div className="flex flex-wrap items-center gap-3">
       <input ref={pastaInputRef} type="file" multiple className="hidden" onChange={handleChange} />
       <input ref={arquivosInputRef} type="file" multiple accept=".xlsx" className="hidden" onChange={handleChange} />
 
-      {arquivos.length > 0 ? (
-        <div className="flex items-center gap-3 text-sm">
-          <FileSpreadsheet className="h-8 w-8 text-green-600" />
-          <div>
-            <p className="font-medium">{arquivos.length} arquivo{arquivos.length === 1 ? '' : 's'} .xlsx selecionado{arquivos.length === 1 ? '' : 's'}</p>
-            <p className="text-muted-foreground">Use os botões abaixo pra escolher outra pasta ou outros arquivos</p>
-          </div>
-        </div>
-      ) : (
-        <div className="flex flex-col items-center gap-2">
-          <FolderOpen className="h-8 w-8 text-muted-foreground" />
-          <p className="text-sm font-medium">Selecione os relatórios DRE pra importar</p>
-          <p className="text-xs text-muted-foreground">Pasta inteira (ex: DRE_novo, lê todas as subpastas de uma vez) ou só os arquivos que mudaram</p>
-        </div>
-      )}
+      <Button type="button" variant="outline" onClick={() => pastaInputRef.current?.click()} className="gap-2">
+        <FolderOpen className="h-4 w-4" />
+        Selecionar pasta
+      </Button>
+      <Button type="button" variant="outline" onClick={() => arquivosInputRef.current?.click()} className="gap-2">
+        <FileSpreadsheet className="h-4 w-4" />
+        Selecionar arquivos
+      </Button>
 
-      <div className="flex gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={() => pastaInputRef.current?.click()}>Selecionar pasta</Button>
-        <Button type="button" variant="outline" size="sm" onClick={() => arquivosInputRef.current?.click()}>Selecionar arquivos</Button>
-      </div>
+      {arquivos.length > 0 && (
+        <span className="text-sm text-muted-foreground">
+          {arquivos.length} arquivo{arquivos.length === 1 ? '' : 's'} .xlsx selecionado{arquivos.length === 1 ? '' : 's'}
+        </span>
+      )}
     </div>
   )
 }

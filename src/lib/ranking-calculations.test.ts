@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { DreLongoRow, Meta } from '@/types'
+import type { DreLongoRow, Meta, OrcamentoLinha } from '@/types'
 import { calcularRankingIndicador, calcularRankingReceita, corClasseAtingimento } from './ranking-calculations'
 
 function linha(
@@ -18,30 +18,74 @@ function meta(unidade: string, codigo: string, mes: number, meta_avr: number): M
   return { unidade, negocio: 'ROTA', ano: 2025, codigo, mes, meta_avr }
 }
 
-describe('calcularRankingReceita', () => {
-  const rows: DreLongoRow[] = [
-    linha('A', '002', 11, 'ACUMULADO_ANO', 900000, 1000000),
-    linha('B', '002', 11, 'ACUMULADO_ANO', 900000, 500000),
-    linha('AMBEV', '002', 11, 'ACUMULADO_ANO', 1000000, 2000000),
-  ]
-  const metas: Meta[] = [
-    meta('A', '002', 0, 900000),
-    meta('B', '002', 0, 900000),
-    meta('AMBEV', '002', 0, 1000000),
-  ]
+function orcamento(unidade: string, mes: number, orcado: number): OrcamentoLinha {
+  return { unidade, negocio: 'ROTA', ano: 2025, mes, conta_codigo: '002', conta_nome: 'Receita Líquida Operacional', orcado, av: 100, ah: 0 }
+}
 
-  it('calcula % de atingimento (receita YTD / meta anual) e ranqueia decrescente, AMBEV sempre por último sem rank', () => {
-    const ranking = calcularRankingReceita(rows, metas, { negocio: 'ROTA', ano: 2025 })
-    expect(ranking.map(r => r.unidade)).toEqual(['A', 'B', 'AMBEV'])
-    expect(ranking[0]).toMatchObject({ rank: 1, receitaYtd: 1000000 })
-    expect(ranking[0].percentualAtingimento).toBeCloseTo((1000000 / 900000) * 100, 5)
-    expect(ranking[1]).toMatchObject({ rank: 2 })
-    expect(ranking[2]).toMatchObject({ rank: null, unidade: 'AMBEV' })
+describe('calcularRankingReceita', () => {
+  describe('modo Mensal', () => {
+    const rows: DreLongoRow[] = [
+      linha('A', '002', 3, 'MENSAL', 900000, 1000000),
+      linha('B', '002', 3, 'MENSAL', 900000, 500000),
+      linha('AMBEV', '002', 3, 'MENSAL', 1000000, 2000000),
+    ]
+    const orcamentos: OrcamentoLinha[] = [
+      orcamento('A', 3, 900000),
+      orcamento('B', 3, 900000),
+      orcamento('AMBEV', 3, 1000000),
+    ]
+
+    it('compara o realizado do mês com o orçado do mesmo mês e ranqueia decrescente, AMBEV sempre por último sem rank', () => {
+      const ranking = calcularRankingReceita(rows, orcamentos, { negocio: 'ROTA', ano: 2025, periodo: 'mensal', mes: 3 })
+      expect(ranking.map(r => r.unidade)).toEqual(['A', 'B', 'AMBEV'])
+      expect(ranking[0]).toMatchObject({ rank: 1, realizado: 1000000, orcado: 900000, impacto: 100000 })
+      expect(ranking[0].percentualAtingimento).toBeCloseTo((1000000 / 900000) * 100, 5)
+      expect(ranking[1]).toMatchObject({ rank: 2, impacto: -400000 })
+      expect(ranking[2]).toMatchObject({ rank: null, unidade: 'AMBEV' })
+    })
+
+    it('percentualAtingimento e impacto null quando não há orçamento importado pro mês', () => {
+      const ranking = calcularRankingReceita(rows, [], { negocio: 'ROTA', ano: 2025, periodo: 'mensal', mes: 3 })
+      expect(ranking.every(r => r.percentualAtingimento === null && r.orcado === null && r.impacto === null)).toBe(true)
+    })
   })
 
-  it('percentualAtingimento null quando não há meta cadastrada', () => {
-    const ranking = calcularRankingReceita(rows, [], { negocio: 'ROTA', ano: 2025 })
-    expect(ranking.every(r => r.percentualAtingimento === null)).toBe(true)
+  describe('modo YTD', () => {
+    const rows: DreLongoRow[] = [
+      linha('A', '002', 3, 'ACUMULADO_ANO', 2700000, 3000000),
+    ]
+    // Acumulado é até o mês 3 (mesMax=3) — o orçado do YTD soma só jan/fev/mar,
+    // ignorando o mês 4 mesmo que ele já tenha orçamento importado.
+    const orcamentos: OrcamentoLinha[] = [
+      orcamento('A', 1, 900000),
+      orcamento('A', 2, 900000),
+      orcamento('A', 3, 900000),
+      orcamento('A', 4, 900000),
+    ]
+
+    it('soma o orçado só até o mesmo mês do acumulado realizado (mesMax)', () => {
+      const ranking = calcularRankingReceita(rows, orcamentos, { negocio: 'ROTA', ano: 2025, periodo: 'ytd', mes: 0 })
+      expect(ranking[0]).toMatchObject({ realizado: 3000000, orcado: 2700000 })
+      expect(ranking[0].percentualAtingimento).toBeCloseTo((3000000 / 2700000) * 100, 5)
+    })
+  })
+
+  describe('modo 1º/2º semestre', () => {
+    it('usa o bloco recalculado (mes=13/14) quando existe', () => {
+      const rows: DreLongoRow[] = [linha('A', '002', 6, 'MENSAL', 900000, 1000000)]
+      const orcamentos: OrcamentoLinha[] = [orcamento('A', 13, 5400000), orcamento('A', 14, 6000000)]
+      const s1 = calcularRankingReceita(rows, orcamentos, { negocio: 'ROTA', ano: 2025, periodo: 's1', mes: 0 })
+      expect(s1[0].orcado).toBe(5400000)
+      const s2 = calcularRankingReceita(rows, orcamentos, { negocio: 'ROTA', ano: 2025, periodo: 's2', mes: 0 })
+      expect(s2[0].orcado).toBe(6000000)
+    })
+
+    it('sem o bloco recalculado, soma os 6 meses do semestre como fallback', () => {
+      const rows: DreLongoRow[] = [linha('A', '002', 6, 'MENSAL', 900000, 1000000)]
+      const orcamentos: OrcamentoLinha[] = [1, 2, 3, 4, 5, 6].map(mes => orcamento('A', mes, 900000))
+      const s1 = calcularRankingReceita(rows, orcamentos, { negocio: 'ROTA', ano: 2025, periodo: 's1', mes: 0 })
+      expect(s1[0].orcado).toBe(900000 * 6)
+    })
   })
 })
 
@@ -53,7 +97,7 @@ describe('calcularRankingIndicador', () => {
     ]
     const metas: Meta[] = [meta('A', '021', 0, 100), meta('B', '021', 0, 100)]
 
-    const ranking = calcularRankingIndicador(rows, metas, { natureza: 'custo', prefixos: ['021'] }, '021', { negocio: 'ROTA', ano: 2025, isYtd: false, mes: 1 })
+    const ranking = calcularRankingIndicador(rows, metas, { natureza: 'custo', prefixos: ['021'] }, '021', { negocio: 'ROTA', ano: 2025, periodo: 'mensal', mes: 1 })
 
     expect(ranking.map(r => r.unidade)).toEqual(['A', 'B'])
     expect(ranking[0]).toMatchObject({ rank: 1, avr: 90, meta: 100, delta: 10 })
@@ -67,11 +111,23 @@ describe('calcularRankingIndicador', () => {
     ]
     const metas: Meta[] = [meta('A', '232', 0, 100), meta('B', '232', 0, 100)]
 
-    const ranking = calcularRankingIndicador(rows, metas, { natureza: 'performance', prefixos: ['232'] }, '232', { negocio: 'ROTA', ano: 2025, isYtd: false, mes: 1 })
+    const ranking = calcularRankingIndicador(rows, metas, { natureza: 'performance', prefixos: ['232'] }, '232', { negocio: 'ROTA', ano: 2025, periodo: 'mensal', mes: 1 })
 
     expect(ranking.map(r => r.unidade)).toEqual(['A', 'B'])
     expect(ranking[0]).toMatchObject({ delta: 20 })
     expect(ranking[1]).toMatchObject({ delta: -20 })
+  })
+
+  it('1º semestre: usa a meta semestral (mes=13) e reconstrói o realizado somando jan-jun', () => {
+    const rows: DreLongoRow[] = [
+      linha('A', '021', 1, 'MENSAL', -500000, -450000, -90),
+      linha('A', '021', 2, 'MENSAL', -500000, -460000, -92),
+    ]
+    const metas: Meta[] = [meta('A', '021', 13, 100)]
+
+    const ranking = calcularRankingIndicador(rows, metas, { natureza: 'custo', prefixos: ['021'] }, '021', { negocio: 'ROTA', ano: 2025, periodo: 's1', mes: 0 })
+
+    expect(ranking[0].meta).toBe(100)
   })
 })
 

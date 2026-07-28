@@ -216,18 +216,21 @@ export interface SeriePontoCaptura {
  * mes=0):
  *   ritmo = (meta_anual × 12 − soma do AVR mês a mês já realizado) / meses restantes
  * Sem meta anual cadastrada, não há o que projetar — retorna só os meses
- * já realizados (sem avrNecessario).
+ * já realizados (sem avrNecessario). `metaAnualOverride`, quando informado
+ * (mesmo null), substitui a busca em `metasManual` — usado pra priorizar a
+ * meta do orçamento sem duplicar essa lógica de ritmo em outro lugar.
  */
 export function calcularSerieCaptura(
   rowsAno: DreLongoRow[],
   metasManual: Meta[],
   params: { unidade: string; negocio: string; ano: number; codigo: string; prefixos: string | string[] },
+  metaAnualOverride?: number | null,
 ): SeriePontoCaptura[] {
   const mensal = rowsAno.filter(r => r.tipo_periodo === 'MENSAL')
   const mesesRealizados = Array.from(new Set(mensal.map(r => r.mes))).sort((a, b) => a - b)
   if (mesesRealizados.length === 0) return []
 
-  const metaAnual = buscarMeta(metasManual, {
+  const metaAnual = metaAnualOverride !== undefined ? metaAnualOverride : buscarMeta(metasManual, {
     unidade: params.unidade, negocio: params.negocio, ano: params.ano, codigo: params.codigo, isYtd: true, mes: 0,
   })
 

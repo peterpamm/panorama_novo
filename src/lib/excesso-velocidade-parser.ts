@@ -1,0 +1,102 @@
+import * as XLSX from 'xlsx'
+import { parseNumeroPtBr } from '@/lib/utils'
+
+/** Contagem agregada de excessos de velocidade de uma unidade (UO), linha por linha (cada linha = 1 veículo/evento). */
+export interface ExcessoVelocidadeUnidadeAgregado {
+  /** Texto de "UO" como veio na planilha (ex: "CD FRANCISCO BELTRÃO - LOG20"). */
+  uo: string
+  /** Quantidade de linhas onde EXCESSO (velocidade aferida) > LIMIAR (limite da via). */
+  totalExcessos: number
+}
+
+export interface ParseExcessoVelocidadeResultado {
+  agregados: ExcessoVelocidadeUnidadeAgregado[]
+  erros: string[]
+}
+
+function normalizar(texto: string): string {
+  return texto.trim().toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+}
+
+function toStr(v: unknown): string {
+  return String(v ?? '').trim()
+}
+
+/** "43 Km/h" → 43; aceita número puro também. */
+function parseVelocidade(raw: unknown): number | null {
+  if (typeof raw === 'number') return raw
+  const str = toStr(raw).replace(/km\/?h/i, '').trim()
+  if (str === '') return null
+  const n = parseNumeroPtBr(str)
+  return Number.isNaN(n) ? null : n
+}
+
+/**
+ * Planilha de excessos de velocidade (várias colunas — placa, prefixo,
+ * motorista, CPF etc — usamos só UO, LIMIAR e EXCESSO). Cada linha é um
+ * evento; conta como excesso quando a velocidade aferida (EXCESSO) é maior
+ * que o limite da via (LIMIAR). Agregamos a contagem por unidade (UO) — a
+ * exclusão de ESTÂNCIA/Camaçari ARM é feita depois, na importação (que
+ * resolve a UO pra unidade de verdade e sabe o negócio).
+ */
+function parseMatriz(matriz: unknown[][]): ParseExcessoVelocidadeResultado {
+  if (matriz.length === 0) return { agregados: [], erros: [] }
+
+  const header = matriz[0].map(c => normalizar(toStr(c)))
+  const iUo = header.findIndex(h => h === 'UO')
+  const iLimiar = header.findIndex(h => h.startsWith('LIMIAR'))
+  const iExcesso = header.findIndex(h => h.startsWith('EXCESSO'))
+
+  if (iUo === -1 || iLimiar === -1 || iExcesso === -1) {
+    return { agregados: [], erros: ['Cabeçalho inválido — esperado colunas UO, LIMIAR e EXCESSO'] }
+  }
+
+  const porUo = new Map<string, number>()
+  const erros: string[] = []
+
+  for (let i = 1; i < matriz.length; i++) {
+    const cols = matriz[i]
+    if (cols.every(c => toStr(c) === '')) continue
+
+    const uo = toStr(cols[iUo]).toUpperCase()
+    if (!uo) continue
+
+    const limiar = parseVelocidade(cols[iLimiar])
+    const excesso = parseVelocidade(cols[iExcesso])
+    if (limiar === null || excesso === null) {
+      erros.push(`Linha ${i + 1}: LIMIAR/EXCESSO inválido para "${uo}"`)
+      continue
+    }
+
+    if (excesso > limiar) porUo.set(uo, (porUo.get(uo) ?? 0) + 1)
+  }
+
+  const agregados: ExcessoVelocidadeUnidadeAgregado[] = Array.from(porUo.entries())
+    .map(([uo, totalExcessos]) => ({ uo, totalExcessos }))
+
+  return { agregados, erros }
+}
+
+/** Lê o CSV (separador ; ou tab). */
+export function parseExcessoVelocidadeCsv(texto: string): ParseExcessoVelocidadeResultado {
+  const linhasTexto = texto.split(/\r?\n/).map(l => l.trim()).filter(l => l !== '')
+  if (linhasTexto.length === 0) return { agregados: [], erros: [] }
+  const separador = linhasTexto[0].includes('\t') ? '\t' : ';'
+  return parseMatriz(linhasTexto.map(l => l.split(separador)))
+}
+
+/** Lê a planilha Excel (.xlsx/.xls) — usa a primeira aba. */
+export async function parseExcessoVelocidadeXlsx(file: File): Promise<ParseExcessoVelocidadeResultado> {
+  const buffer = await file.arrayBuffer()
+  const wb = XLSX.read(buffer, { type: 'array' })
+  const sheet = wb.Sheets[wb.SheetNames[0]]
+  if (!sheet) return { agregados: [], erros: ['Arquivo Excel sem abas'] }
+  const matriz = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' })
+  return parseMatriz(matriz)
+}
+
+/** Detecta o formato pela extensão e faz o parse do arquivo. */
+export async function parseExcessoVelocidadeFile(file: File): Promise<ParseExcessoVelocidadeResultado> {
+  if (/\.xlsx?$/i.test(file.name)) return parseExcessoVelocidadeXlsx(file)
+  return parseExcessoVelocidadeCsv(await file.text())
+}

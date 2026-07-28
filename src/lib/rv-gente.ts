@@ -43,6 +43,24 @@ export function ehSetorFrota(setor: string): boolean {
   return tokensSetor(setor).includes('FROTA')
 }
 
+/** Setor de segurança: aceita "SEGURANÇA"/"SEGURANCA" ou "SEG" (palavra inteira, sem acentos). */
+export function ehSetorSeguranca(setor: string): boolean {
+  const tokens = tokensSetor(setor)
+  return tokens.includes('SEGURANCA') || tokens.includes('SEG')
+}
+
+/** Setor de distribuição: aceita "DISTRIBUIÇÃO"/"DISTRIBUICAO" ou "DISTRIB" (palavra inteira, sem acentos). */
+export function ehSetorDistribuicao(setor: string): boolean {
+  const tokens = tokensSetor(setor)
+  return tokens.includes('DISTRIBUICAO') || tokens.includes('DISTRIB')
+}
+
+/** Setor de armazém: aceita "ARMAZÉM"/"ARMAZEM" ou "ARM" (palavra inteira, sem acentos). */
+export function ehSetorArmazem(setor: string): boolean {
+  const tokens = tokensSetor(setor)
+  return tokens.includes('ARMAZEM') || tokens.includes('ARM')
+}
+
 /**
  * Compara o negócio de uma meta/indicador com o negócio da liderança:
  * vazio/CONS de qualquer lado casa com tudo (gerente único responde por todos

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { calcularMatrizPerdas } from './painel-perdas-calculations'
-import type { DreLongoRow, MetaPerdas, PainelPerdasAux } from '@/types'
+import type { DreLongoRow, MetaPerdaIndicador, PainelPerdasAux } from '@/types'
 
 function rowDre(override: Partial<DreLongoRow>): DreLongoRow {
   return {
@@ -87,12 +87,42 @@ describe('calcularMatrizPerdas', () => {
     expect(linhaP.valores['FOZ']).toBeCloseTo(-0.01) // -1000 / 100000
   })
 
-  it('META (R$) = meta_anual / 12 * num_meses', () => {
+  it('META (R$) = soma dos indicadores (meta_anual) / 12 * num_meses', () => {
     const dre = [rowDre({ conta_codigo: '021', diferenca: 0 })]
-    const meta: MetaPerdas = { unidade: 'FOZ', ano: 2025, meta_pct: -2.0, meta_anual: -12000 }
-    const r = calcularMatrizPerdas(dre, [], [meta], 2025, [1, 2, 3])
+    const metas: MetaPerdaIndicador[] = [
+      { unidade: 'FOZ', ano: 2025, indicador: 'vales', meta_anual: -8000 },
+      { unidade: 'FOZ', ano: 2025, indicador: 'multas', meta_anual: -4000 },
+    ]
+    const r = calcularMatrizPerdas(dre, [], metas, 2025, [1, 2, 3])
     const linhaMetaRs = r.linhas.find(l => l.tipo === 'meta_rs')!
-    expect(linhaMetaRs.valores['FOZ']).toBeCloseTo(-3000) // -12000/12 * 3
+    expect(linhaMetaRs.valores['FOZ']).toBeCloseTo(-3000) // (-8000-4000)/12 * 3
+  })
+
+  it('META (%) = META (R$) / FATURAMENTO', () => {
+    const dre = [
+      rowDre({ conta_codigo: '021', diferenca: 0 }),
+      rowDre({ tipo_periodo: 'ACUMULADO_ANO', conta_codigo: '001', mes: 1, remunerado: -120000 }),
+    ]
+    const metas: MetaPerdaIndicador[] = [
+      { unidade: 'FOZ', ano: 2025, indicador: 'vales', meta_anual: -12000 },
+    ]
+    const r = calcularMatrizPerdas(dre, [], metas, 2025, [1])
+    const linhaMetaPct = r.linhas.find(l => l.tipo === 'meta_pct')!
+    expect(linhaMetaPct.valores['FOZ']).toBeCloseTo(-1000 / 120000) // metaRs = -12000/12*1
+  })
+
+  it('META (R$) do AMBEV soma as unidades individuais (sem linha própria na planilha)', () => {
+    const dre = [
+      rowDre({ unidade: 'FOZ', conta_codigo: '021', diferenca: 0 }),
+      rowDre({ unidade: 'RIO', conta_codigo: '021', diferenca: 0 }),
+    ]
+    const metas: MetaPerdaIndicador[] = [
+      { unidade: 'FOZ', ano: 2025, indicador: 'vales', meta_anual: -12000 },
+      { unidade: 'RIO', ano: 2025, indicador: 'vales', meta_anual: -6000 },
+    ]
+    const r = calcularMatrizPerdas(dre, [], metas, 2025, [1, 2, 3])
+    const linhaMetaRs = r.linhas.find(l => l.tipo === 'meta_rs')!
+    expect(linhaMetaRs.valores['AMBEV']).toBeCloseTo(-4500) // (-12000-6000)/12 * 3
   })
 
   it('AMBEV fica último na lista de unidades', () => {

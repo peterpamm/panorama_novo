@@ -8,7 +8,6 @@ export function getChartColors() {
     grid:   isDark ? '#1e2a3a' : '#e2e8f0',
     axis:   isDark ? '#64748b' : '#94a3b8',
     legend: isDark ? '#94a3b8' : '#6b7280',
-    dotStroke: isDark ? '#161d2d' : 'white',
     /** Fundo do cursor de hover do Tooltip em gráficos de barra — sutil nos dois temas. */
     cursor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
   }
@@ -90,8 +89,7 @@ export function PontoDot({ cx, cy, index, ultimoIndex, natureza, valores }: Pont
   if (!ponto || ponto.avr === null) return null
   const atual = index === ultimoIndex
   const cor = corPorSemaforo(ponto.avr, ponto.meta, natureza)
-  const { dotStroke } = getChartColors()
-  return <circle cx={cx} cy={cy} r={atual ? 6 : 4} fill={cor} stroke={dotStroke} strokeWidth={atual ? 2 : 1.5} />
+  return <circle cx={cx} cy={cy} r={atual ? 4 : 3} fill={cor} stroke="none" />
 }
 
 interface PontoLabelProps {

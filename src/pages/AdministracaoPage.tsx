@@ -6,8 +6,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Toaster } from '@/components/ui/toaster'
 import { useToast } from '@/components/ui/use-toast'
+import { OrcamentoTab } from '@/components/administracao/OrcamentoTab'
+import { UsuariosTab } from '@/components/administracao/UsuariosTab'
 import type { Unidade } from '@/types'
 
 interface LinhaUnidadeProps {
@@ -145,43 +148,61 @@ export function AdministracaoPage() {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Unidades</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Unidades sem nenhum lançamento podem ser excluídas direto. Unidades duplicadas (ex: uma renomeada e outra antiga que ficou sem uso)
-            podem ser mescladas — os lançamentos da unidade da esquerda são movidos pra unidade escolhida em "Mesclar com" e a duplicada é removida.
-            "Data de entrada" é opcional — só preencha pra unidades que começaram a operar no meio de algum ano com dado no banco (ex: 2025-07);
-            isso ajusta a meta de Redução de Custos pra usar a média do período em que já operava no lugar dos meses em que ainda não existia.
-            {' '}"Apelidos (BI)" são os nomes alternativos que a unidade recebe em arquivos externos (BI da Ambev) — separe por vírgula
-            (ex: em Camaçari, <span className="font-mono text-xs">CDL CAMAÇARI, CDR BAHIA</span>); as importações de Gente usam esses apelidos pra reconhecer a unidade.
-          </p>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <p className="text-sm text-muted-foreground">Carregando...</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Nome</TableHead>
-                  <TableHead>Código</TableHead>
-                  <TableHead>Nome no GInfo</TableHead>
-                  <TableHead>Apelidos (BI)</TableHead>
-                  <TableHead>Data de entrada</TableHead>
-                  <TableHead>Mesclar duplicada</TableHead>
-                  <TableHead />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {unidades.map(u => (
-                  <LinhaUnidade key={u.codigo} unidade={u} unidades={unidades} onAtualizado={recarregar} />
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      <Tabs defaultValue="unidades">
+        <TabsList>
+          <TabsTrigger value="unidades">Unidades</TabsTrigger>
+          <TabsTrigger value="orcamento">Orçamento</TabsTrigger>
+          <TabsTrigger value="usuarios">Usuários</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="unidades" className="pt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Unidades</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Unidades sem nenhum lançamento podem ser excluídas direto. Unidades duplicadas (ex: uma renomeada e outra antiga que ficou sem uso)
+                podem ser mescladas — os lançamentos da unidade da esquerda são movidos pra unidade escolhida em "Mesclar com" e a duplicada é removida.
+                "Data de entrada" é opcional — só preencha pra unidades que começaram a operar no meio de algum ano com dado no banco (ex: 2025-07);
+                isso ajusta a meta de Redução de Custos pra usar a média do período em que já operava no lugar dos meses em que ainda não existia.
+                {' '}"Apelidos (BI)" são os nomes alternativos que a unidade recebe em arquivos externos (BI da Ambev) — separe por vírgula
+                (ex: em Camaçari, <span className="font-mono text-xs">CDL CAMAÇARI, CDR BAHIA</span>); as importações de Gente e o Orçamento usam esses apelidos pra reconhecer a unidade.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <p className="text-sm text-muted-foreground">Carregando...</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>Código</TableHead>
+                      <TableHead>Nome no GInfo</TableHead>
+                      <TableHead>Apelidos (BI)</TableHead>
+                      <TableHead>Data de entrada</TableHead>
+                      <TableHead>Mesclar duplicada</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {unidades.map(u => (
+                      <LinhaUnidade key={u.codigo} unidade={u} unidades={unidades} onAtualizado={recarregar} />
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="orcamento" className="pt-4">
+          <OrcamentoTab />
+        </TabsContent>
+
+        <TabsContent value="usuarios" className="pt-4">
+          <UsuariosTab />
+        </TabsContent>
+      </Tabs>
       <Toaster />
     </div>
   )

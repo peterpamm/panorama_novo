@@ -57,6 +57,49 @@ export const RANKING_CUSTOS = ['900', '021', '158', '113', '157', '074', '075']
  */
 export const CODIGOS_PERFORMANCE = ['232', '275']
 
+/**
+ * Código(s) de conta NO PRÓPRIO ORÇAMENTO (tabela `orcamentos` — numeração
+ * própria da planilha, consistente entre as ~29 abas ORÇ_XXX_SUFIXO, mas
+ * diferente da numeração do plano de contas do DRE) que correspondem a cada
+ * pacote do Farol — usado pra puxar a meta mensal/anual/semestral direto do
+ * orçamento em vez da tabela `metas`, pra qualquer unidade/negócio. Confirmado por nome junto
+ * com o usuário e depois traduzido pro código — casar só pelo nome dava
+ * problema porque a planilha tem linhas duplicadas (ex: "048 UNIFORMES" e
+ * "051 UNIFORMES" são a mesma descrição, contas diferentes). Pacotes sem
+ * entrada aqui continuam usando a tabela `metas` normalmente.
+ */
+export const PACOTE_CONTA_ORCAMENTO: Record<string, string[]> = {
+  '232': ['133'], // EBITDA
+  '275': ['155'], // Lucro Líquido do Exercício - Geração de Caixa
+  '021': ['012'], // Custos Operacionais
+  '900': ['012', '077'], // Custos Operacionais + Despesas Administrativas e Financeiras
+  '157': ['077'], // Despesas Administrativas e Financeiras
+  '158': ['020', '078'], // Custo com Pessoal + Despesas com Pessoal Administrativo
+  '033': ['020'], // Custo com Pessoal
+  '159': ['078'], // Despesas com Pessoal Administrativo
+  '113': ['052'], // Custos Gerais com Frota
+  '073': ['046'], // Gastos com Uniformes e EPI's
+  '117': ['056'], // Manutenção de Veículos Próprios
+  '131': ['058'], // Pneus
+  '115': ['054'], // Óleo Diesel
+  '074': ['047'], // EPI's
+  '075': ['048'], // Uniformes
+  '190': ['096'], // Despesas Administrativas Gerais
+  '217': ['121'], // Despesas Gerais Frota Leve
+  '218': ['122'], // Manutenção Frota Leve
+}
+
+/**
+ * Códigos de conta do orçamento realmente usados por algum pacote do Farol
+ * (todos os valores de PACOTE_CONTA_ORCAMENTO) + a Receita Líquida
+ * Operacional (denominador de qualquer AV/semestre). Usado pra recalcular
+ * só o necessário em vez de todas as ~155 contas de cada aba — bem mais
+ * rápido e mais leve pro Supabase.
+ */
+export const CONTAS_ORCAMENTO_USADAS = Array.from(
+  new Set([CONTA_RECEITA, ...Object.values(PACOTE_CONTA_ORCAMENTO).flat()]),
+)
+
 export const CORES_FAROL = {
   positivo: '#10b981',
   negativo: '#ef4444',
@@ -77,6 +120,8 @@ export interface RvIndicadorDre {
   nome: string
   tipo: 'avr' | 'dispersao'
   prefixos: string[]
+  /** Só conta na apuração de lideranças com esse negócio (ex: 'ROTA') — undefined = vale pra todas. */
+  negocio?: string
 }
 
 /**
@@ -95,12 +140,14 @@ export const RV_GENTE_DRE: RvIndicadorDre[] = [
 /**
  * Indicadores do setor financeiro — todos com origem no DRE, sem importação
  * de metas (AVR usa a meta do Farol; dispersão usa as contas do Painel de
- * Perdas). O `id` é a chave do peso em rv_financeiro_pesos_dre.
+ * Perdas). O `id` é a chave do peso em rv_financeiro_pesos_dre. Vales (contas
+ * 051/052) não entra aqui — vira o indicador `valesPerdasTabela` do
+ * RvApuracao (mesma regra da Distribuição: dispersão vs % da Meta de Perdas
+ * de Vales, não mais ≥ 0).
  */
 export const RV_FINANCEIRO_DRE: RvIndicadorDre[] = [
   { id: '157',    nome: 'Despesa Administrativa', tipo: 'avr',       prefixos: ['157'] },
   { id: '021',    nome: 'Custo Operacional',      tipo: 'avr',       prefixos: ['021'] },
-  { id: 'VALES',  nome: 'Gastos com Vales',       tipo: 'dispersao', prefixos: ['051', '052'] },
   { id: 'MULTAS', nome: 'Multas',                 tipo: 'dispersao', prefixos: ['137', '222'] },
 ]
 
@@ -124,6 +171,21 @@ export const RV_FROTA_DRE: RvIndicadorDre[] = [
 export const RV_SEGURANCA_DRE: RvIndicadorDre[] = [
   { id: '074', nome: "EPI's",     tipo: 'avr', prefixos: ['074'] },
   { id: '075', nome: 'Uniformes', tipo: 'avr', prefixos: ['075'] },
+]
+
+/**
+ * Metadados do indicador Pacote de Gente da Distribuição — 158, contas
+ * 158+033 (inclui a Despesa com Pessoal ADM, mesmo pacote do Farol de
+ * Metas), AVR mensal vs meta do Farol do pacote 158. Só conta na apuração
+ * das lideranças da ROTA (negocio: 'ROTA') — a RV é da liderança da
+ * rota/distribuição, então usa sempre o resultado do negócio ROTA (nunca
+ * CONS/consolidado), mesmo em unidades sem split de negócio no DRE. Usado
+ * como bloco customizado no RvApuracao (prop incluirPacoteGenteDu), não pelo
+ * mecanismo genérico indicadoresDre/tabelaPesos — o peso é por função da
+ * liderança (rv_distribuicao_peso_funcao), não por indicador único.
+ */
+export const RV_DISTRIBUICAO_DRE: RvIndicadorDre[] = [
+  { id: '158', nome: 'Pacote de Gente', tipo: 'avr', prefixos: ['158', '033'], negocio: 'ROTA' },
 ]
 
 /** Cards "Redução de Custos -15%" da aba ADM. */

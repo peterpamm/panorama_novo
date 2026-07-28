@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { supabase } from '@/lib/supabase'
 import { useUnidades } from '@/hooks/useUnidades'
 import { useDreLongoTodasUnidades } from '@/hooks/useDreLongoTodasUnidades'
 import { useMetasTodasUnidades } from '@/hooks/useMetasTodasUnidades'
@@ -10,11 +11,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RankingTabelaIndicador, RankingTabelaPerdas, RankingTabelaReceita, type RankingLinhaPerda } from '@/components/ranking/RankingTabelas'
 import { UnidadesMultiSelect } from '@/components/ranking/UnidadesMultiSelect'
 import { usePainelPerdasAux } from '@/hooks/usePainelPerdasAux'
-import { PACOTES, RANKING_CUSTOS, RANKING_PERFORMANCE } from '@/lib/constants'
-import { calcularRankingIndicador, calcularRankingReceita } from '@/lib/ranking-calculations'
+import { CONTA_RECEITA, PACOTES, RANKING_CUSTOS, RANKING_PERFORMANCE } from '@/lib/constants'
+import { calcularRankingIndicador, calcularRankingReceita, type PeriodoRanking } from '@/lib/ranking-calculations'
 import { calcularMatrizPerdas, INDICADORES_PERDAS } from '@/lib/painel-perdas-calculations'
+import { fetchOrcamentoPaginado } from '@/lib/orcamento-fetch'
 import { MES_ABREV } from '@/components/farol/chart-shared'
 import { cn } from '@/lib/utils'
+import type { OrcamentoLinha } from '@/types'
 
 function unicos<T>(valores: T[]): T[] {
   return Array.from(new Set(valores))
@@ -84,13 +87,39 @@ export function RankingPage() {
     setSelMes(mesesDisponiveis[mesesDisponiveis.length - 1])
   }, [mesesDisponiveis, selMes])
 
-  const [isYtd, setIsYtd] = useState(false)
+  const [periodo, setPeriodo] = useState<PeriodoRanking>('mensal')
+  const isYtd = periodo === 'ytd'
+  const mesDesabilitado = periodo !== 'mensal'
+  const periodoTexto = periodo === 'ytd'
+    ? 'YTD — acumulado do ano'
+    : periodo === 's1'
+      ? '1º Semestre'
+      : periodo === 's2'
+        ? '2º Semestre'
+        : `Mensal — M${selMes ?? '-'}`
 
   const metasNegocioAno = useMemo(() => metas.filter(m => m.negocio === selNegocio && m.ano === selAno), [metas, selNegocio, selAno])
 
+  // Receita Líquida Operacional orçada (tabela `orcamentos`) — todas as unidades,
+  // pro ranking de Receita comparar realizado × orçado no lugar da meta manual.
+  const [orcamentoRows, setOrcamentoRows] = useState<OrcamentoLinha[]>([])
+  useEffect(() => {
+    if (selNegocio === '' || selAno === null) { setOrcamentoRows([]); return }
+    let cancelado = false
+    fetchOrcamentoPaginado((from, to) =>
+      supabase.from('orcamentos').select('*')
+        .eq('negocio', selNegocio).eq('ano', selAno).eq('conta_codigo', CONTA_RECEITA)
+        .order('id', { ascending: true })
+        .range(from, to),
+    )
+      .then(rows => { if (!cancelado) setOrcamentoRows(rows) })
+      .catch(() => { if (!cancelado) setOrcamentoRows([]) })
+    return () => { cancelado = true }
+  }, [selNegocio, selAno])
+
   const rankingReceita = useMemo(
-    () => calcularRankingReceita(rowsNegocioAno, metasNegocioAno, { negocio: selNegocio, ano: selAno ?? 0 }),
-    [rowsNegocioAno, metasNegocioAno, selNegocio, selAno],
+    () => calcularRankingReceita(rowsNegocioAno, orcamentoRows, { negocio: selNegocio, ano: selAno ?? 0, periodo, mes: selMes ?? 0 }),
+    [rowsNegocioAno, orcamentoRows, selNegocio, selAno, periodo, selMes],
   )
 
   const rankingPerformance = useMemo(
@@ -98,10 +127,10 @@ export function RankingPage() {
       codigo,
       info: PACOTES[codigo],
       linhas: calcularRankingIndicador(rowsNegocioAno, metasNegocioAno, PACOTES[codigo], codigo, {
-        negocio: selNegocio, ano: selAno ?? 0, isYtd, mes: selMes ?? 0,
+        negocio: selNegocio, ano: selAno ?? 0, periodo, mes: selMes ?? 0,
       }),
     })),
-    [rowsNegocioAno, metasNegocioAno, selNegocio, selAno, isYtd, selMes],
+    [rowsNegocioAno, metasNegocioAno, selNegocio, selAno, periodo, selMes],
   )
 
   const rankingCustos = useMemo(
@@ -109,23 +138,30 @@ export function RankingPage() {
       codigo,
       info: PACOTES[codigo],
       linhas: calcularRankingIndicador(rowsNegocioAno, metasNegocioAno, PACOTES[codigo], codigo, {
-        negocio: selNegocio, ano: selAno ?? 0, isYtd, mes: selMes ?? 0,
+        negocio: selNegocio, ano: selAno ?? 0, periodo, mes: selMes ?? 0,
       }),
     })),
-    [rowsNegocioAno, metasNegocioAno, selNegocio, selAno, isYtd, selMes],
+    [rowsNegocioAno, metasNegocioAno, selNegocio, selAno, periodo, selMes],
   )
 
   // ── Ranking de Perdas (indicadores do Painel de Perdas, sempre CONS) ──────
   const rankingPerdas = useMemo(() => {
     if (!selAno || !selMes) return []
 
-    // Meses do período: mês selecionado ou acumulado Jan..mês (YTD).
+    // Meses do período: mês selecionado, acumulado Jan..mês (YTD), ou os meses
+    // do semestre que já tiverem dado importado.
     const mesesCons = unicos(
       rowsFiltradas
         .filter(r => r.negocio === 'CONS' && r.tipo_periodo === 'MENSAL' && r.ano === selAno)
         .map(r => r.mes),
     )
-    const meses = isYtd ? mesesCons.filter(m => m <= selMes).sort((a, b) => a - b) : [selMes]
+    const meses = periodo === 'ytd'
+      ? mesesCons.filter(m => m <= selMes).sort((a, b) => a - b)
+      : periodo === 's1'
+        ? mesesCons.filter(m => m >= 1 && m <= 6).sort((a, b) => a - b)
+        : periodo === 's2'
+          ? mesesCons.filter(m => m >= 7 && m <= 12).sort((a, b) => a - b)
+          : [selMes]
 
     const auxFiltrado = unidadesInicializadas ? rowsAux.filter(r => selUnidades.has(r.unidade)) : rowsAux
     const matriz = calcularMatrizPerdas(rowsFiltradas, auxFiltrado, [], selAno, meses)
@@ -136,7 +172,7 @@ export function RankingPage() {
 
       // Indicadores AUX (Indisponibilidade/Devolução) vêm de import separado e podem
       // não ter o mês mais recente do DRE — no modo Mensal, cai pro último mês com dado.
-      if (ind.fonte === 'AUX' && !isYtd) {
+      if (ind.fonte === 'AUX' && periodo === 'mensal') {
         const mesesAux = unicos(
           auxFiltrado.filter(r => r.ano === selAno && r.indicador === ind.key).map(r => r.mes),
         ).sort((a, b) => a - b)
@@ -152,20 +188,25 @@ export function RankingPage() {
 
       const individuais = matriz.unidades.filter(u => u !== 'AMBEV')
 
-      const ordenadas = individuais
+      // BNS é receita boa dentro do Painel de Perdas — mantém rank 1 = melhor.
+      // Os demais são perdas de verdade: rank 1 = pior, pra dar destaque a quem mais perde.
+      const pioresPrimeiro = ind.key !== 'bns'
+      const comValor = individuais
         .map(u => ({ unidade: u, valor: valores[u] ?? null }))
-        .sort((a, b) => (b.valor ?? -Infinity) - (a.valor ?? -Infinity))
+        .filter((x): x is { unidade: string; valor: number } => x.valor !== null)
+        .sort((a, b) => pioresPrimeiro ? a.valor - b.valor : b.valor - a.valor)
+      const semValor = individuais.filter(u => (valores[u] ?? null) === null)
 
       let rank = 0
-      const linhas: RankingLinhaPerda[] = ordenadas.map(x => ({
-        ...x,
-        rank: x.valor === null ? null : ++rank,
-      }))
+      const linhas: RankingLinhaPerda[] = [
+        ...comValor.map(x => ({ ...x, rank: ++rank })),
+        ...semValor.map(u => ({ unidade: u, valor: null, rank: null })),
+      ]
       linhas.push({ unidade: 'AMBEV', valor: valores['AMBEV'] ?? null, rank: null })
 
-      return { key: ind.key, label: ind.label, linhas, nota }
+      return { key: ind.key, label: ind.label, linhas, nota, pioresPrimeiro }
     })
-  }, [rowsFiltradas, rowsAux, selUnidades, unidadesInicializadas, selAno, selMes, isYtd])
+  }, [rowsFiltradas, rowsAux, selUnidades, unidadesInicializadas, selAno, selMes, periodo])
 
   const carregando = loadingUnidades || loadingDre || loadingMetas
 
@@ -219,8 +260,8 @@ export function RankingPage() {
             </div>
             <div className="space-y-1.5">
               <FilterLabel>Mês</FilterLabel>
-              <Select value={String(selMes ?? '')} onValueChange={v => setSelMes(Number(v))} disabled={isYtd}>
-                <SelectTrigger className={cn(filterTriggerClass, isYtd && 'opacity-50')}><SelectValue /></SelectTrigger>
+              <Select value={String(selMes ?? '')} onValueChange={v => setSelMes(Number(v))} disabled={mesDesabilitado}>
+                <SelectTrigger className={cn(filterTriggerClass, mesDesabilitado && 'opacity-50')}><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {mesesDisponiveis.map(m => <SelectItem key={m} value={String(m)}>{MES_ABREV[m] ?? m}</SelectItem>)}
                 </SelectContent>
@@ -236,9 +277,11 @@ export function RankingPage() {
                 opcoes={[
                   { value: 'mensal', label: 'Mensal' },
                   { value: 'ytd',    label: 'YTD'    },
+                  { value: 's1',     label: '1º Sem' },
+                  { value: 's2',     label: '2º Sem' },
                 ] as const}
-                value={isYtd ? 'ytd' : 'mensal'}
-                onChange={v => setIsYtd(v === 'ytd')}
+                value={periodo}
+                onChange={setPeriodo}
               />
             </div>
           </div>
@@ -262,7 +305,7 @@ export function RankingPage() {
                 linhas={rankingReceita}
                 nomesUnidade={nomesUnidade}
                 titulo="Receita"
-                subtitulo="Ranqueado por % de atingimento da meta anual de receita (sempre acumulado do ano, independente do modo Mensal/YTD)"
+                subtitulo={`Receita Líquida Operacional realizada vs orçada · ${periodoTexto}`}
               />
             </TabsContent>
 
@@ -273,7 +316,7 @@ export function RankingPage() {
                   linhas={linhas}
                   nomesUnidade={nomesUnidade}
                   titulo={info.nome}
-                  subtitulo={isYtd ? `YTD — acumulado do ano` : `Mensal — M${selMes ?? '-'}`}
+                  subtitulo={periodoTexto}
                 />
               ))}
             </TabsContent>
@@ -285,21 +328,20 @@ export function RankingPage() {
                   linhas={linhas}
                   nomesUnidade={nomesUnidade}
                   titulo={info.nome}
-                  subtitulo={isYtd ? `YTD — acumulado do ano` : `Mensal — M${selMes ?? '-'}`}
+                  subtitulo={periodoTexto}
                 />
               ))}
             </TabsContent>
 
             <TabsContent value="perdas" className="space-y-6 pt-4">
-              {rankingPerdas.map(({ key, label, linhas, nota }) => (
+              {rankingPerdas.map(({ key, label, linhas, nota, pioresPrimeiro }) => (
                 <RankingTabelaPerdas
                   key={key}
                   linhas={linhas}
                   nomesUnidade={nomesUnidade}
                   titulo={label}
-                  subtitulo={nota
-                    ? `Mensal — ${nota}`
-                    : isYtd ? `YTD — Jan a M${selMes ?? '-'}` : `Mensal — M${selMes ?? '-'}`}
+                  pioresPrimeiro={pioresPrimeiro}
+                  subtitulo={nota ? `Mensal — ${nota}` : periodoTexto}
                 />
               ))}
             </TabsContent>

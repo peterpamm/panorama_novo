@@ -35,7 +35,12 @@ function TooltipEvolucao({ active, payload, label }: { active?: boolean; payload
 
 function GapDot({ cx, cy, index, payload }: { cx?: number; cy?: number; index?: number; payload?: SeriePontoConta }) {
   if (cx === undefined || cy === undefined || index === undefined || !payload) return null
-  return <circle cx={cx} cy={cy} r={5} fill={payload.gap >= 0 ? COR_POSITIVO : COR_NEGATIVO} stroke="#ffffff" strokeWidth={2} />
+  return <circle cx={cx} cy={cy} r={3} fill={payload.gap >= 0 ? COR_POSITIVO : COR_NEGATIVO} stroke="none" />
+}
+
+function GapActiveDot({ cx, cy, index, payload }: { cx?: number; cy?: number; index?: number; payload?: SeriePontoConta }) {
+  if (cx === undefined || cy === undefined || index === undefined || !payload) return null
+  return <circle cx={cx} cy={cy} r={5} fill={payload.gap >= 0 ? COR_POSITIVO : COR_NEGATIVO} stroke="none" />
 }
 
 /** Rótulo do gap em pílula (ver GapPill em chart-shared) acima do ponto da linha. */
@@ -100,6 +105,7 @@ export function EvolucaoChart({ serie }: EvolucaoChartProps) {
             stroke="#9ca3af"
             strokeWidth={2}
             dot={<GapDot />}
+            activeDot={<GapActiveDot />}
             label={<GapLabel />}
             isAnimationActive={false}
           />

@@ -1,268 +1,28 @@
-import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Loader2 } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
-import { useUnidades } from '@/hooks/useUnidades'
-import { useDreLongoTodasUnidades } from '@/hooks/useDreLongoTodasUnidades'
-import { useMetasTodasUnidades } from '@/hooks/useMetasTodasUnidades'
-import type { RvIndicadorDre } from '@/lib/constants'
-import type { TabelaPesosDre } from '@/components/metas/PesosDreCard'
-import { avrPorPrefixo, buscarMetaComFallback, normalizarParaCalculo } from '@/lib/farol-calculations'
-import { menorMelhor, negocioCompativel, negocioDreDaPessoa } from '@/lib/rv-gente'
-import { resolverUnidade } from '@/lib/unidade-resolver'
+import { useRvApuracao, MESES_NOMES, fmtPeso, fmtValor, type RvApuracaoProps } from '@/hooks/useRvApuracao'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { TableCard } from '@/components/ui/table-card'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { selectGlamour } from '@/components/ui/field-styles'
-import { useToast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
-import type { MetaGente, ResultadoGente, RvLideranca } from '@/types'
 
-const MESES_NOMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
-
-function fmtPct(v: number): string {
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
-function fmtPeso(v: number): string {
-  return v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
-}
-
-function fmtValor(v: number): string {
-  return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
-type StatusItem = 'bateu' | 'perdeu' | 'pendente'
-
-interface ItemApuracao {
-  chave: string
-  rotulo: string
-  peso: number
-  status: StatusItem
-  detalhe: string
-}
-
-interface LinhaApuracao {
-  pessoa: RvLideranca
-  unidadeOk: boolean
-  itens: ItemApuracao[]
-  pctPossivel: number
-  pctConquistado: number
-  aReceber: number
-}
-
-interface RvApuracaoProps {
-  /** Nome do setor exibido no card (ex: "RH", "FINANCEIRO"). */
-  setorLabel: string
-  /** Filtro de setor sobre o cadastro de lideranças (ex: ehSetorRh). */
-  ehDoSetor: (setor: string) => boolean
-  /** Indicadores com origem no DRE do setor (RV_GENTE_DRE, RV_FINANCEIRO_DRE...). */
-  indicadoresDre: RvIndicadorDre[]
-  /** Tabela dos pesos dos indicadores do DRE. */
-  tabelaPesos: TabelaPesosDre
-  /** Inclui os indicadores do BI (metas_gente × resultados_gente) — só a RV de Gente usa. */
-  incluirIndicadoresBi?: boolean
-}
+export type { RvApuracaoProps }
 
 /**
  * Apuração da RV de um setor: pra cada liderança do setor, cruza os
- * indicadores do mês — os do BI (metas_gente × resultados_gente da sua
- * operação/negócio, quando o setor usa) e os do DRE (indicadoresDre × pesos
- * de tabelaPesos) — soma os pesos dos indicadores batidos e aplica sobre o
- * valor de RV da pessoa. Indicador sem resultado/meta fica pendente e não soma.
+ * indicadores do mês e soma os pesos dos indicadores batidos sobre o valor
+ * de RV da pessoa. Toda a lógica de cálculo vive em useRvApuracao (também
+ * reaproveitado pelo Painel Geral, que agrega vários setores de uma vez
+ * filtrando por unidade) — aqui só a tela de um setor só, com os filtros de
+ * Ano/Mês/Operação.
  */
-export function RvApuracao({ setorLabel, ehDoSetor, indicadoresDre, tabelaPesos, incluirIndicadoresBi = false }: RvApuracaoProps) {
-  const { toast } = useToast()
-  const { unidades } = useUnidades()
-  const { rows: rowsDre, loading: loadingDre } = useDreLongoTodasUnidades()
-  const { metas: metasFarol, loading: loadingMetasFarol } = useMetasTodasUnidades()
-
-  const [liderancas, setLiderancas] = useState<RvLideranca[]>([])
-  const [metas, setMetas] = useState<MetaGente[]>([])
-  const [resultados, setResultados] = useState<ResultadoGente[]>([])
-  const [pesosDre, setPesosDre] = useState<Map<string, number>>(new Map())
-  const [carregando, setCarregando] = useState(true)
-
-  useEffect(() => {
-    async function carregar() {
-      setCarregando(true)
-      const [l, p, m, r] = await Promise.all([
-        supabase.from('rv_liderancas').select('*'),
-        supabase.from(tabelaPesos).select('*'),
-        incluirIndicadoresBi ? supabase.from('metas_gente').select('*') : Promise.resolve({ data: [], error: null }),
-        incluirIndicadoresBi ? supabase.from('resultados_gente').select('*') : Promise.resolve({ data: [], error: null }),
-      ])
-      const erro = l.error ?? p.error ?? m.error ?? r.error
-      if (erro) toast({ title: 'Erro ao carregar dados da apuração', description: erro.message, variant: 'destructive' })
-      setLiderancas((l.data as RvLideranca[]) ?? [])
-      setMetas((m.data as MetaGente[]) ?? [])
-      setResultados((r.data as ResultadoGente[]) ?? [])
-      setPesosDre(new Map(((p.data as { codigo: string; peso: number }[]) ?? []).map(x => [x.codigo, Number(x.peso)])))
-      setCarregando(false)
-    }
-    carregar()
-  }, [tabelaPesos, incluirIndicadoresBi]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Filtros ─────────────────────────────────────────────────────────────────
-  const anosDisponiveis = useMemo(
-    () => Array.from(new Set([
-      ...metas.map(m => m.ano),
-      ...resultados.map(r => r.ano),
-      ...rowsDre.filter(r => r.tipo_periodo === 'MENSAL').map(r => r.ano),
-    ])).sort((a, b) => b - a),
-    [metas, resultados, rowsDre],
-  )
-  const [verAno, setVerAno] = useState('')
-  const [verMes, setVerMes] = useState('')
-  const [filtroOperacao, setFiltroOperacao] = useState('todos')
-
-  const liderancasSetor = useMemo(() => liderancas.filter(l => ehDoSetor(l.setor)), [liderancas, ehDoSetor])
-
-  useEffect(() => {
-    if (anosDisponiveis.length > 0 && !anosDisponiveis.includes(Number(verAno))) {
-      setVerAno(String(anosDisponiveis[0]))
-    }
-  }, [anosDisponiveis, verAno])
-
-  // Mês padrão: o último com resultado do BI importado no ano (setores sem BI usam o último mês do DRE).
-  useEffect(() => {
-    if (verMes !== '' || verAno === '') return
-    const ano = Number(verAno)
-    const mesesComDado = incluirIndicadoresBi
-      ? resultados.filter(r => r.ano === ano).map(r => r.mes)
-      : rowsDre.filter(r => r.tipo_periodo === 'MENSAL' && r.ano === ano).map(r => r.mes)
-    setVerMes(String(mesesComDado.length > 0 ? Math.max(...mesesComDado) : new Date().getMonth() + 1))
-  }, [verAno, verMes, resultados, rowsDre, incluirIndicadoresBi])
-
-  const operacoesDisponiveis = useMemo(
-    () => Array.from(new Set(liderancasSetor.map(l => l.operacao))).sort(),
-    [liderancasSetor],
-  )
-
-  // ── Apuração por pessoa ─────────────────────────────────────────────────────
-  const linhas = useMemo<LinhaApuracao[]>(() => {
-    const ano = Number(verAno)
-    const mes = Number(verMes)
-    if (!ano || !mes) return []
-
-    const pessoas = liderancasSetor.filter(p => filtroOperacao === 'todos' || p.operacao === filtroOperacao)
-
-    const resultadosIdx = new Map(
-      resultados.filter(r => r.ano === ano && r.mes === mes).map(r => [`${r.indicador}|${r.operacao_bi}`, r.valor]),
-    )
-
-    // Metas do BI agrupadas por indicador×operação (peso/negócio valem pro ano; valor é o do mês).
-    interface MetaOp { indicador: string; operacao_bi: string; unidade: string; negocio: string; peso: number; valorMes: number | null }
-    const metasOps = new Map<string, MetaOp>()
-    for (const m of metas.filter(m => m.ano === ano)) {
-      const chave = `${m.indicador}|${m.operacao_bi}`
-      const atual = metasOps.get(chave)
-        ?? { indicador: m.indicador, operacao_bi: m.operacao_bi, unidade: m.unidade, negocio: '', peso: 0, valorMes: null }
-      if (m.negocio) atual.negocio = m.negocio
-      if (m.peso) atual.peso = Number(m.peso)
-      if (m.mes === mes) atual.valorMes = m.valor
-      metasOps.set(chave, atual)
-    }
-
-    const dreMensal = rowsDre.filter(r => r.tipo_periodo === 'MENSAL' && r.ano === ano)
-
-    return pessoas.map(pessoa => {
-      const unidade = resolverUnidade(pessoa.operacao, unidades)
-      const itens: ItemApuracao[] = []
-
-      if (unidade) {
-        // Indicadores do BI da operação/negócio da pessoa
-        for (const mo of metasOps.values()) {
-          if (mo.unidade !== unidade.codigo || mo.peso <= 0) continue
-          if (!negocioCompativel(mo.negocio, pessoa.negocio)) continue
-
-          const resultado = resultadosIdx.get(`${mo.indicador}|${mo.operacao_bi}`)
-          let status: StatusItem
-          let detalhe: string
-          if (mo.valorMes === null) {
-            status = 'pendente'
-            detalhe = 'Sem meta importada pro mês'
-          } else if (resultado === undefined) {
-            status = 'pendente'
-            detalhe = `Meta ${fmtPct(mo.valorMes)} · sem resultado importado`
-          } else {
-            const bateu = menorMelhor(mo.indicador) ? resultado <= mo.valorMes : resultado >= mo.valorMes
-            status = bateu ? 'bateu' : 'perdeu'
-            detalhe = `Resultado ${fmtPct(resultado)} · Meta ${fmtPct(mo.valorMes)}`
-          }
-          itens.push({
-            chave: `bi|${mo.indicador}|${mo.operacao_bi}`,
-            rotulo: mo.indicador,
-            peso: mo.peso,
-            status,
-            detalhe: `${mo.operacao_bi} · Peso ${fmtPeso(mo.peso)}% · ${detalhe}`,
-          })
-        }
-
-        // Indicadores do DRE do setor
-        const rowsUnidade = dreMensal.filter(r => r.unidade === unidade.codigo)
-        const negociosDre = Array.from(new Set(rowsUnidade.map(r => r.negocio)))
-        const negocioDre = negocioDreDaPessoa(unidade.codigo, unidade.nome, pessoa.negocio, negociosDre)
-        const rowsMes = rowsUnidade.filter(r => r.negocio === negocioDre && r.mes === mes)
-
-        for (const ind of indicadoresDre) {
-          const peso = pesosDre.get(ind.id) ?? 0
-          if (peso <= 0) continue
-
-          let status: StatusItem
-          let detalhe: string
-          if (rowsMes.length === 0) {
-            status = 'pendente'
-            detalhe = 'Sem DRE importado pro mês'
-          } else if (ind.tipo === 'avr') {
-            const calc = normalizarParaCalculo(rowsMes)
-            const avr = avrPorPrefixo(calc, ind.prefixos)
-            const meta = buscarMetaComFallback(calc, metasFarol, {
-              unidade: unidade.codigo, negocio: negocioDre, ano, codigo: ind.id, isYtd: false, mes, prefixos: ind.prefixos,
-            })
-            if (meta === null) {
-              status = 'pendente'
-              detalhe = `AVR ${fmtPct(avr)} · sem meta cadastrada`
-            } else {
-              status = avr <= meta ? 'bateu' : 'perdeu'
-              detalhe = `AVR ${fmtPct(avr)} · Meta ${fmtPct(meta)}`
-            }
-          } else {
-            const valor = rowsMes
-              .filter(r => ind.prefixos.some(p => r.conta_codigo.startsWith(p)))
-              .reduce((acc, r) => acc + (r.diferenca ?? 0), 0)
-            status = valor >= 0 ? 'bateu' : 'perdeu'
-            detalhe = `Dispersão ${Math.round(valor).toLocaleString('pt-BR')} · meta ≥ 0 (sem estouro)`
-          }
-          itens.push({
-            chave: `dre|${ind.id}`,
-            rotulo: ind.nome,
-            peso,
-            status,
-            detalhe: `${negocioDre} · Peso ${fmtPeso(peso)}% · ${detalhe}`,
-          })
-        }
-      }
-
-      const pctPossivel = itens.reduce((acc, i) => acc + i.peso, 0)
-      const pctConquistado = itens.filter(i => i.status === 'bateu').reduce((acc, i) => acc + i.peso, 0)
-      return {
-        pessoa,
-        unidadeOk: unidade !== undefined,
-        itens,
-        pctPossivel,
-        pctConquistado,
-        aReceber: pessoa.valor * pctConquistado / 100,
-      }
-    }).sort((a, b) =>
-      a.pessoa.operacao.localeCompare(b.pessoa.operacao) || a.pessoa.nome.localeCompare(b.pessoa.nome),
-    )
-  }, [liderancasSetor, metas, resultados, pesosDre, rowsDre, metasFarol, unidades, verAno, verMes, filtroOperacao, indicadoresDre])
-
-  const totalBase = linhas.reduce((acc, l) => acc + l.pessoa.valor, 0)
-  const totalReceber = linhas.reduce((acc, l) => acc + l.aReceber, 0)
-
-  const carregandoTudo = carregando || loadingDre || loadingMetasFarol
+export function RvApuracao(props: RvApuracaoProps) {
+  const { setorLabel } = props
+  const {
+    liderancas, linhas, anosDisponiveis, verAno, setVerAno, verMes, setVerMes,
+    filtroOperacao, setFiltroOperacao, operacoesDisponiveis, carregandoTudo, totalBase, totalReceber,
+  } = useRvApuracao(props)
 
   return (
     <div className="space-y-4">

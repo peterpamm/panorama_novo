@@ -160,8 +160,8 @@ export function SlidePerdaDre({ titulo, contas, rowsTodosAnos, unidadeSel, unida
                   name={String(ano)}
                   stroke={COR_AVR}
                   strokeWidth={2.5}
-                  dot={{ r: 4, strokeWidth: 1.5 }}
-                  activeDot={{ r: 7 }}
+                  dot={{ r: 3, fill: COR_AVR, strokeWidth: 0 }}
+                  activeDot={{ r: 5, fill: COR_AVR, strokeWidth: 0 }}
                   isAnimationActive={false}
                 >
                   <LabelList

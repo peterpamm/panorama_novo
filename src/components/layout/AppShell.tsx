@@ -11,6 +11,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/ranking':       'Ranking',
   '/painel-perdas': 'Painel de Perdas',
   '/remuneracao-variavel': 'Remuneração Variável',
+  '/area-financeira': 'Área Financeira',
   '/metas':         'Metas',
   '/importacao':    'Importação de DRE',
   '/admin':         'Administração',

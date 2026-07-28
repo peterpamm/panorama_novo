@@ -5,7 +5,7 @@
 @layer base {
   :root {
     /* Superfícies */
-    --background:         220 30% 97.5%;   /* #f5f7fb — fundo levemente azulado */
+    --background:         220 28% 93%;     /* #e8ecf2 — cinza ~40% mais forte que antes, pros cards brancos destacarem mais */
     --foreground:         222 30% 10%;     /* #131926 */
     --card:               0 0% 100%;
     --card-foreground:    222 30% 10%;

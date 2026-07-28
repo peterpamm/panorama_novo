@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useUnidades } from '@/hooks/useUnidades'
 import { useDreLongoTodasUnidades } from '@/hooks/useDreLongoTodasUnidades'
-import { useMetasTodasUnidades } from '@/hooks/useMetasTodasUnidades'
+import { useOrcamentoTodasUnidades } from '@/hooks/useOrcamentoTodasUnidades'
 import type { RvIndicadorDre } from '@/lib/constants'
-import { avrPorPrefixo, buscarMetaComFallback, normalizarParaCalculo } from '@/lib/farol-calculations'
+import { avrPorPrefixo, normalizarParaCalculo } from '@/lib/farol-calculations'
+import { buscarMetaOrcamento } from '@/lib/orcamento-farol'
 import { unidadeSplitNegocio } from '@/lib/rv-gente'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { TableCard } from '@/components/ui/table-card'
@@ -36,14 +37,14 @@ interface IndicadoresDreCardProps {
 
 /**
  * Matriz de acompanhamento dos indicadores de RV com origem no DRE, por
- * unidade×mês: 'avr' compara o AVR mensal com a meta do Farol (custo — quanto
- * menor melhor); 'dispersao' soma a coluna DIFERENÇA do DRE nas contas
+ * unidade×mês: 'avr' compara o AVR mensal com a meta do Orçamento (custo —
+ * quanto menor melhor); 'dispersao' soma a coluna DIFERENÇA do DRE nas contas
  * (verde quando ≥ 0, sem estouro). Ponta Grossa e Camaçari abrem por negócio
  * (ROTA/ARM), demais unidades usam CONS.
  */
 export function IndicadoresDreCard({ indicadores }: IndicadoresDreCardProps) {
   const { rows: rowsDre, loading: loadingDre } = useDreLongoTodasUnidades()
-  const { metas, loading: loadingMetas } = useMetasTodasUnidades()
+  const { orcamentos, loading: loadingOrcamento } = useOrcamentoTodasUnidades()
   const { unidades } = useUnidades()
 
   const [indId, setIndId] = useState(indicadores[0].id)
@@ -99,9 +100,7 @@ export function IndicadoresDreCard({ indicadores }: IndicadoresDreCardProps) {
         if (ind.tipo === 'avr') {
           const calc = normalizarParaCalculo(rowsMes)
           const avr = avrPorPrefixo(calc, ind.prefixos)
-          const meta = buscarMetaComFallback(calc, metas, {
-            unidade, negocio, ano, codigo: ind.id, isYtd: false, mes, prefixos: ind.prefixos,
-          })
+          const meta = buscarMetaOrcamento(orcamentos, { unidade, negocio, ano, codigo: ind.id, mes })
           return { tipo: 'avr', avr, meta }
         }
 
@@ -113,9 +112,9 @@ export function IndicadoresDreCard({ indicadores }: IndicadoresDreCardProps) {
       })
       return { unidade, negocio, nome: nomesUnidades.get(unidade) ?? unidade, meses }
     })
-  }, [rowsDre, metas, anoDre, ind, nomesUnidades])
+  }, [rowsDre, orcamentos, anoDre, ind, nomesUnidades])
 
-  const carregando = loadingDre || loadingMetas
+  const carregando = loadingDre || loadingOrcamento
 
   return (
     <div className="space-y-4">
@@ -145,7 +144,7 @@ export function IndicadoresDreCard({ indicadores }: IndicadoresDreCardProps) {
         subtitulo={carregando
           ? 'Carregando...'
           : ind.tipo === 'avr'
-            ? `${anoDre} · AVR do mês vs meta do Farol · quanto menor melhor · verde = meta batida, vermelho = meta perdida`
+            ? `${anoDre} · AVR do mês vs meta do Orçamento · quanto menor melhor · verde = meta batida, vermelho = meta perdida`
             : `${anoDre} · dispersão do mês (coluna diferença do DRE, contas ${ind.prefixos.join(' + ')}) · verde = sem estouro (≥ 0)`}
       >
         {carregando ? (

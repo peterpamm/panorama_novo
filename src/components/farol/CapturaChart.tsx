@@ -112,7 +112,7 @@ export function CapturaChart({ serie, natureza, nomeSerie = 'AVR Realizado', nom
             strokeWidth={2.5}
             isAnimationActive={false}
             dot={<PontoDot ultimoIndex={ultimoRealizadoIndex} natureza={natureza} valores={valoresRealizado} />}
-            activeDot={{ r: 7 }}
+            activeDot={{ r: 5, fill: COR_AVR, strokeWidth: 0 }}
             label={<PontoLabel ultimoIndex={ultimoRealizadoIndex} natureza={natureza} valores={valoresRealizado} formatter={formatter} />}
           />
           <Line

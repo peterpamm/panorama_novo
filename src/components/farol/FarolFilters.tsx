@@ -6,8 +6,8 @@ interface Opcao {
   label: string
 }
 
-/** Período do Farol: mês selecionado, acumulado do ano (YTD) ou 1º semestre (meta snapshot de junho). */
-export type PeriodoFarol = 'mensal' | 'ytd' | 's1'
+/** Período do Farol: mês selecionado, acumulado do ano (YTD), 1º ou 2º semestre. */
+export type PeriodoFarol = 'mensal' | 'ytd' | 's1' | 's2'
 
 interface FarolFiltersProps {
   unidades: Opcao[]
@@ -95,6 +95,7 @@ export function FarolFilters({
             { id: 'mensal', label: 'Mensal', title: 'Mês selecionado' },
             { id: 'ytd',    label: 'YTD',    title: 'Acumulado do ano' },
             { id: 's1',     label: '1º Sem', title: 'Acumulado Jan–Jun vs meta do 1º semestre' },
+            { id: 's2',     label: '2º Sem', title: 'Acumulado Jul–Dez vs meta do 2º semestre' },
           ] as const).map(o => (
             <button
               key={o.id}

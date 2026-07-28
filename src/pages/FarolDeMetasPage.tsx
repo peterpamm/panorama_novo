@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
+import { supabase } from '@/lib/supabase'
 import { useUnidades } from '@/hooks/useUnidades'
 import { useDreLongo } from '@/hooks/useDreLongo'
 import { useDreLongoTodasUnidades } from '@/hooks/useDreLongoTodasUnidades'
@@ -18,14 +19,16 @@ import {
   ESTOURO_ZERO_CARDS, REDUCAO_CUSTOS_CARDS,
 } from '@/lib/constants'
 import {
-  avrPorPrefixo, buscarMetaComFallback, buscarMetaSemestral, calcularEstouroZero, calcularEvolucaoReducaoCustos, calcularImpactoFinanceiro,
+  avrPorPrefixo, calcularEstouroZero, calcularEvolucaoReducaoCustos, calcularImpactoFinanceiro,
   calcularIncrementoUnidadesNovas, calcularReceita, calcularReducaoCustos, calcularSemaforo, calcularSerieAnual,
   calcularSerieCaptura, calcularSerieCapturaReducaoCustos, calcularSerieReducaoCustos, normalizarParaCalculo,
   somaReal, somaRealAnoAnteriorComMedia,
 } from '@/lib/farol-calculations'
 import type { UnidadeIncremento } from '@/lib/farol-calculations'
+import { buscarMetaOrcamento } from '@/lib/orcamento-farol'
+import { fetchOrcamentoPaginado } from '@/lib/orcamento-fetch'
 import { formatCurrencyInteiro } from '@/lib/utils'
-import type { DreLongoRow } from '@/types'
+import type { DreLongoRow, OrcamentoLinha } from '@/types'
 
 function unicos<T>(valores: T[]): T[] {
   return Array.from(new Set(valores))
@@ -124,32 +127,77 @@ export function FarolDeMetasPage() {
     return rowsAno.filter(r => r.tipo_periodo === 'MENSAL' && r.mes <= 6)
   }, [rowsAno, mesAcumMax, dfBaseYtd])
 
-  const dfBase = periodo === 'ytd' ? dfBaseYtd : periodo === 's1' ? dfBaseS1 : dfBaseMensal
+  // 2º semestre: não existe atalho "acumulado" (o ACUMULADO_ANO da view é sempre desde
+  // janeiro) — sempre reconstrói somando os meses de Jul a Dez já importados.
+  const dfBaseS2 = useMemo(
+    () => rowsAno.filter(r => r.tipo_periodo === 'MENSAL' && r.mes >= 7 && r.mes <= 12),
+    [rowsAno],
+  )
+
+  const dfBase = periodo === 'ytd' ? dfBaseYtd : periodo === 's1' ? dfBaseS1 : periodo === 's2' ? dfBaseS2 : dfBaseMensal
   const periodoTexto = periodo === 'ytd'
     ? `YTD (M${mesAcumMax ?? '-'})`
     : periodo === 's1'
       ? '1º Semestre'
-      : `Mensal (M${selMes ?? '-'})`
+      : periodo === 's2'
+        ? '2º Semestre'
+        : `Mensal (M${selMes ?? '-'})`
 
   const calcBase = useMemo(() => normalizarParaCalculo(dfBase), [dfBase])
   const receita = useMemo(() => calcularReceita(calcBase), [calcBase])
 
+  // Meta mensal/anual/semestral direto do orçamento (pacotes mapeados em
+  // PACOTE_CONTA_ORCAMENTO) em vez da tabela `metas` — ver src/lib/orcamento-farol.ts.
+  const [orcamentoRows, setOrcamentoRows] = useState<OrcamentoLinha[]>([])
+  useEffect(() => {
+    if (selUnidade === '' || selNegocio === '' || selAno === null) { setOrcamentoRows([]); return }
+    let cancelado = false
+    fetchOrcamentoPaginado((from, to) =>
+      supabase.from('orcamentos').select('*')
+        .eq('unidade', selUnidade).eq('negocio', selNegocio).eq('ano', selAno)
+        .order('id', { ascending: true })
+        .range(from, to),
+    )
+      .then(rows => { if (!cancelado) setOrcamentoRows(rows) })
+      .catch(() => { if (!cancelado) setOrcamentoRows([]) })
+    return () => { cancelado = true }
+  }, [selUnidade, selNegocio, selAno])
+
   function calcularIndicador(codigo: string) {
     const info = PACOTES[codigo]
     const avr = avrPorPrefixo(calcBase, info.prefixos)
-    const meta = selAno === null || selMes === null
+    // Meta vem só do Orçamento — sem fallback pra tabela `metas`/AVO do DRE
+    // (nem no anual, nem no mensal, nem no semestre): null quando o Orçamento
+    // não tem linha pra essa unidade/ano/período, em vez de exibir um valor
+    // de uma fonte diferente da que o usuário está de fato mantendo.
+    const meta = selAno === null
       ? null
-      : periodo === 's1'
-        ? buscarMetaSemestral(metas, { unidade: selUnidade, negocio: selNegocio, ano: selAno, codigo, semestre: 1 })
-        : buscarMetaComFallback(calcBase, metas, { unidade: selUnidade, negocio: selNegocio, ano: selAno, codigo, isYtd, mes: selMes, prefixos: info.prefixos })
+      : buscarMetaOrcamento(orcamentoRows, {
+          unidade: selUnidade, negocio: selNegocio, ano: selAno, codigo,
+          mes: periodo === 's1' ? 13 : periodo === 's2' ? 14 : isYtd ? 0 : (selMes ?? 0),
+        })
     const semaforo = calcularSemaforo(avr, meta, info.natureza)
     const impacto = calcularImpactoFinanceiro(avr, meta, receita, info.natureza)
-    const serieAnual = selAno === null
+    const serieAnualBase = selAno === null
       ? []
       : calcularSerieAnual(rowsAno, metas, { unidade: selUnidade, negocio: selNegocio, ano: selAno, codigo, prefixos: info.prefixos })
+    const serieAnual = serieAnualBase.map(ponto => {
+      const metaOrcMes = buscarMetaOrcamento(orcamentoRows, { unidade: selUnidade, negocio: selNegocio, ano: selAno ?? 0, codigo, mes: ponto.mes })
+      return { ...ponto, meta: metaOrcMes }
+    })
+    // Curva de Captura: a meta anual (e o ritmo necessário calculado a partir
+    // dela) vem só do orçamento — `metaOrcamentoAnual` é passado direto
+    // (mesmo quando null) pra `calcularSerieCaptura` nunca cair no fallback
+    // interno dela pra tabela `metas` (só cai quando o argumento é omitido).
+    const metaOrcamentoAnual = selAno === null
+      ? null
+      : buscarMetaOrcamento(orcamentoRows, { unidade: selUnidade, negocio: selNegocio, ano: selAno, codigo, mes: 0 })
     const serieCaptura = selAno === null
       ? []
-      : calcularSerieCaptura(rowsAno, metas, { unidade: selUnidade, negocio: selNegocio, ano: selAno, codigo, prefixos: info.prefixos })
+      : calcularSerieCaptura(
+          rowsAno, metas, { unidade: selUnidade, negocio: selNegocio, ano: selAno, codigo, prefixos: info.prefixos },
+          metaOrcamentoAnual,
+        )
     return { codigo, info, avr, meta, semaforo, impacto, serieAnual, serieCaptura }
   }
 

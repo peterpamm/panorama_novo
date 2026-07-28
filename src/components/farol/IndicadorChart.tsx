@@ -58,7 +58,7 @@ export function IndicadorChart({ serie, gradientId, natureza, nomeSerie = 'AVR R
             strokeWidth={2.5}
             isAnimationActive={false}
             dot={<PontoDot ultimoIndex={ultimoIndex} natureza={natureza} valores={valores} />}
-            activeDot={{ r: 7 }}
+            activeDot={{ r: 5, fill: COR_AVR, strokeWidth: 0 }}
             label={<PontoLabel ultimoIndex={ultimoIndex} natureza={natureza} valores={valores} formatter={formatter} />}
           />
           <Line

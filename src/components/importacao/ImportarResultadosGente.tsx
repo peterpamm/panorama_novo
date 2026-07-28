@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useUnidades } from '@/hooks/useUnidades'
 import { parseMetasGenteFile, type ParsedMetaGenteRow } from '@/lib/metas-gente-parser'
 import { resolverUnidade } from '@/lib/unidade-resolver'
-import { FileDropzone } from '@/components/importacao/FileDropzone'
+import { FilePickerButton } from '@/components/importacao/FilePickerButton'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -124,9 +124,8 @@ export function ImportarResultadosGente() {
             </SelectContent>
           </Select>
         </div>
+        <FilePickerButton label="Arquivo de resultados (.xlsx ou .csv)" accept=".xlsx,.xls,.csv,.txt" file={file} onFile={handleFile} />
       </div>
-
-      <FileDropzone label="Arquivo de resultados (.xlsx ou .csv)" accept=".xlsx,.xls,.csv,.txt" file={file} onFile={handleFile} />
 
       {errosParse.length > 0 && (
         <div className="rounded-lg border border-amber-300/50 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400">

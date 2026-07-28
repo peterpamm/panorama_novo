@@ -6,6 +6,7 @@ import { PillToggle } from '@/components/ui/pill-toggle'
 import { RV_FROTA_DRE } from '@/lib/constants'
 import { ehSetorFrota } from '@/lib/rv-gente'
 import { IndicadoresDreCard } from '@/components/rv/IndicadoresDreCard'
+import { DescontosFrotaCard } from '@/components/rv/DescontosFrotaCard'
 import { RvApuracao } from '@/components/rv/RvApuracao'
 
 type AbaRvFrota = 'acompanhamento' | 'apuracao'
@@ -16,9 +17,10 @@ const ABAS = [
 ] as const
 
 /**
- * Subpágina RV de Frota — /remuneracao-variavel/frota. Por enquanto só os
- * indicadores do DRE (Manutenção, Pneus, Diesel); os de fora do DRE entram
- * quando a importação deles for estruturada.
+ * Subpágina RV de Frota — /remuneracao-variavel/frota. Indicadores do DRE
+ * (Manutenção, Pneus, Diesel) + Desconto CIVF / Desconto Stress Test
+ * (resultado importado em Importação &gt; Frota, meta e peso únicos em R$,
+ * quanto menor melhor).
  */
 export function RvFrotaPage() {
   const [aba, setAba] = useState<AbaRvFrota>('acompanhamento')
@@ -41,13 +43,18 @@ export function RvFrotaPage() {
       </div>
 
       {aba === 'acompanhamento' ? (
-        <IndicadoresDreCard indicadores={RV_FROTA_DRE} />
+        <div className="space-y-6">
+          <IndicadoresDreCard indicadores={RV_FROTA_DRE} />
+          <DescontosFrotaCard />
+        </div>
       ) : (
         <RvApuracao
           setorLabel="FROTA"
           ehDoSetor={ehSetorFrota}
           indicadoresDre={RV_FROTA_DRE}
           tabelaPesos="rv_frota_pesos_dre"
+          incluirDescontoCivf
+          incluirDescontoStressTest
         />
       )}
       <Toaster />

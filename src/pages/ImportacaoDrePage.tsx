@@ -7,13 +7,23 @@ import { useUnidades } from '@/hooks/useUnidades'
 import { parseDreXlsx, type ParseDreResult } from '@/lib/dre-xlsx-parser'
 import { parseDreFilename, type DreFilenameInfo } from '@/lib/dre-filename-parser'
 import { detectarAlteracoes, mesesParaComparar } from '@/lib/dre-diff-detector'
-import { CODIGOS_PERFORMANCE, PACOTES } from '@/lib/constants'
 import { PastaDropzone } from '@/components/importacao/PastaDropzone'
 import { ResolverUnidadesPanel } from '@/components/importacao/ResolverUnidadesPanel'
 import { RelatorioAlteracoes } from '@/components/importacao/RelatorioAlteracoes'
 import { ImportarPainelPerdasAuxDialog } from '@/components/importacao/ImportarPainelPerdasAuxDialog'
 import { ImportarMetasPerdasDialog } from '@/components/metas/ImportarMetasPerdasDialog'
 import { ImportacaoGentePanel } from '@/components/importacao/ImportacaoGentePanel'
+import { ImportarResultadosDtoT2 } from '@/components/importacao/ImportarResultadosDtoT2'
+import { ImportarResultadosDtoT1 } from '@/components/importacao/ImportarResultadosDtoT1'
+import { ImportarResultadosGsd } from '@/components/importacao/ImportarResultadosGsd'
+import { ImportarResultadosLogon } from '@/components/importacao/ImportarResultadosLogon'
+import { ImportarResultadosExcessoVelocidade } from '@/components/importacao/ImportarResultadosExcessoVelocidade'
+import { ImportarResultadosFai } from '@/components/importacao/ImportarResultadosFai'
+import { RegistrarTriCard } from '@/components/importacao/RegistrarTriCard'
+import { ImportarResultadosDistribuicaoBi } from '@/components/importacao/ImportarResultadosDistribuicaoBi'
+import { ImportarMetaPresenteismoDu } from '@/components/importacao/ImportarMetaPresenteismoDu'
+import { ImportarResultadosDescontoFrota } from '@/components/importacao/ImportarResultadosDescontoFrota'
+import { ImportacaoArmazemPanel } from '@/components/importacao/ImportacaoArmazemPanel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -24,39 +34,6 @@ import type { AlteracaoRetroativa, Unidade } from '@/types'
 type Stage = 'idle' | 'resolvendo' | 'analisando' | 'preview' | 'importando' | 'done'
 
 const BATCH_SIZE = 200
-
-const MES_IDX: Record<string, number> = {
-  jan: 1, fev: 2, mar: 3, abr: 4, mai: 5, jun: 6,
-  jul: 7, ago: 8, set: 9, out: 10, nov: 11, dez: 12,
-}
-
-/** Último mês presente nos blocos do arquivo (ignora o bloco 'total'). */
-function mesMaxDosBlocos(blocos: string[]): number {
-  return blocos.reduce((max, b) => Math.max(max, MES_IDX[b] ?? 0), 0)
-}
-
-/**
- * Snapshot da meta do 1º semestre: soma do total_avo (acumulado Jan–Jun) das
- * contas de cada pacote, com a mesma normalização de sinal do Farol (custo é
- * invertido; performance 232/275 mantém). O arquivo de julho sobrescreve o
- * bloco TOTAL, então esse valor só existe no momento do import de junho —
- * gravamos na tabela `metas` com mes=13 pra não perder.
- */
-function calcularMetasS1(linhas: ParseDreResult['linhas']): { codigo: string; meta: number }[] {
-  const resultado: { codigo: string; meta: number }[] = []
-  for (const [codigo, info] of Object.entries(PACOTES)) {
-    const contas = linhas.filter(l =>
-      info.prefixos.some(p => l.conta_codigo.startsWith(p)) && l.campos['total_avo'] !== undefined,
-    )
-    if (contas.length === 0) continue
-    const meta = contas.reduce((acc, l) => {
-      const avo = l.campos['total_avo']
-      return acc + (CODIGOS_PERFORMANCE.includes(l.conta_codigo) ? avo : -avo)
-    }, 0)
-    resultado.push({ codigo, meta: Math.round(meta * 100) / 100 })
-  }
-  return resultado
-}
 
 interface ArquivoProcessado {
   file: File
@@ -196,7 +173,6 @@ export function ImportacaoDrePage() {
 
     let totalContas = 0
     let totalAlteracoes = 0
-    let totalMetasS1 = 0
 
     try {
       for (let i = 0; i < arquivosProcessados.length; i++) {
@@ -240,27 +216,6 @@ export function ImportacaoDrePage() {
           if (error) throw new Error(error.message)
         }
 
-        // Arquivo com dados até junho: snapshot da meta do 1º semestre (mes=13),
-        // antes que o import de julho sobrescreva o acumulado.
-        if (mesMaxDosBlocos(ap.parsed.blocosDetectados) === 6) {
-          const metasS1 = calcularMetasS1(ap.parsed.linhas)
-          if (metasS1.length > 0) {
-            const { error } = await supabase.from('metas').upsert(
-              metasS1.map(m => ({
-                unidade: ap.unidadeCodigo,
-                negocio: ap.negocio,
-                ano: ap.ano,
-                codigo: m.codigo,
-                mes: 13,
-                meta_avr: m.meta,
-              })),
-              { onConflict: 'unidade,negocio,ano,codigo,mes' },
-            )
-            if (error) throw new Error(error.message)
-            totalMetasS1 += metasS1.length
-          }
-        }
-
         totalContas += linhas.length
         totalAlteracoes += ap.alteracoes.length
         setProgresso(Math.round(((i + 1) / arquivosProcessados.length) * 100))
@@ -270,9 +225,6 @@ export function ImportacaoDrePage() {
       setProgressoLabel('Atualizando cache dos dados...')
       await revalidarAposImport()
 
-      if (totalMetasS1 > 0) {
-        toast({ title: `Meta do 1º semestre atualizada`, description: `${totalMetasS1} meta(s) de pacote gravada(s) a partir do acumulado de junho.` })
-      }
       setResumo({ arquivos: arquivosProcessados.length, contas: totalContas, alteracoes: totalAlteracoes })
       setStage('done')
     } catch (err) {
@@ -407,6 +359,30 @@ export function ImportacaoDrePage() {
           >
             Gente
           </TabsTrigger>
+          <TabsTrigger
+            value="seguranca"
+            className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
+          >
+            Segurança
+          </TabsTrigger>
+          <TabsTrigger
+            value="distribuicao"
+            className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
+          >
+            Distribuição
+          </TabsTrigger>
+          <TabsTrigger
+            value="frota"
+            className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
+          >
+            Frota
+          </TabsTrigger>
+          <TabsTrigger
+            value="armazem"
+            className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
+          >
+            Armazém
+          </TabsTrigger>
         </TabsList>
 
         {/* ── Financeiro: DRE + dados auxiliares ── */}
@@ -437,6 +413,51 @@ export function ImportacaoDrePage() {
         {/* ── Gente: RV das lideranças ── */}
         <TabsContent value="gente" className="pt-6">
           <ImportacaoGentePanel />
+        </TabsContent>
+
+        {/* ── Segurança: resultado mensal do DTO T2, DTO T1, GSD, LogOn, Excesso de Velocidade, FAI e TRI ── */}
+        <TabsContent value="seguranca" className="pt-6">
+          <div className="space-y-8">
+            <ImportarResultadosDtoT2 />
+            <div className="border-t pt-8">
+              <ImportarResultadosDtoT1 />
+            </div>
+            <div className="border-t pt-8">
+              <ImportarResultadosGsd />
+            </div>
+            <div className="border-t pt-8">
+              <ImportarResultadosLogon />
+            </div>
+            <div className="border-t pt-8">
+              <ImportarResultadosExcessoVelocidade />
+            </div>
+            <div className="border-t pt-8">
+              <ImportarResultadosFai />
+            </div>
+            <div className="border-t pt-8">
+              <RegistrarTriCard />
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ── Distribuição: resultado mensal do LogOn DU, Devolução e Presenteísmo DU + meta mensal do Presenteísmo DU ── */}
+        <TabsContent value="distribuicao" className="pt-6">
+          <div className="space-y-8">
+            <ImportarResultadosDistribuicaoBi />
+            <div className="border-t pt-8">
+              <ImportarMetaPresenteismoDu />
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* ── Frota: resultado mensal do Desconto CIVF e Desconto Stress Test ── */}
+        <TabsContent value="frota" className="pt-6">
+          <ImportarResultadosDescontoFrota />
+        </TabsContent>
+
+        {/* ── Armazém: T2 (resultado + meta do Presenteísmo AL) e T1 (resultado + metas de TMA/Disponibilidade/Presenteísmo AL) ── */}
+        <TabsContent value="armazem" className="pt-6">
+          <ImportacaoArmazemPanel />
         </TabsContent>
       </Tabs>
 

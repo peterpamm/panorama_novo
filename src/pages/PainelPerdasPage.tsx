@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   LineChart, Line,
+  BarChart, Bar, Cell,
   XAxis, YAxis, Tooltip as RechartsTooltip,
-  Legend, LabelList, ResponsiveContainer,
+  Legend, LabelList, ResponsiveContainer, Customized,
 } from 'recharts'
+import { supabase } from '@/lib/supabase'
 import { useDreLongoTodasUnidades } from '@/hooks/useDreLongoTodasUnidades'
 import { usePainelPerdasAux } from '@/hooks/usePainelPerdasAux'
-import { useMetasPerdas } from '@/hooks/useMetasPerdas'
 import { useUnidades } from '@/hooks/useUnidades'
 import {
   calcularMatrizPerdas,
@@ -18,16 +19,20 @@ import { formatCurrencyInteiro } from '@/lib/utils'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { TableCard } from '@/components/ui/table-card'
 import { FilterLabel, filterTriggerClass } from '@/components/farol/FarolFilters'
+import { getChartColors } from '@/components/farol/chart-shared'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Toaster } from '@/components/ui/toaster'
+import { PillToggle } from '@/components/ui/pill-toggle'
 import { cn } from '@/lib/utils'
-import type { DreLongoRow, PainelPerdasAux as PainelPerdasAuxRow, Unidade } from '@/types'
+import type { DreLongoRow, MetaPerdaIndicador, PainelPerdasAux as PainelPerdasAuxRow, Unidade } from '@/types'
 
 const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 const CORES_ANOS = ['#2a78d6', '#1baf7a', '#eda100', '#008300']
+const COR_META_PERDAS = '#94a3b8'
+const COR_NECESSARIO = '#f59e0b'
 
 // ─── Formatação e cores (tab Consolidado) ────────────────────────────────────
 
@@ -116,6 +121,28 @@ function valorIndicadorUnidadeMes(
     .reduce((acc, r) => acc + (r.diferenca ?? 0), 0)
 }
 
+/**
+ * Meta de Perdas (Metas > Metas de Perdas) do indicador, distribuída
+ * linearmente pelo ano — a tabela metas_perdas_indicadores só guarda o total
+ * anual (meta_anual, R$ negativo), então o valor "mensal" é sempre
+ * meta_anual/12. Existe pra todos os indicadores (DRE e AUX), diferente do
+ * orçamento (que só cobre conta do DRE). AMBEV soma a meta anual de todas as
+ * unidades (a planilha de metas de perdas não importa uma linha AMBEV própria).
+ */
+function metaPerdasMensal(
+  metasPerdasIndicadores: MetaPerdaIndicador[],
+  ind: (typeof INDICADORES_PERDAS)[number],
+  unidade: string,
+  ano: number,
+): number | null {
+  const rows = unidade === 'AMBEV'
+    ? metasPerdasIndicadores.filter(m => m.unidade !== 'AMBEV' && m.ano === ano && m.indicador === ind.key)
+    : metasPerdasIndicadores.filter(m => m.unidade === unidade && m.ano === ano && m.indicador === ind.key)
+  if (rows.length === 0) return null
+  const metaAnual = rows.reduce((acc, m) => acc + m.meta_anual, 0)
+  return metaAnual / 12
+}
+
 // ─── Tooltip do gráfico ──────────────────────────────────────────────────────
 
 interface TooltipPayloadItem { name: string; value: number | null; color: string }
@@ -131,6 +158,68 @@ function TooltipEvolucao({ active, payload, label }: { active?: boolean; payload
         </p>
       ))}
     </div>
+  )
+}
+
+interface AcumuladoPillDado {
+  nome: string
+  diffPct: number | null
+  diffValor: number | null
+}
+
+/**
+ * Balõezinhos com o % e o valor de diferença vs. o ano atual (verde = perda
+ * menor / melhor, vermelho = perda maior / pior), pras barras de comparação
+ * (ano anterior, Meta de Perdas) — a barra do ano atual não leva balão.
+ *
+ * Renderizado via `Customized` (não LabelList) numa altura FIXA dentro da
+ * margem superior do gráfico (acima de onde qualquer barra chega),
+ * independente do tamanho de cada barra — o `y` de uma barra negativa é a
+ * ponta de baixo dela, não o topo, então um balão "grudado" na barra ficaria
+ * no meio do gráfico em vez de no vão em branco acima das barras.
+ * `xAxisMap`/`offset` vêm do próprio recharts (repassados a qualquer
+ * componente usado dentro de `<Customized component={...}>`).
+ */
+function AcumuladoPillsOverlay({
+  dados, xAxisMap, offset,
+}: {
+  dados?: AcumuladoPillDado[]
+  xAxisMap?: Record<string, { scale?: (v: string) => number | undefined }>
+  offset?: { top?: number }
+}) {
+  if (!dados || !xAxisMap || !offset?.top) return null
+  const axis = Object.values(xAxisMap)[0]
+  const scale = axis?.scale
+  if (!scale) return null
+  const bandwidth = (scale as unknown as { bandwidth?: () => number }).bandwidth?.() ?? 0
+  const altura = 32
+  // Centralizado no vão em branco da margem superior do gráfico (acima de
+  // `offset.top`, onde nenhuma barra chega) — nunca dentro da área de plotagem.
+  const topo = Math.max(4, (offset.top - altura) / 2)
+  const isDark = document.documentElement.classList.contains('dark')
+
+  return (
+    <g>
+      {dados.map(d => {
+        if (d.diffPct == null || d.diffValor == null) return null
+        const xBase = scale(d.nome)
+        if (xBase == null) return null
+        const cx = xBase + bandwidth / 2
+        const positivo = d.diffValor >= 0
+        const bg = positivo ? 'rgba(16,185,129,0.16)' : 'rgba(239,68,68,0.16)'
+        const fg = positivo ? (isDark ? '#34d399' : '#047857') : (isDark ? '#f87171' : '#b91c1c')
+        const textoPct = `${positivo ? '+' : ''}${Math.round(d.diffPct)}%`
+        const textoValor = `${positivo ? '+' : ''}${Math.round(d.diffValor).toLocaleString('pt-BR')}`
+        const largura = Math.max(textoPct.length, textoValor.length) * 6.6 + 16
+        return (
+          <g key={d.nome}>
+            <rect x={cx - largura / 2} y={topo} width={largura} height={altura} rx={altura / 2} fill={bg} />
+            <text x={cx} y={topo + 13} textAnchor="middle" fontSize={11} fontWeight={700} fill={fg}>{textoPct}</text>
+            <text x={cx} y={topo + 25} textAnchor="middle" fontSize={9.5} fontWeight={500} fill={fg}>{textoValor}</text>
+          </g>
+        )
+      })}
+    </g>
   )
 }
 
@@ -249,10 +338,9 @@ function TabelaEvolucaoAno({
 export function PainelPerdasPage() {
   const { rows: rowsDre, loading: loadingDre } = useDreLongoTodasUnidades()
   const { rows: rowsAux, loading: loadingAux } = usePainelPerdasAux()
-  const { metasPerdas, loading: loadingMetas } = useMetasPerdas()
   const { unidades } = useUnidades()
 
-  const loading = loadingDre || loadingAux || loadingMetas
+  const loading = loadingDre || loadingAux
 
   const anosDisponiveis = useMemo(() => {
     const s = new Set(rowsDre.filter(r => r.negocio === 'CONS').map(r => r.ano))
@@ -288,11 +376,21 @@ export function PainelPerdasPage() {
     })
   }
 
+  // Metas de Perdas (Metas > Metas de Perdas, por indicador) pro ano do
+  // Consolidado — todas as unidades (a tabela mostra todas como coluna).
+  const [metasPerdasIndicadoresConsolidado, setMetasPerdasIndicadoresConsolidado] = useState<MetaPerdaIndicador[]>([])
+  useEffect(() => {
+    let cancelado = false
+    supabase.from('metas_perdas_indicadores').select('*').eq('ano', anoAtivo)
+      .then(({ data }) => { if (!cancelado) setMetasPerdasIndicadoresConsolidado((data as MetaPerdaIndicador[]) ?? []) })
+    return () => { cancelado = true }
+  }, [anoAtivo])
+
   const matriz = useMemo(() => {
     if (rowsDre.length === 0) return null
     const mesesOrdenados = Array.from(mesesAtivos).sort((a, b) => a - b)
-    return calcularMatrizPerdas(rowsDre, rowsAux, metasPerdas, anoAtivo, mesesOrdenados)
-  }, [rowsDre, rowsAux, metasPerdas, anoAtivo, mesesAtivos])
+    return calcularMatrizPerdas(rowsDre, rowsAux, metasPerdasIndicadoresConsolidado, anoAtivo, mesesOrdenados)
+  }, [rowsDre, rowsAux, metasPerdasIndicadoresConsolidado, anoAtivo, mesesAtivos])
 
   // ── Tab Evolução ──────────────────────────────────────────────────────────
 
@@ -344,6 +442,152 @@ export function PainelPerdasPage() {
       return ponto
     })
   }, [rowsDre, rowsAux, indSel, anosEvoAtivos, selUnidadeLinhas])
+
+  // ── Orçado acumulado (Administração > Orçamento) + Curva de Captura ────────
+  const anosChave = anosEvoOrdenados.join(',')
+  const [metasPerdasIndicadores, setMetasPerdasIndicadores] = useState<MetaPerdaIndicador[]>([])
+  const [loadingMetasPerdasIndicadores, setLoadingMetasPerdasIndicadores] = useState(false)
+
+  useEffect(() => {
+    if (anosEvoOrdenados.length === 0) return
+    let cancelado = false
+    async function carregar() {
+      setLoadingMetasPerdasIndicadores(true)
+      try {
+        let q = supabase.from('metas_perdas_indicadores').select('*').in('ano', anosEvoOrdenados)
+        if (selUnidadeLinhas !== 'AMBEV') q = q.eq('unidade', selUnidadeLinhas)
+        const { data, error } = await q
+        if (error) throw new Error(error.message)
+        if (!cancelado) setMetasPerdasIndicadores((data as MetaPerdaIndicador[]) ?? [])
+      } finally {
+        if (!cancelado) setLoadingMetasPerdasIndicadores(false)
+      }
+    }
+    carregar()
+    return () => { cancelado = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anosChave, selUnidadeLinhas])
+
+  const [modoGraficoEvo, setModoGraficoEvo] = useState<'mensal' | 'captura'>('mensal')
+
+  /**
+   * Acumulado do "mesmo período" pros dois anos mais recentes selecionados —
+   * o corte é sempre o último mês com resultado do ano mais recente (ex: se só
+   * tem dado até julho, o ano anterior também acumula só até julho, pra
+   * comparação justa). A Meta de Perdas (Metas > Metas de Perdas) é anual, sem
+   * quebra por mês — o acumulado dela é só meta_anual/12 × mesCorte.
+   */
+  const acumulado = useMemo(() => {
+    if (anosEvoOrdenados.length === 0) return null
+    const anoAtual = anosEvoOrdenados[anosEvoOrdenados.length - 1]
+    const anoAnterior = anosEvoOrdenados.length >= 2 ? anosEvoOrdenados[anosEvoOrdenados.length - 2] : null
+
+    const mesesComDado = Array.from({ length: 12 }, (_, i) => i + 1)
+      .filter(mes => valorIndicadorUnidadeMes(rowsDre, rowsAux, indSel, selUnidadeLinhas, anoAtual, mes) !== null)
+    const mesCorte = mesesComDado.length > 0 ? Math.max(...mesesComDado) : 0
+    if (mesCorte === 0) return null
+
+    function somaAcumulada(fn: (mes: number) => number | null): number | null {
+      const valores = Array.from({ length: mesCorte }, (_, i) => fn(i + 1))
+      if (!valores.some(v => v !== null)) return null
+      return valores.reduce<number>((acc, v) => acc + (v ?? 0), 0)
+    }
+
+    const realizadoAtual = somaAcumulada(mes => valorIndicadorUnidadeMes(rowsDre, rowsAux, indSel, selUnidadeLinhas, anoAtual, mes))
+    const realizadoAnterior = anoAnterior !== null
+      ? somaAcumulada(mes => valorIndicadorUnidadeMes(rowsDre, rowsAux, indSel, selUnidadeLinhas, anoAnterior, mes))
+      : null
+    const metaMensal = metaPerdasMensal(metasPerdasIndicadores, indSel, selUnidadeLinhas, anoAtual)
+    const metaAcumulada = metaMensal !== null ? metaMensal * mesCorte : null
+
+    return { anoAtual, anoAnterior, mesCorte, realizadoAtual, realizadoAnterior, metaMensal, metaAcumulada }
+  }, [anosEvoOrdenados, rowsDre, rowsAux, metasPerdasIndicadores, indSel, selUnidadeLinhas])
+
+  /**
+   * A meta mensal entra como um dataKey de verdade (não um ReferenceLine) pra
+   * aparecer no Tooltip compartilhado ao passar o mouse em qualquer ponto do
+   * gráfico — um ReferenceLine não participa do payload do Tooltip.
+   */
+  const chartDataComMeta = useMemo(() => {
+    if (acumulado?.metaMensal == null) return chartData
+    const metaMensal = acumulado.metaMensal
+    return chartData.map(p => ({ ...p, metaMensal }))
+  }, [chartData, acumulado])
+
+  /**
+   * Diferença do ano atual em relação a uma barra de comparação (ano
+   * anterior / Meta de Perdas) — o sinal sempre descreve o desempenho do ano
+   * ATUAL: positivo (verde) = ano atual teve perda MENOR (valor menos
+   * negativo, ou seja melhor) que a barra comparada; negativo (vermelho) =
+   * ano atual perdeu mais que ela (pior).
+   */
+  function diffVsAtual(valorComparado: number | null, valorAtual: number | null): { diffPct: number | null; diffValor: number | null } {
+    if (valorComparado === null || valorAtual === null || valorAtual === 0) return { diffPct: null, diffValor: null }
+    const diffValor = valorAtual - valorComparado
+    const diffPct = (diffValor / Math.abs(valorAtual)) * 100
+    return { diffPct, diffValor }
+  }
+
+  const dadosBarrasAcumulado = useMemo(() => {
+    if (!acumulado) return []
+    const arr: { nome: string; valor: number | null; cor: string; diffPct: number | null; diffValor: number | null }[] = []
+    const idxAtual = anosEvoOrdenados.indexOf(acumulado.anoAtual)
+    arr.push({ nome: `${acumulado.anoAtual}`, valor: acumulado.realizadoAtual, cor: CORES_ANOS[idxAtual % CORES_ANOS.length], diffPct: null, diffValor: null })
+    if (acumulado.anoAnterior !== null) {
+      const idxAnterior = anosEvoOrdenados.indexOf(acumulado.anoAnterior)
+      arr.push({
+        nome: `${acumulado.anoAnterior}`,
+        valor: acumulado.realizadoAnterior,
+        cor: CORES_ANOS[idxAnterior % CORES_ANOS.length],
+        ...diffVsAtual(acumulado.realizadoAnterior, acumulado.realizadoAtual),
+      })
+    }
+    arr.push({
+      nome: 'Meta de Perdas',
+      valor: acumulado.metaAcumulada,
+      cor: COR_META_PERDAS,
+      ...diffVsAtual(acumulado.metaAcumulada, acumulado.realizadoAtual),
+    })
+    return arr
+  }, [acumulado, anosEvoOrdenados])
+
+  /**
+   * Curva de captura: realizado MENSAL (não acumulado) × Meta mensal de Perdas
+   * (linha reta, meta_anual/12) × Necessário — a partir do mês de corte, pega o
+   * que ainda resta da meta anual (meta_anual − o que já foi realizado até
+   * agora) e distribui igual pelos meses restantes: um ritmo mensal fixo, não
+   * uma curva crescente (mesma lógica de `calcularSerieCaptura` do Farol de
+   * Metas). O necessário conecta com o realizado no mês de corte (mesmo valor,
+   * pra não dar salto visual) e some quando o corte é o último mês do ano.
+   */
+  const serieCapturaPerdas = useMemo(() => {
+    if (!acumulado) return []
+    const { mesCorte, anoAtual, metaMensal, realizadoAtual } = acumulado
+    const metaAnualTotal = metaMensal !== null ? metaMensal * 12 : null
+    const mesesRestantes = 12 - mesCorte
+    const necessarioPorMes = (metaAnualTotal !== null && realizadoAtual !== null && mesesRestantes > 0)
+      ? (metaAnualTotal - realizadoAtual) / mesesRestantes
+      : null
+
+    return Array.from({ length: 12 }, (_, i) => {
+      const mes = i + 1
+      const realizadoMensal = valorIndicadorUnidadeMes(rowsDre, rowsAux, indSel, selUnidadeLinhas, anoAtual, mes)
+
+      let necessarioMensal: number | null = null
+      if (necessarioPorMes !== null) {
+        if (mes === mesCorte) necessarioMensal = realizadoMensal
+        else if (mes > mesCorte) necessarioMensal = necessarioPorMes
+      }
+
+      return {
+        mes,
+        mesNome: MESES_NOMES[i],
+        realizadoMensal,
+        metaMensalLinha: metaMensal,
+        necessarioMensal,
+      }
+    })
+  }, [acumulado, rowsDre, rowsAux, indSel, selUnidadeLinhas])
 
   const fmtAxis = (v: number) => {
     if (v === 0) return 'R$ 0'
@@ -555,39 +799,158 @@ export function PainelPerdasPage() {
             </div>
           </div>
 
-          {/* Gráfico de linhas */}
-          <div className="rounded-lg border bg-card p-4">
-            <p className="text-sm font-semibold text-foreground mb-4">
+          {/* Gráfico */}
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-foreground">
               {indSel.label} — {selUnidadeLinhas === 'AMBEV' ? 'AMBEV Consolidado' : (nomesUnidades[selUnidadeLinhas] ?? selUnidadeLinhas)}
             </p>
-            <ResponsiveContainer width="100%" height={320}>
-              <LineChart data={chartData} margin={{ top: 28, right: 24, left: 16, bottom: 8 }}>
-                <XAxis dataKey="mesNome" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 11 }} width={80} axisLine={false} tickLine={false} />
-                <RechartsTooltip content={(props) => <TooltipEvolucao {...(props as Parameters<typeof TooltipEvolucao>[0])} />} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                {anosEvoOrdenados.map((ano, i) => (
-                  <Line
-                    key={ano}
-                    dataKey={`y${ano}`}
-                    name={String(ano)}
-                    stroke={CORES_ANOS[i % CORES_ANOS.length]}
-                    strokeWidth={2}
-                    dot={{ r: 5, strokeWidth: 1.5 }}
-                    activeDot={{ r: 7 }}
-                    connectNulls={false}
-                  >
-                    <LabelList
-                      dataKey={`y${ano}`}
-                      position={i % 2 === 0 ? 'top' : 'bottom'}
-                      formatter={(v: unknown) => typeof v === 'number' ? formatCurrencyInteiro(v) : ''}
-                      style={{ fontSize: 9, fill: CORES_ANOS[i % CORES_ANOS.length] }}
-                    />
-                  </Line>
-                ))}
-              </LineChart>
-            </ResponsiveContainer>
+            <PillToggle
+              opcoes={[
+                { value: 'mensal', label: 'Evolução Mensal' },
+                { value: 'captura', label: 'Curva de Captura' },
+              ] as const}
+              value={modoGraficoEvo}
+              onChange={setModoGraficoEvo}
+            />
           </div>
+
+          {modoGraficoEvo === 'mensal' ? (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              <div className="rounded-lg border bg-card p-4 lg:col-span-2">
+                <ResponsiveContainer width="100%" height={320}>
+                  <LineChart data={chartDataComMeta} margin={{ top: 28, right: 24, left: 16, bottom: 8 }}>
+                    <XAxis dataKey="mesNome" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 11 }} width={80} axisLine={false} tickLine={false} />
+                    <RechartsTooltip content={(props) => <TooltipEvolucao {...(props as Parameters<typeof TooltipEvolucao>[0])} />} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    {acumulado?.metaMensal != null && (
+                      <Line
+                        type="monotone"
+                        dataKey="metaMensal"
+                        name="Meta mensal"
+                        stroke={COR_META_PERDAS}
+                        strokeWidth={2}
+                        strokeDasharray="5 4"
+                        dot={false}
+                        activeDot={{ r: 5, fill: COR_META_PERDAS, strokeWidth: 0 }}
+                      />
+                    )}
+                    {anosEvoOrdenados.map((ano, i) => (
+                      <Line
+                        key={ano}
+                        type="monotone"
+                        dataKey={`y${ano}`}
+                        name={String(ano)}
+                        stroke={CORES_ANOS[i % CORES_ANOS.length]}
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: CORES_ANOS[i % CORES_ANOS.length], strokeWidth: 0 }}
+                        activeDot={{ r: 5, fill: CORES_ANOS[i % CORES_ANOS.length], strokeWidth: 0 }}
+                        connectNulls={false}
+                      >
+                        <LabelList
+                          dataKey={`y${ano}`}
+                          position={i % 2 === 0 ? 'top' : 'bottom'}
+                          formatter={(v: unknown) => typeof v === 'number' ? formatCurrencyInteiro(v) : ''}
+                          style={{ fontSize: 9, fill: CORES_ANOS[i % CORES_ANOS.length] }}
+                        />
+                      </Line>
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="rounded-lg border bg-card p-4">
+                <p className="mb-1 text-xs font-semibold text-muted-foreground">
+                  Acumulado {acumulado ? `até ${MESES_NOMES[acumulado.mesCorte - 1]}` : ''}
+                </p>
+                {loadingMetasPerdasIndicadores && (
+                  <p className="mb-2 text-[11px] text-muted-foreground">Carregando Meta de Perdas...</p>
+                )}
+                {!acumulado || dadosBarrasAcumulado.length === 0 ? (
+                  <p className="flex h-[280px] items-center justify-center text-center text-sm text-muted-foreground">
+                    Sem resultado no ano pra acumular.
+                  </p>
+                ) : (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={dadosBarrasAcumulado} margin={{ top: 56, right: 8, left: 8, bottom: 8 }}>
+                      <XAxis dataKey="nome" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis hide />
+                      <RechartsTooltip
+                        formatter={(v: unknown) => typeof v === 'number' ? formatCurrencyInteiro(v) : '—'}
+                        cursor={{ fill: getChartColors().cursor }}
+                      />
+                      <Bar dataKey="valor" radius={[4, 4, 0, 0]} barSize={48}>
+                        <LabelList
+                          dataKey="valor"
+                          position="top"
+                          formatter={(v: unknown) => typeof v === 'number' ? formatCurrencyInteiro(v) : '—'}
+                          style={{ fontSize: 10 }}
+                        />
+                        {dadosBarrasAcumulado.map((d, i) => (
+                          <Cell key={i} fill={d.cor} />
+                        ))}
+                      </Bar>
+                      <Customized dados={dadosBarrasAcumulado} component={AcumuladoPillsOverlay} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border bg-card p-4">
+              {!acumulado ? (
+                <p className="flex h-[320px] items-center justify-center text-center text-sm text-muted-foreground">
+                  Sem resultado no ano pra acumular.
+                </p>
+              ) : (
+                <>
+                  <p className="mb-4 text-xs text-muted-foreground">
+                    Realizado mensal × Meta mensal de Perdas × Necessário nos meses restantes — {acumulado.anoAtual}
+                  </p>
+                  <ResponsiveContainer width="100%" height={320}>
+                    <LineChart data={serieCapturaPerdas} margin={{ top: 28, right: 24, left: 16, bottom: 8 }}>
+                      <XAxis dataKey="mesNome" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                      <YAxis tickFormatter={fmtAxis} tick={{ fontSize: 11 }} width={80} axisLine={false} tickLine={false} />
+                      <RechartsTooltip formatter={(v: unknown) => typeof v === 'number' ? formatCurrencyInteiro(v) : '—'} />
+                      <Legend wrapperStyle={{ fontSize: 12 }} />
+                      <Line
+                        type="monotone"
+                        dataKey="realizadoMensal"
+                        name="Realizado mensal"
+                        stroke={CORES_ANOS[anosEvoOrdenados.indexOf(acumulado.anoAtual) % CORES_ANOS.length]}
+                        strokeWidth={2}
+                        dot={{ r: 3, fill: CORES_ANOS[anosEvoOrdenados.indexOf(acumulado.anoAtual) % CORES_ANOS.length], strokeWidth: 0 }}
+                        activeDot={{ r: 5, fill: CORES_ANOS[anosEvoOrdenados.indexOf(acumulado.anoAtual) % CORES_ANOS.length], strokeWidth: 0 }}
+                        connectNulls={false}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="metaMensalLinha"
+                        name="Meta mensal"
+                        stroke={COR_META_PERDAS}
+                        strokeWidth={2}
+                        strokeDasharray="5 4"
+                        dot={false}
+                        activeDot={{ r: 5, fill: COR_META_PERDAS, strokeWidth: 0 }}
+                        connectNulls
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="necessarioMensal"
+                        name="Necessário nos meses restantes"
+                        stroke={COR_NECESSARIO}
+                        strokeWidth={2}
+                        strokeDasharray="3 3"
+                        dot={{ r: 3, fill: COR_NECESSARIO, strokeWidth: 0 }}
+                        activeDot={{ r: 5, fill: COR_NECESSARIO, strokeWidth: 0 }}
+                        connectNulls
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Tabelas mensais por ano */}
           <div className="space-y-6">

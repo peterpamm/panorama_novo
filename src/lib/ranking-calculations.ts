@@ -1,14 +1,17 @@
-import type { DreLongoRow, Meta, Natureza } from '@/types'
+import type { DreLongoRow, Meta, Natureza, OrcamentoLinha } from '@/types'
 import { CONTA_RECEITA } from '@/lib/constants'
 import {
   avrPorPrefixo,
-  buscarMeta,
   buscarMetaComFallback,
+  buscarMetaSemestral,
   calcularImpactoFinanceiro,
   calcularReceita,
   calcularSemaforo,
   normalizarParaCalculo,
 } from '@/lib/farol-calculations'
+
+/** Período do Ranking — mesmas opções do Farol de Metas (Mensal/YTD/1º/2º semestre). */
+export type PeriodoRanking = 'mensal' | 'ytd' | 's1' | 's2'
 
 function unicos<T>(valores: T[]): T[] {
   return Array.from(new Set(valores))
@@ -22,8 +25,28 @@ function rowsAcumuladoMesMax(rowsUnidade: DreLongoRow[]): DreLongoRow[] {
   return acumulado.filter(r => r.mes === mesMax)
 }
 
+/**
+ * Linhas do DRE de uma unidade pro período escolhido — mesma régua do Farol de
+ * Metas: Mensal usa o mês selecionado; YTD usa o acumulado do mês mais recente
+ * importado; 1º semestre usa o acumulado direto quando ele ainda é Jan-Jun
+ * (número exato do GInfo) ou reconstrói somando Jan-Jun depois que julho for
+ * importado; 2º semestre sempre reconstrói somando Jul-Dez (não existe
+ * acumulado "só do 2º semestre" na view, que conta sempre desde janeiro).
+ */
+function rowsParaPeriodo(rowsUnidade: DreLongoRow[], periodo: PeriodoRanking, mes: number): DreLongoRow[] {
+  if (periodo === 'mensal') return rowsUnidade.filter(r => r.tipo_periodo === 'MENSAL' && r.mes === mes)
+  if (periodo === 'ytd') return rowsAcumuladoMesMax(rowsUnidade)
+  if (periodo === 's1') {
+    const acumulado = rowsAcumuladoMesMax(rowsUnidade)
+    const mesMax = acumulado.length > 0 ? acumulado[0].mes : null
+    if (mesMax !== null && mesMax <= 6) return acumulado
+    return rowsUnidade.filter(r => r.tipo_periodo === 'MENSAL' && r.mes >= 1 && r.mes <= 6)
+  }
+  return rowsUnidade.filter(r => r.tipo_periodo === 'MENSAL' && r.mes >= 7 && r.mes <= 12)
+}
+
 /** Separa AMBEV (sempre no fim, sem rank) das demais unidades, ordena as demais por `chave` (decrescente, null por último) e atribui rank 1..N. */
-function atribuirRank<T extends { unidade: string; rank: number | null }>(linhas: T[], chave: (l: T) => number | null): T[] {
+export function atribuirRank<T extends { unidade: string; rank: number | null }>(linhas: T[], chave: (l: T) => number | null): T[] {
   const normais = linhas.filter(l => l.unidade !== 'AMBEV')
   const ambev = linhas.filter(l => l.unidade === 'AMBEV')
 
@@ -43,27 +66,58 @@ function atribuirRank<T extends { unidade: string; rank: number | null }>(linhas
 
 export interface RankingLinhaReceita {
   unidade: string
-  receitaYtd: number
-  metaAnual: number | null
+  realizado: number
+  /** Receita Líquida Operacional orçada (tabela `orcamentos`, conta 002) do mesmo período do `realizado` — null se não há orçamento importado. */
+  orcado: number | null
+  /** Impacto em R$: realizado − orçado. Positivo = faturou acima do orçado; negativo = abaixo. Null se não há orçado. */
+  impacto: number | null
   percentualAtingimento: number | null
   rank: number | null
 }
 
-/** Aba Receita: ranqueia por % de atingimento da meta anual (sempre YTD, igual ao painel antigo, independente do modo Mensal/Anual escolhido). */
-export function calcularRankingReceita(rowsNegocioAno: DreLongoRow[], metasNegocioAno: Meta[], params: { negocio: string; ano: number }): RankingLinhaReceita[] {
+function somaOrcado(orcamentoUnidade: OrcamentoLinha[], meses: number[]): number | null {
+  const linhas = orcamentoUnidade.filter(o => meses.includes(o.mes))
+  return linhas.length === 0 ? null : linhas.reduce((acc, o) => acc + o.orcado, 0)
+}
+
+/**
+ * Aba Receita: compara a Receita Líquida Operacional realizada com a orçada
+ * (tabela `orcamentos`, conta 002), sempre no mesmo recorte de meses dos dois
+ * lados — Mensal compara mês a mês; YTD soma o orçado só até o mesmo mês do
+ * acumulado realizado de cada unidade (nunca o ano orçado inteiro); 1º/2º
+ * semestre usa o bloco recalculado (mes=13/14 — tela Administração > Orçamento
+ * > Recalcular semestres) quando existe, senão soma os 6 meses do semestre.
+ */
+export function calcularRankingReceita(
+  rowsNegocioAno: DreLongoRow[],
+  orcamentoRows: OrcamentoLinha[],
+  params: { negocio: string; ano: number; periodo: PeriodoRanking; mes: number },
+): RankingLinhaReceita[] {
   const unidades = unicos(rowsNegocioAno.map(r => r.unidade))
 
   const linhas = unidades.map(unidade => {
     const rowsUnidade = rowsNegocioAno.filter(r => r.unidade === unidade)
-    const calc = normalizarParaCalculo(rowsAcumuladoMesMax(rowsUnidade))
-    const receitaYtd = calcularReceita(calc)
+    const orcamentoUnidade = orcamentoRows.filter(o => o.unidade === unidade && o.conta_codigo === CONTA_RECEITA)
 
-    const metasUnidade = metasNegocioAno.filter(m => m.unidade === unidade)
-    const metaAnual = buscarMeta(metasUnidade, { unidade, negocio: params.negocio, ano: params.ano, codigo: CONTA_RECEITA, isYtd: true, mes: 0 })
+    const realizado = calcularReceita(normalizarParaCalculo(rowsParaPeriodo(rowsUnidade, params.periodo, params.mes)))
 
-    const percentualAtingimento = metaAnual !== null && metaAnual !== 0 ? (receitaYtd / metaAnual) * 100 : null
+    let orcado: number | null
+    if (params.periodo === 'mensal') {
+      orcado = somaOrcado(orcamentoUnidade, [params.mes])
+    } else if (params.periodo === 'ytd') {
+      const acumulado = rowsAcumuladoMesMax(rowsUnidade)
+      const mesMax = acumulado.length > 0 ? acumulado[0].mes : 0
+      orcado = somaOrcado(orcamentoUnidade, Array.from({ length: mesMax }, (_, i) => i + 1))
+    } else {
+      const mesSemestral = params.periodo === 's1' ? 13 : 14
+      const mesesFallback = params.periodo === 's1' ? [1, 2, 3, 4, 5, 6] : [7, 8, 9, 10, 11, 12]
+      orcado = somaOrcado(orcamentoUnidade, [mesSemestral]) ?? somaOrcado(orcamentoUnidade, mesesFallback)
+    }
 
-    return { unidade, receitaYtd, metaAnual, percentualAtingimento, rank: null as number | null }
+    const percentualAtingimento = orcado !== null && orcado !== 0 ? (realizado / orcado) * 100 : null
+    const impacto = orcado !== null ? realizado - orcado : null
+
+    return { unidade, realizado, orcado, impacto, percentualAtingimento, rank: null as number | null }
   })
 
   return atribuirRank(linhas, l => l.percentualAtingimento)
@@ -86,33 +140,34 @@ export interface RankingLinhaIndicador {
 
 /**
  * Abas Performance/Custos: ranqueia por Δ da meta (avrPorPrefixo - meta, com
- * sinal já correto por natureza via `calcularSemaforo`). No modo Mensal, usa
- * o mês selecionado; no modo Anual (YTD), usa o acumulado do mês mais
- * recente importado — mesma régua do Farol de Metas.
+ * sinal já correto por natureza via `calcularSemaforo`). Mensal usa o mês
+ * selecionado; YTD usa o acumulado do mês mais recente importado; 1º/2º
+ * semestre usa a meta semestral (mes=13/14 na tabela `metas`) — mesma régua
+ * do Farol de Metas.
  */
 export function calcularRankingIndicador(
   rowsNegocioAno: DreLongoRow[],
   metasNegocioAno: Meta[],
   pacote: { natureza: Natureza; prefixos: string[] },
   codigo: string,
-  params: { negocio: string; ano: number; isYtd: boolean; mes: number },
+  params: { negocio: string; ano: number; periodo: PeriodoRanking; mes: number },
 ): RankingLinhaIndicador[] {
   const unidades = unicos(rowsNegocioAno.map(r => r.unidade))
 
   const linhas = unidades.map(unidade => {
     const rowsUnidade = rowsNegocioAno.filter(r => r.unidade === unidade)
-    const rowsPeriodo = params.isYtd
-      ? rowsAcumuladoMesMax(rowsUnidade)
-      : rowsUnidade.filter(r => r.tipo_periodo === 'MENSAL' && r.mes === params.mes)
-
-    const calc = normalizarParaCalculo(rowsPeriodo)
+    const calc = normalizarParaCalculo(rowsParaPeriodo(rowsUnidade, params.periodo, params.mes))
     const avr = avrPorPrefixo(calc, pacote.prefixos)
     const receita = calcularReceita(calc)
 
     const metasUnidade = metasNegocioAno.filter(m => m.unidade === unidade)
-    const meta = buscarMetaComFallback(calc, metasUnidade, {
-      unidade, negocio: params.negocio, ano: params.ano, codigo, isYtd: params.isYtd, mes: params.mes, prefixos: pacote.prefixos,
-    })
+    const meta = params.periodo === 's1' || params.periodo === 's2'
+      ? buscarMetaSemestral(metasUnidade, {
+          unidade, negocio: params.negocio, ano: params.ano, codigo, semestre: params.periodo === 's1' ? 1 : 2,
+        })
+      : buscarMetaComFallback(calc, metasUnidade, {
+          unidade, negocio: params.negocio, ano: params.ano, codigo, isYtd: params.periodo === 'ytd', mes: params.mes, prefixos: pacote.prefixos,
+        })
 
     const semaforo = calcularSemaforo(avr, meta, pacote.natureza)
     const impacto = calcularImpactoFinanceiro(avr, meta, receita, pacote.natureza)
