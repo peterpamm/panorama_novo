@@ -4,11 +4,11 @@ import { parseExcessoVelocidadeCsv } from './excesso-velocidade-parser'
 const HEADER = 'PLACA;PREFIXO;UO;TIPO;NIVEL;LIMIAR;EXCESSO;DURACAO'
 
 describe('parseExcessoVelocidadeCsv', () => {
-  it('conta como excesso só quando EXCESSO > LIMIAR, agregando por UO', () => {
+  it('conta como excesso quando TIPO contém EXCESSO_VELOCIDADE, agregando por UO', () => {
     const texto = [
       HEADER,
-      'QTL1640;QTL1640;CD FRANCISCO BELTRÃO - LOG20;EXCESSO_BAIXO;-;40 Km/h;43 Km/h;00:00:05',
-      'RMY2D87;RMY2D87;CD FRANCISCO BELTRÃO - LOG20;EXCESSO_ALTO;-;64 Km/h;95 Km/h;00:01:12',
+      'QTL1640;QTL1640;CD FRANCISCO BELTRÃO - LOG20;EXCESSO_VELOCIDADE;-;40 Km/h;43 Km/h;00:00:05',
+      'RMY2D87;RMY2D87;CD FRANCISCO BELTRÃO - LOG20;EXCESSO_VELOCIDADE;-;64 Km/h;95 Km/h;00:01:12',
       'RJL4177;RJL4177;CD FRANCISCO BELTRÃO - LOG20;NO_LIMITE;-;60 Km/h;60 Km/h;00:00:00',
     ].join('\n')
     const { agregados, erros } = parseExcessoVelocidadeCsv(texto)
@@ -21,9 +21,9 @@ describe('parseExcessoVelocidadeCsv', () => {
   it('agrupa por mais de uma UO ao mesmo tempo', () => {
     const texto = [
       HEADER,
-      'AAA1111;AAA1111;CD FOZ - LOG20;EXCESSO_BAIXO;-;40 Km/h;43 Km/h;00:00:05',
-      'BBB2222;BBB2222;CD DIADEMA - LOG20;EXCESSO_ALTO;-;64 Km/h;95 Km/h;00:01:12',
-      'CCC3333;CCC3333;CD DIADEMA - LOG20;EXCESSO_BAIXO;-;60 Km/h;66 Km/h;00:00:07',
+      'AAA1111;AAA1111;CD FOZ - LOG20;EXCESSO_VELOCIDADE;-;40 Km/h;43 Km/h;00:00:05',
+      'BBB2222;BBB2222;CD DIADEMA - LOG20;EXCESSO_VELOCIDADE;-;64 Km/h;95 Km/h;00:01:12',
+      'CCC3333;CCC3333;CD DIADEMA - LOG20;EXCESSO_VELOCIDADE;-;60 Km/h;66 Km/h;00:00:07',
     ].join('\n')
     const { agregados } = parseExcessoVelocidadeCsv(texto)
     expect(agregados).toEqual([
@@ -32,8 +32,20 @@ describe('parseExcessoVelocidadeCsv', () => {
     ])
   })
 
-  it('retorna erro de cabeçalho inválido quando falta UO, LIMIAR ou EXCESSO', () => {
-    const { agregados, erros } = parseExcessoVelocidadeCsv('PLACA;TIPO\nQTL1640;EXCESSO_BAIXO')
+  it('ignora linhas com TIPO diferente de EXCESSO_VELOCIDADE', () => {
+    const texto = [
+      HEADER,
+      'AAA1111;AAA1111;CD FOZ - LOG20;NO_LIMITE;-;40 Km/h;39 Km/h;00:00:00',
+      'BBB2222;BBB2222;CD FOZ - LOG20;EXCESSO_VELOCIDADE;-;64 Km/h;95 Km/h;00:01:12',
+    ].join('\n')
+    const { agregados } = parseExcessoVelocidadeCsv(texto)
+    expect(agregados).toEqual([
+      { uo: 'CD FOZ - LOG20', totalExcessos: 1 },
+    ])
+  })
+
+  it('retorna erro de cabeçalho inválido quando falta UO ou TIPO', () => {
+    const { agregados, erros } = parseExcessoVelocidadeCsv('PLACA;LIMIAR\nQTL1640;40 Km/h')
     expect(agregados).toEqual([])
     expect(erros).toHaveLength(1)
   })

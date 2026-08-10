@@ -11,6 +11,7 @@ import { Toaster } from '@/components/ui/toaster'
 import { useToast } from '@/components/ui/use-toast'
 import { OrcamentoTab } from '@/components/administracao/OrcamentoTab'
 import { UsuariosTab } from '@/components/administracao/UsuariosTab'
+import { MinhaContaTab } from '@/components/administracao/MinhaContaTab'
 import type { Unidade } from '@/types'
 
 interface LinhaUnidadeProps {
@@ -153,6 +154,7 @@ export function AdministracaoPage() {
           <TabsTrigger value="unidades">Unidades</TabsTrigger>
           <TabsTrigger value="orcamento">Orçamento</TabsTrigger>
           <TabsTrigger value="usuarios">Usuários</TabsTrigger>
+          <TabsTrigger value="minha-conta">Minha Conta</TabsTrigger>
         </TabsList>
 
         <TabsContent value="unidades" className="pt-4">
@@ -201,6 +203,10 @@ export function AdministracaoPage() {
 
         <TabsContent value="usuarios" className="pt-4">
           <UsuariosTab />
+        </TabsContent>
+
+        <TabsContent value="minha-conta" className="pt-4">
+          <MinhaContaTab />
         </TabsContent>
       </Tabs>
       <Toaster />

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Loader2, Pencil, Plus, Trash2, Users } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useUnidades } from '@/hooks/useUnidades'
@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
-import { formatarResultado, naturezaEFormatoAutomaticos, resolverNaturezaFormato } from '@/lib/reuniao-resultados'
+import { formatarResultado, naturezaEFormatoAutomaticos, resolverNaturezaFormato, unidadesParticipaveis } from '@/lib/reuniao-resultados'
 import { formatarMinutosComoDuracao, parseDuracaoParaMinutos } from '@/lib/duracao'
 import { INDICADORES_PERDAS } from '@/lib/painel-perdas-calculations'
 import { PACOTES } from '@/lib/constants'
@@ -36,18 +36,22 @@ const FONTES: { value: ReuniaoFonte; label: string }[] = [
   { value: 'perdas', label: 'Automático — indicador do Painel de Perdas' },
   { value: 'farol_pacote', label: 'Automático — pacote do Farol de Metas' },
   { value: 'rotinas', label: 'Automático — % de aderência das Rotinas Financeiras' },
+  { value: 'termometro', label: 'Automático — Termômetro (importação de planilha, sem meta)' },
+  { value: 'importado', label: 'Automático — importado de planilha (meta, resultado e pontos prontos)' },
 ]
 
 const PONTOS_MAX_SETOR = 200
 
 const FORM_INICIAL = {
-  nome: '', meta: '', formato: 'numero' as ReuniaoFormato, natureza: 'performance' as Natureza, pontos: '',
-  fonte: 'manual' as ReuniaoFonte, fonteChave: '',
+  nome: '', nomeT1: '', meta: '', formato: 'numero' as ReuniaoFormato, natureza: 'performance' as Natureza, pontos: '',
+  fonte: 'manual' as ReuniaoFonte, fonteChave: '', metaFixa: '',
 }
 
 /** Nome amigável da fonte automática escolhida — só pra mostrar na listagem e no formulário. */
 function labelFonteChave(fonte: ReuniaoFonte, fonteChave: string | null): string {
   if (fonte === 'rotinas') return 'Aderência das Rotinas Financeiras'
+  if (fonte === 'termometro') return 'Pontuação direta (sem meta) — importada mensalmente'
+  if (fonte === 'importado') return 'Meta, resultado e pontos prontos — importados mensalmente'
   if (!fonteChave) return ''
   if (fonte === 'perdas') return INDICADORES_PERDAS.find(i => i.key === fonteChave)?.label ?? fonteChave
   if (fonte === 'farol_pacote') return PACOTES[fonteChave]?.nome ?? fonteChave
@@ -61,6 +65,7 @@ interface CadastroIndicadoresTabProps {
 export function CadastroIndicadoresTab({ setor }: CadastroIndicadoresTabProps) {
   const { toast } = useToast()
   const { unidades } = useUnidades()
+  const linhasParticipaveis = useMemo(() => unidadesParticipaveis(unidades, setor), [unidades, setor])
 
   const [ano, setAno] = useState(String(new Date().getFullYear()))
   const [indicadores, setIndicadores] = useState<ReuniaoIndicador[]>([])
@@ -98,12 +103,14 @@ export function CadastroIndicadoresTab({ setor }: CadastroIndicadoresTabProps) {
     setEditando(i)
     setForm({
       nome: i.nome,
+      nomeT1: i.nome_t1 ?? '',
       meta: i.fonte === 'manual' && i.meta !== null ? (i.formato === 'duracao' ? formatarMinutosComoDuracao(i.meta) : String(i.meta)) : '',
       formato: i.formato,
       natureza: i.natureza,
       pontos: String(i.pontos),
       fonte: i.fonte,
       fonteChave: i.fonte_chave ?? '',
+      metaFixa: i.meta_fixa !== null ? String(i.meta_fixa) : '',
     })
     setDialogAberto(true)
   }
@@ -116,6 +123,17 @@ export function CadastroIndicadoresTab({ setor }: CadastroIndicadoresTabProps) {
       return
     }
 
+    const nomeT1 = form.nomeT1.trim() || null
+
+    let metaFixa: number | null = null
+    if (form.fonte === 'perdas' && form.metaFixa.trim() !== '') {
+      metaFixa = Number(form.metaFixa.replace(',', '.'))
+      if (Number.isNaN(metaFixa)) {
+        toast({ title: 'Preencha a meta fixa corretamente', variant: 'destructive' })
+        return
+      }
+    }
+
     let payload: Record<string, unknown>
     if (form.fonte === 'manual') {
       const meta = form.formato === 'duracao' ? parseDuracaoParaMinutos(form.meta) : Number(form.meta.replace(',', '.'))
@@ -123,19 +141,22 @@ export function CadastroIndicadoresTab({ setor }: CadastroIndicadoresTabProps) {
         toast({ title: 'Preencha a meta corretamente', variant: 'destructive' })
         return
       }
-      payload = { setor, ano: Number(ano), nome, meta, formato: form.formato, natureza: form.natureza, pontos, fonte: 'manual', fonte_chave: null }
+      payload = { setor, ano: Number(ano), nome, nome_t1: nomeT1, meta, formato: form.formato, natureza: form.natureza, pontos, fonte: 'manual', fonte_chave: null, meta_fixa: null }
+    } else if (form.fonte === 'importado') {
+      // Meta/resultado/pontos vêm prontos da planilha (por unidade/mês) — só formato/natureza ficam a critério de quem cadastra, iguais ao manual, só pra exibição.
+      payload = { setor, ano: Number(ano), nome, nome_t1: nomeT1, meta: null, formato: form.formato, natureza: form.natureza, pontos, fonte: 'importado', fonte_chave: null, meta_fixa: null }
     } else {
-      if (form.fonte !== 'rotinas' && !form.fonteChave) {
+      if (form.fonte !== 'rotinas' && form.fonte !== 'termometro' && !form.fonteChave) {
         toast({ title: 'Selecione o indicador/pacote de origem', variant: 'destructive' })
         return
       }
-      const fonteChave = form.fonte === 'rotinas' ? null : form.fonteChave
+      const fonteChave = form.fonte === 'rotinas' || form.fonte === 'termometro' ? null : form.fonteChave
       const auto = naturezaEFormatoAutomaticos(form.fonte, fonteChave)
       if (!auto) {
         toast({ title: 'Não consegui identificar a fonte selecionada', variant: 'destructive' })
         return
       }
-      payload = { setor, ano: Number(ano), nome, meta: null, formato: auto.formato, natureza: auto.natureza, pontos, fonte: form.fonte, fonte_chave: fonteChave }
+      payload = { setor, ano: Number(ano), nome, nome_t1: nomeT1, meta: null, formato: auto.formato, natureza: auto.natureza, pontos, fonte: form.fonte, fonte_chave: fonteChave, meta_fixa: metaFixa }
     }
 
     setSalvando(true)
@@ -179,27 +200,28 @@ export function CadastroIndicadoresTab({ setor }: CadastroIndicadoresTabProps) {
   async function abrirParticipantes(i: ReuniaoIndicador) {
     setParticipantesDe(i)
     setCarregandoParticipantes(true)
-    const { data } = await supabase.from('reuniao_resultados_participantes').select('unidade').eq('indicador_id', i.id)
-    setParticipantesSel(new Set((data ?? []).map(r => r.unidade as string)))
+    const { data } = await supabase.from('reuniao_resultados_participantes').select('unidade,negocio').eq('indicador_id', i.id)
+    setParticipantesSel(new Set((data ?? []).map(r => `${r.unidade}|${r.negocio}`)))
     setCarregandoParticipantes(false)
   }
 
-  async function toggleParticipante(unidadeCodigo: string) {
+  async function toggleParticipante(unidadeCodigo: string, negocio: string) {
     if (!participantesDe) return
-    const participa = participantesSel.has(unidadeCodigo)
+    const chave = `${unidadeCodigo}|${negocio}`
+    const participa = participantesSel.has(chave)
     setParticipantesSel(prev => {
       const novo = new Set(prev)
-      if (participa) novo.delete(unidadeCodigo)
-      else novo.add(unidadeCodigo)
+      if (participa) novo.delete(chave)
+      else novo.add(chave)
       return novo
     })
     if (participa) {
       const { error } = await supabase.from('reuniao_resultados_participantes')
-        .delete().eq('indicador_id', participantesDe.id).eq('unidade', unidadeCodigo)
+        .delete().eq('indicador_id', participantesDe.id).eq('unidade', unidadeCodigo).eq('negocio', negocio)
       if (error) toast({ title: 'Erro ao atualizar participante', description: error.message, variant: 'destructive' })
     } else {
       const { error } = await supabase.from('reuniao_resultados_participantes')
-        .insert({ indicador_id: participantesDe.id, unidade: unidadeCodigo })
+        .insert({ indicador_id: participantesDe.id, unidade: unidadeCodigo, negocio })
       if (error) toast({ title: 'Erro ao atualizar participante', description: error.message, variant: 'destructive' })
     }
   }
@@ -250,15 +272,23 @@ export function CadastroIndicadoresTab({ setor }: CadastroIndicadoresTabProps) {
                 const { natureza } = resolverNaturezaFormato(i)
                 return (
                 <TableRow key={i.id}>
-                  <TableCell className={cn('text-sm font-medium', !i.ativo && 'text-muted-foreground line-through')}>{i.nome}</TableCell>
+                  <TableCell className={cn('text-sm font-medium', !i.ativo && 'text-muted-foreground line-through')}>
+                    {i.nome}
+                    {i.nome_t1 && <span className="text-muted-foreground"> / {i.nome_t1}</span>}
+                  </TableCell>
                   <TableCell className="text-center text-sm tabular-nums">
                     {i.fonte === 'manual' ? formatarResultado(i.meta, i.formato) : (
                       <span className="text-xs text-muted-foreground">
                         Automático · {labelFonteChave(i.fonte, i.fonte_chave)}
+                        {i.fonte === 'perdas' && i.meta_fixa !== null && ` · Meta fixa: ${formatarResultado(i.meta_fixa, i.formato)}`}
                       </span>
                     )}
                   </TableCell>
-                  <TableCell className="text-center text-sm text-muted-foreground">{natureza === 'custo' ? 'Custo (menor melhor)' : 'Performance (maior melhor)'}</TableCell>
+                  <TableCell className="text-center text-sm text-muted-foreground">
+                    {i.nome_t1
+                      ? 'Varia (T2 ≠ T1)'
+                      : natureza === 'custo' ? 'Custo (menor melhor)' : 'Performance (maior melhor)'}
+                  </TableCell>
                   <TableCell className="text-center text-sm font-semibold tabular-nums">{i.pontos}</TableCell>
                   <TableCell className="text-center">
                     <button
@@ -304,6 +334,11 @@ export function CadastroIndicadoresTab({ setor }: CadastroIndicadoresTabProps) {
             <div className="space-y-1.5">
               <Label htmlFor="ind-nome">Nome</Label>
               <Input id="ind-nome" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} placeholder="Ex: TMA, Presenteísmo, Aderência..." />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="ind-nome-t1">Nome no T1 (opcional)</Label>
+              <Input id="ind-nome-t1" value={form.nomeT1} onChange={e => setForm(f => ({ ...f, nomeT1: e.target.value }))} placeholder="Ex: DEV PDV no T2, GTY no T1 — deixe em branco se for o mesmo nome" />
             </div>
 
             <div className="space-y-1.5">
@@ -353,7 +388,16 @@ export function CadastroIndicadoresTab({ setor }: CadastroIndicadoresTabProps) {
                     {INDICADORES_PERDAS.map(ind => <SelectItem key={ind.key} value={ind.key}>{ind.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">Meta e resultado ficam automáticos (Metas de Perdas + DRE) — formato R$, quanto menos negativo (ou positivo) melhor.</p>
+                <p className="text-xs text-muted-foreground">O resultado sempre vem do Painel de Perdas (DRE/AUX). A meta também, por padrão — só pra essa Reunião, dá pra travar uma meta fixa pra todas as unidades (o Painel de Perdas/RV continuam usando a meta normal).</p>
+                <div className="space-y-1.5 pt-1">
+                  <Label htmlFor="ind-meta-fixa">Meta fixa nessa Reunião (opcional)</Label>
+                  <Input
+                    id="ind-meta-fixa"
+                    value={form.metaFixa}
+                    onChange={e => setForm(f => ({ ...f, metaFixa: e.target.value }))}
+                    placeholder="Ex: 0 — deixe em branco pra usar a meta do Painel de Perdas"
+                  />
+                </div>
               </div>
             ) : form.fonte === 'farol_pacote' ? (
               <div className="space-y-1.5">
@@ -366,11 +410,45 @@ export function CadastroIndicadoresTab({ setor }: CadastroIndicadoresTabProps) {
                 </Select>
                 <p className="text-xs text-muted-foreground">Meta e resultado (AVR) ficam automáticos (Orçamento + DRE) — formato %.</p>
               </div>
-            ) : (
+            ) : form.fonte === 'rotinas' ? (
               <p className="text-xs text-muted-foreground">
                 Meta e resultado ficam automáticos: % de aderência mensal das Rotinas Financeiras (Área Financeira &gt;
                 Rotinas) contra a meta cadastrada em Metas &gt; Financeiro &gt; Metas de Resultado — quanto maior, melhor.
               </p>
+            ) : form.fonte === 'termometro' ? (
+              <p className="text-xs text-muted-foreground">
+                Sem meta — a pontuação ganha no mês é o próprio valor importado na aba Importação, limitado ao total de
+                pontos cadastrado abaixo (ex: indicador vale até 110 pontos, importou 85 → ganha 85 pontos).
+              </p>
+            ) : (
+              <>
+                <div className="space-y-1.5">
+                  <Label>Formato</Label>
+                  <Select value={form.formato} onValueChange={v => setForm(f => ({ ...f, formato: v as ReuniaoFormato }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {FORMATOS.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Natureza</Label>
+                  <Select value={form.natureza} onValueChange={v => setForm(f => ({ ...f, natureza: v as Natureza }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="performance">Performance (maior é melhor)</SelectItem>
+                      <SelectItem value="custo">Custo (menor é melhor)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Sem meta — meta, resultado e pontos vêm prontos da planilha padrão (aba Importação), por unidade/mês.
+                  Formato/natureza são só pra exibição (a pontuação nunca é calculada a partir deles) — se o "Nome no T1"
+                  for diferente e a direção mudar entre T2/T1 (ex: ON TIME quanto maior melhor, TMV quanto menor melhor),
+                  pode escolher qualquer uma das duas aqui: não afeta a pontuação, e a tela para de afirmar uma direção
+                  única sempre que houver Nome no T1 cadastrado.
+                </p>
+              </>
             )}
 
             <div className="space-y-1.5">
@@ -402,16 +480,19 @@ export function CadastroIndicadoresTab({ setor }: CadastroIndicadoresTabProps) {
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 max-h-80 overflow-y-auto sm:grid-cols-3">
-              {unidades.map(u => (
-                <div key={u.codigo} className="flex items-center gap-1.5">
-                  <Checkbox
-                    id={`part-${u.codigo}`}
-                    checked={participantesSel.has(u.codigo)}
-                    onCheckedChange={() => toggleParticipante(u.codigo)}
-                  />
-                  <Label htmlFor={`part-${u.codigo}`} className="cursor-pointer text-sm font-normal">{u.nome}</Label>
-                </div>
-              ))}
+              {linhasParticipaveis.map(p => {
+                const chave = `${p.unidade}|${p.negocio}`
+                return (
+                  <div key={chave} className="flex items-center gap-1.5">
+                    <Checkbox
+                      id={`part-${chave}`}
+                      checked={participantesSel.has(chave)}
+                      onCheckedChange={() => toggleParticipante(p.unidade, p.negocio)}
+                    />
+                    <Label htmlFor={`part-${chave}`} className="cursor-pointer text-sm font-normal">{p.nome}</Label>
+                  </div>
+                )
+              })}
             </div>
           )}
         </DialogContent>

@@ -13,8 +13,9 @@ import { useToast } from '@/components/ui/use-toast'
 import { criarUsuario } from '@/lib/admin-users-api'
 import { concederPagina, listarPermissoesAgrupadas, revogarPagina, type UsuarioComPermissoes } from '@/lib/permissoes-api'
 import { PAGINAS, type PaginaChave } from '@/lib/permissoes'
+import { opcoesNegocioSplit, unidadeSplitNegocio } from '@/lib/rv-gente'
 
-const FORM_INICIAL = { email: '', senha: '', role: 'unidade' as 'admin' | 'unidade', unidade: '' }
+const FORM_INICIAL = { email: '', senha: '', role: 'unidade' as 'admin' | 'unidade', unidade: '', negocio: '' }
 const GRUPOS = Array.from(new Set(PAGINAS.map(p => p.grupo)))
 
 function PaginasCheckboxGrid({ prefixo, selecionadas, onToggle }: {
@@ -61,6 +62,15 @@ export function UsuariosTab() {
   const [paginasNovoUsuario, setPaginasNovoUsuario] = useState<Set<PaginaChave>>(new Set())
   const [salvando, setSalvando] = useState(false)
 
+  // Unidades com 2 gerentes (Camaçari e Ponta Grossa — cada uma abre Rota e
+  // Armazém como negócio separado) — precisa escolher de qual negócio é
+  // esse usuário, senão o Painel Geral da RV mistura a liderança dos dois
+  // gerentes.
+  const unidadeSelecionada = unidades.find(u => u.codigo === form.unidade)
+  const precisaNegocio = form.role === 'unidade' && !!unidadeSelecionada && unidadeSplitNegocio(unidadeSelecionada.codigo, unidadeSelecionada.nome)
+  // Camaçari é Rota+Armazém, Ponta Grossa é Empurrada+Armazém — nunca o mesmo par (ver opcoesNegocioSplit).
+  const opcoesNegocio = unidadeSelecionada ? opcoesNegocioSplit(unidadeSelecionada.codigo, unidadeSelecionada.nome) : []
+
   function toggleNovoUsuario(pagina: PaginaChave) {
     setPaginasNovoUsuario(prev => {
       const novo = new Set(prev)
@@ -84,6 +94,10 @@ export function UsuariosTab() {
       toast({ title: 'Selecione a unidade', variant: 'destructive' })
       return
     }
+    if (precisaNegocio && !form.negocio) {
+      toast({ title: 'Selecione de qual gerente/negócio é esse usuário', variant: 'destructive' })
+      return
+    }
     setSalvando(true)
     try {
       await criarUsuario({
@@ -91,9 +105,10 @@ export function UsuariosTab() {
         senha: form.senha,
         role: form.role,
         unidade: form.role === 'unidade' ? form.unidade : undefined,
+        rvNegocio: precisaNegocio ? form.negocio : undefined,
         paginasIniciais: Array.from(paginasNovoUsuario),
       })
-      toast({ title: 'Usuário criado', description: `${email} já pode logar (se a confirmação de email estiver desativada no projeto).` })
+      toast({ title: 'Usuário criado', description: `${email} só ganha acesso depois de você rodar SELECT sync_auth_app_metadata(); no SQL Editor.` })
       setForm(FORM_INICIAL)
       setPaginasNovoUsuario(new Set())
       await carregarMatriz()
@@ -170,6 +185,15 @@ export function UsuariosTab() {
               Email se "Confirm email" está desativado.
             </p>
           </div>
+          <div className="mt-2 flex items-start gap-2 rounded-lg border border-red-300/50 bg-red-50 p-3 text-xs text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+            <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" />
+            <p>
+              <strong>Passo obrigatório:</strong> depois de criar o(s) usuário(s) aqui, vá no SQL Editor do Supabase e
+              rode <code className="rounded bg-black/10 px-1 py-0.5 dark:bg-white/10">SELECT sync_auth_app_metadata();</code> —
+              sem isso, o login é criado mas fica sem nenhum acesso liberado. Só precisa rodar uma vez, mesmo criando
+              vários usuários seguidos — pode deixar todos criados e rodar só no final.
+            </p>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="max-w-2xl space-y-4">
@@ -209,7 +233,7 @@ export function UsuariosTab() {
               {form.role === 'unidade' && (
                 <div className="space-y-1.5">
                   <Label>Unidade</Label>
-                  <Select value={form.unidade} onValueChange={v => setForm(f => ({ ...f, unidade: v }))}>
+                  <Select value={form.unidade} onValueChange={v => setForm(f => ({ ...f, unidade: v, negocio: '' }))}>
                     <SelectTrigger>
                       <SelectValue placeholder="Selecione..." />
                     </SelectTrigger>
@@ -219,6 +243,24 @@ export function UsuariosTab() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+              )}
+              {precisaNegocio && (
+                <div className="col-span-2 space-y-1.5">
+                  <Label>Gerente de qual negócio?</Label>
+                  <Select value={form.negocio} onValueChange={v => setForm(f => ({ ...f, negocio: v }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {opcoesNegocio.map(o => (
+                        <SelectItem key={o.valor} value={o.valor}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Essa unidade tem 2 gerentes — cada um só vai ver a própria liderança no Painel Geral da RV.
+                  </p>
                 </div>
               )}
             </div>

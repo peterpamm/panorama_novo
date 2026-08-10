@@ -27,31 +27,34 @@ export function useDreLongo(unidade: string | null) {
       const PAGE = 10000
       const TABELA = 'mv_dre_longo'
 
-      // 1. Conta as linhas da unidade (1 request rápido com índice)
-      const { count, error: errCount } = await supabase
-        .from(TABELA)
-        .select('*', { count: 'exact', head: true })
-        .eq('unidade', unidade)
-
-      if (errCount) throw errCount
-      if (!count) return []
-
-      // 2. Busca todas as páginas em paralelo
-      const numPaginas = Math.ceil(count / PAGE)
-      const resultados = await Promise.all(
-        Array.from({ length: numPaginas }, (_, i) =>
-          supabase
-            .from(TABELA)
-            .select('*')
-            .eq('unidade', unidade)
-            .range(i * PAGE, Math.min((i + 1) * PAGE - 1, count - 1)),
-        ),
-      )
-
+      // Busca páginas sequenciais até uma voltar com menos linhas que PAGE
+      // (fim dos dados) — evita o COUNT(*) exato, que na pior das hipóteses
+      // pode estourar o statement_timeout do Supabase.
       const todas: DreLongoRow[] = []
-      for (const r of resultados) {
-        if (r.error) throw r.error
-        todas.push(...(r.data as DreLongoRow[]))
+      let pagina = 0
+      let acabou = false
+      while (!acabou) {
+        // .order() é obrigatório com .range(): sem ordem explícita o Postgres
+        // não garante a mesma ordem entre duas chamadas separadas, então a
+        // página 1 pode pular/repetir linhas que a página 0 já devolveu —
+        // bug real já visto (resultado de um pacote zerado só numa unidade,
+        // sumindo/reaparecendo a cada F5, ver DataContext.tsx).
+        const { data, error } = await supabase
+          .from(TABELA)
+          .select('*')
+          .eq('unidade', unidade)
+          .order('negocio', { ascending: true })
+          .order('ano', { ascending: true })
+          .order('mes', { ascending: true })
+          .order('tipo_periodo', { ascending: true })
+          .order('conta_codigo', { ascending: true })
+          .range(pagina * PAGE, (pagina + 1) * PAGE - 1)
+
+        if (error) throw error
+        const dados = (data as DreLongoRow[]) ?? []
+        todas.push(...dados)
+        if (dados.length < PAGE) acabou = true
+        pagina += 1
       }
       return todas
     }

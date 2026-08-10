@@ -1,0 +1,13 @@
+# Apache — coloque este arquivo dentro da pasta dist/ (junto do index.html)
+# antes de zipar/publicar. Exige mod_rewrite habilitado no Apache — sem
+# isso a regra é ignorada e as rotas internas do app (ex:
+# /area-financeira/rotinas) dão 404 ao dar F5.
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>

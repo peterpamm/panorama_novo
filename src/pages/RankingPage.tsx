@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useUnidades } from '@/hooks/useUnidades'
 import { useDreLongoTodasUnidades } from '@/hooks/useDreLongoTodasUnidades'
-import { useMetasTodasUnidades } from '@/hooks/useMetasTodasUnidades'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PillToggle } from '@/components/ui/pill-toggle'
 import { FilterLabel, filterTriggerClass } from '@/components/farol/FarolFilters'
@@ -11,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RankingTabelaIndicador, RankingTabelaPerdas, RankingTabelaReceita, type RankingLinhaPerda } from '@/components/ranking/RankingTabelas'
 import { UnidadesMultiSelect } from '@/components/ranking/UnidadesMultiSelect'
 import { usePainelPerdasAux } from '@/hooks/usePainelPerdasAux'
-import { CONTA_RECEITA, PACOTES, RANKING_CUSTOS, RANKING_PERFORMANCE } from '@/lib/constants'
+import { CONTAS_ORCAMENTO_USADAS, PACOTES, RANKING_CUSTOS, RANKING_PERFORMANCE } from '@/lib/constants'
 import { calcularRankingIndicador, calcularRankingReceita, type PeriodoRanking } from '@/lib/ranking-calculations'
 import { calcularMatrizPerdas, INDICADORES_PERDAS } from '@/lib/painel-perdas-calculations'
 import { fetchOrcamentoPaginado } from '@/lib/orcamento-fetch'
@@ -26,7 +25,6 @@ function unicos<T>(valores: T[]): T[] {
 export function RankingPage() {
   const { unidades, loading: loadingUnidades } = useUnidades()
   const { rows, loading: loadingDre } = useDreLongoTodasUnidades()
-  const { metas, loading: loadingMetas } = useMetasTodasUnidades()
   const { rows: rowsAux } = usePainelPerdasAux()
 
   const nomesUnidade = useMemo(() => new Map(unidades.map(u => [u.codigo, u.nome])), [unidades])
@@ -98,17 +96,17 @@ export function RankingPage() {
         ? '2º Semestre'
         : `Mensal — M${selMes ?? '-'}`
 
-  const metasNegocioAno = useMemo(() => metas.filter(m => m.negocio === selNegocio && m.ano === selAno), [metas, selNegocio, selAno])
-
-  // Receita Líquida Operacional orçada (tabela `orcamentos`) — todas as unidades,
-  // pro ranking de Receita comparar realizado × orçado no lugar da meta manual.
+  // Orçamento (tabela `orcamentos`) — todas as unidades, restrito às contas
+  // realmente usadas por algum pacote do Farol/Ranking (`CONTAS_ORCAMENTO_USADAS`,
+  // já inclui a Receita) — base única pra Receita, Performance e Custos, sem
+  // fallback pra tabela `metas`/AVO do DRE.
   const [orcamentoRows, setOrcamentoRows] = useState<OrcamentoLinha[]>([])
   useEffect(() => {
     if (selNegocio === '' || selAno === null) { setOrcamentoRows([]); return }
     let cancelado = false
     fetchOrcamentoPaginado((from, to) =>
       supabase.from('orcamentos').select('*')
-        .eq('negocio', selNegocio).eq('ano', selAno).eq('conta_codigo', CONTA_RECEITA)
+        .eq('negocio', selNegocio).eq('ano', selAno).in('conta_codigo', CONTAS_ORCAMENTO_USADAS)
         .order('id', { ascending: true })
         .range(from, to),
     )
@@ -126,22 +124,22 @@ export function RankingPage() {
     () => RANKING_PERFORMANCE.map(codigo => ({
       codigo,
       info: PACOTES[codigo],
-      linhas: calcularRankingIndicador(rowsNegocioAno, metasNegocioAno, PACOTES[codigo], codigo, {
+      linhas: calcularRankingIndicador(rowsNegocioAno, orcamentoRows, PACOTES[codigo], codigo, {
         negocio: selNegocio, ano: selAno ?? 0, periodo, mes: selMes ?? 0,
       }),
     })),
-    [rowsNegocioAno, metasNegocioAno, selNegocio, selAno, periodo, selMes],
+    [rowsNegocioAno, orcamentoRows, selNegocio, selAno, periodo, selMes],
   )
 
   const rankingCustos = useMemo(
     () => RANKING_CUSTOS.map(codigo => ({
       codigo,
       info: PACOTES[codigo],
-      linhas: calcularRankingIndicador(rowsNegocioAno, metasNegocioAno, PACOTES[codigo], codigo, {
+      linhas: calcularRankingIndicador(rowsNegocioAno, orcamentoRows, PACOTES[codigo], codigo, {
         negocio: selNegocio, ano: selAno ?? 0, periodo, mes: selMes ?? 0,
       }),
     })),
-    [rowsNegocioAno, metasNegocioAno, selNegocio, selAno, periodo, selMes],
+    [rowsNegocioAno, orcamentoRows, selNegocio, selAno, periodo, selMes],
   )
 
   // ── Ranking de Perdas (indicadores do Painel de Perdas, sempre CONS) ──────
@@ -208,7 +206,7 @@ export function RankingPage() {
     })
   }, [rowsFiltradas, rowsAux, selUnidades, unidadesInicializadas, selAno, selMes, periodo])
 
-  const carregando = loadingUnidades || loadingDre || loadingMetas
+  const carregando = loadingUnidades || loadingDre
 
   if (carregando && rows.length === 0) {
     return (

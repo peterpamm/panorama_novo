@@ -6,14 +6,15 @@ import { useOrcamentoTodasUnidades } from '@/hooks/useOrcamentoTodasUnidades'
 import type { RvIndicadorDre } from '@/lib/constants'
 import { RV_DISTRIBUICAO_DRE } from '@/lib/constants'
 import type { TabelaPesosDre } from '@/components/metas/PesosDreCard'
-import { avrPorPrefixo, normalizarParaCalculo } from '@/lib/farol-calculations'
+import { avrPorPrefixo, calcularSemaforo, normalizarParaCalculo } from '@/lib/farol-calculations'
 import { buscarMetaOrcamento } from '@/lib/orcamento-farol'
 import { menorMelhor, negocioCompativel, negocioDreDaPessoa, unidadeSplitNegocio } from '@/lib/rv-gente'
-import { resolverUnidade } from '@/lib/unidade-resolver'
+import { negocioPorPrefixo, normalizarNomeUnidade, resolverUnidade } from '@/lib/unidade-resolver'
 import { formatarMinutosComoDuracao } from '@/lib/duracao'
+import { formatarResultado } from '@/lib/reuniao-resultados'
 import { OPERACOES_ARMAZEM_T1 } from '@/lib/armazem-t1-bi-parser'
 import { useToast } from '@/components/ui/use-toast'
-import type { DtoT1Meta, DtoT2Meta, ExcessoVelocidadeMeta, FaiMeta, GsdMeta, LogonMeta, MetaArmazemEfc, MetaArmazemPresenteismoAl, MetaArmazemQuebras, MetaArmazemRefugo, MetaArmazemT1DisponibilidadeGente, MetaArmazemT1PresenteismoAl, MetaArmazemT1Quebras, MetaArmazemT1Tma, MetaArmazemTma, MetaDevolucao, MetaGente, MetaPerdaIndicador, MetaPresenteismoDu, PainelPerdasAux, PesoDistribuicaoFuncao, ResultadoArmazemBi, ResultadoArmazemQuebras, ResultadoArmazemT1Bi, ResultadoDescontoCivf, ResultadoDescontoStressTest, ResultadoDistribuicaoBi, ResultadoDtoT1, ResultadoDtoT2, ResultadoExcessoVelocidade, ResultadoFai, ResultadoGente, ResultadoGsd, ResultadoLogon, ResultadoTri, RvLideranca, TriMeta } from '@/types'
+import type { DtoT1Meta, DtoT2Meta, ExcessoVelocidadeMeta, FaiMeta, GsdMeta, LogonMeta, MetaArmazemEfc, MetaArmazemPresenteismoAl, MetaArmazemQuebras, MetaArmazemRefugo, MetaArmazemT1DisponibilidadeGente, MetaArmazemT1PresenteismoAl, MetaArmazemT1Quebras, MetaArmazemT1Tma, MetaArmazemTma, MetaDevolucao, MetaGente, MetaPerdaIndicador, MetaPresenteismoDu, PainelPerdasAux, PesoDistribuicaoFuncao, ResultadoArmazemBi, ResultadoArmazemQuebras, ResultadoArmazemT1Bi, ResultadoDescontoCivf, ResultadoDescontoStressTest, ResultadoDistribuicaoBi, ResultadoDtoT1, ResultadoDtoT2, ResultadoExcessoVelocidade, ResultadoFai, ResultadoGente, ResultadoGsd, ResultadoLogon, ResultadoTri, ReuniaoIndicador, ReuniaoResultadoMensal, RvLideranca, TriMeta } from '@/types'
 
 export const MESES_NOMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
@@ -81,8 +82,15 @@ export interface RvApuracaoProps {
   incluirFai?: boolean
   /** Inclui o indicador TRI (resultados_tri × rv_tri_meta, meta e peso únicos, vale pra todas as unidades) — só a RV de Segurança usa. */
   incluirTri?: boolean
-  /** Inclui o indicador Indisponibilidade (painel_perdas_aux × rv_indisponibilidade_meta, meta e peso únicos em R$) — só a RV de Distribuição usa. */
-  incluirIndisponibilidade?: boolean
+  /**
+   * Inclui o indicador Indisponibilidade (painel_perdas_aux, mesmo dado pras
+   * duas) × meta+peso em R$ — a tabela escolhida decide de quem é o peso.
+   * Distribuição usa 'rv_indisponibilidade_meta' (peso por função, vem de
+   * rv_distribuicao_peso_funcao — o peso da própria tabela fica sem uso);
+   * Empurrada usa 'rv_empurrada_indisponibilidade_meta' (peso único, direto
+   * da tabela).
+   */
+  indisponibilidadeTabela?: 'rv_indisponibilidade_meta' | 'rv_empurrada_indisponibilidade_meta'
   /**
    * Inclui o indicador Vales (DRE contas 051/052 × % configurável da Meta de
    * Perdas de Vales — metas_perdas_indicadores, anual/12) — Distribuição e
@@ -91,6 +99,20 @@ export interface RvApuracaoProps {
    * SUPERVISOR DU — não conta pra COORD. DU.
    */
   valesPerdasTabela?: 'rv_vales_distribuicao_meta' | 'rv_vales_financeiro_meta'
+  /** Inclui o indicador GTY (nome/nome_t1 'GTY' da Reunião Resultados, setor Distribuição, fonte='importado') × rv_empurrada_gty_meta (peso único) — só a RV de Empurrada usa. Resultado/meta já vêm importados na Reunião Resultados, sem reimportar aqui. */
+  incluirGty?: boolean
+  /** Inclui o indicador TMV (nome/nome_t1 'TMV' da Reunião Resultados) × rv_empurrada_tmv_meta (peso único) — só a RV de Empurrada usa. */
+  incluirTmv?: boolean
+  /** Inclui o indicador Tempo de Rendição (nome/nome_t1 'TEMPO RENDIÇÃO' da Reunião Resultados) × rv_empurrada_rendicao_meta (peso único) — só a RV de Empurrada usa. */
+  incluirTempoRendicao?: boolean
+  /**
+   * Inclui o indicador Avaria de Transporte — só a RV de Empurrada usa. Mesmo
+   * resultado do indicador Vales (DRE contas 051/052, independente do
+   * negócio), mas com meta direta em R$ (rv_empurrada_avaria_transporte_meta)
+   * em vez de % da Meta de Perdas anual — diferente do mecanismo de
+   * `valesPerdasTabela` usado por Distribuição/Financeiro.
+   */
+  incluirAvariaTransporte?: boolean
   /**
    * Inclui o indicador Pacote de Gente da Distribuição (158, contas 158+033,
    * negócio ROTA sempre — mesma regra que antes vinha de indicadoresDre) —
@@ -133,6 +155,8 @@ export interface RvApuracaoProps {
   incluirArmazemQuebras?: boolean
   /** Restringe a apuração só às lideranças cuja operação resolve pra essa unidade — usado pelo Painel Geral (visão por unidade). */
   filtrarUnidade?: string
+  /** Restringe a apuração só às lideranças cuja OPERAÇÃO comece com CDL (ROTA) ou CDR (ARM) — unidades com 2 gerentes (ex: Camaçari) usam isso pra um não ver quanto o outro recebe. Casa pelo prefixo da operação (`negocioPorPrefixo`), não pelo campo `negocio` da liderança — esse pode ser 'CONS' por causa de como o resultado da RV dela é calculado, sem relação com de qual gerente ela é. */
+  filtrarNegocio?: string
   /** Ano forçado de fora (ex: seletor compartilhado do Painel Geral) — quando ausente, usa o auto-detectado internamente (comportamento padrão). */
   anoForcado?: string
   /** Mês forçado de fora — mesma ideia do anoForcado. */
@@ -165,7 +189,7 @@ export interface UseRvApuracaoResultado {
  * (visão por unidade, agregando vários setores de uma vez).
  */
 export function useRvApuracao({
-  ehDoSetor, indicadoresDre = [], tabelaPesos, incluirIndicadoresBi = false, incluirDtoT2 = false, incluirDtoT1 = false, incluirGsd = false, incluirLogon = false, incluirExcessoVelocidade = false, incluirFai = false, incluirTri = false, incluirIndisponibilidade = false, valesPerdasTabela, incluirPacoteGenteDu = false, incluirLogonDu = false, incluirDevolucao = false, incluirPresenteismoDu = false, incluirDescontoCivf = false, incluirDescontoStressTest = false, incluirArmazemEfc = false, incluirArmazemTmaT2 = false, incluirArmazemPresenteismoAlT2 = false, incluirArmazemRefugo = false, incluirArmazemTmaT1 = false, incluirArmazemDisponibilidadeGenteT1 = false, incluirArmazemPresenteismoAlT1 = false, incluirArmazemQuebras = false, filtrarUnidade, anoForcado, mesForcado,
+  ehDoSetor, indicadoresDre = [], tabelaPesos, incluirIndicadoresBi = false, incluirDtoT2 = false, incluirDtoT1 = false, incluirGsd = false, incluirLogon = false, incluirExcessoVelocidade = false, incluirFai = false, incluirTri = false, indisponibilidadeTabela, valesPerdasTabela, incluirGty = false, incluirTmv = false, incluirTempoRendicao = false, incluirAvariaTransporte = false, incluirPacoteGenteDu = false, incluirLogonDu = false, incluirDevolucao = false, incluirPresenteismoDu = false, incluirDescontoCivf = false, incluirDescontoStressTest = false, incluirArmazemEfc = false, incluirArmazemTmaT2 = false, incluirArmazemPresenteismoAlT2 = false, incluirArmazemRefugo = false, incluirArmazemTmaT1 = false, incluirArmazemDisponibilidadeGenteT1 = false, incluirArmazemPresenteismoAlT1 = false, incluirArmazemQuebras = false, filtrarUnidade, filtrarNegocio, anoForcado, mesForcado,
 }: RvApuracaoProps): UseRvApuracaoResultado {
   const { toast } = useToast()
   const { unidades } = useUnidades()
@@ -202,9 +226,15 @@ export function useRvApuracao({
   const [resultadosTri, setResultadosTri] = useState<ResultadoTri[]>([])
   const [triMeta, setTriMeta] = useState<TriMeta | null>(null)
   const [resultadosIndisponibilidade, setResultadosIndisponibilidade] = useState<PainelPerdasAux[]>([])
-  const [indisponibilidadeMeta, setIndisponibilidadeMeta] = useState<{ meta_valor: number } | null>(null)
+  const [indisponibilidadeMeta, setIndisponibilidadeMeta] = useState<{ meta_valor: number; peso?: number } | null>(null)
   const [metasPerdasVales, setMetasPerdasVales] = useState<MetaPerdaIndicador[]>([])
   const [valesMeta, setValesMeta] = useState<{ peso?: number; pct_meta: number } | null>(null)
+  const [indicadoresImportadosDistribuicao, setIndicadoresImportadosDistribuicao] = useState<ReuniaoIndicador[]>([])
+  const [resultadosImportadosDistribuicao, setResultadosImportadosDistribuicao] = useState<ReuniaoResultadoMensal[]>([])
+  const [gtyPeso, setGtyPeso] = useState<number | null>(null)
+  const [tmvPeso, setTmvPeso] = useState<number | null>(null)
+  const [rendicaoPeso, setRendicaoPeso] = useState<number | null>(null)
+  const [avariaTransporteMeta, setAvariaTransporteMeta] = useState<{ meta_valor: number; peso: number } | null>(null)
   const [resultadosDistribuicaoBi, setResultadosDistribuicaoBi] = useState<ResultadoDistribuicaoBi[]>([])
   const [logonDuMeta, setLogonDuMeta] = useState<{ meta_pct: number } | null>(null)
   const [devolucaoMetas, setDevolucaoMetas] = useState<Map<string, number>>(new Map())
@@ -233,8 +263,32 @@ export function useRvApuracao({
   useEffect(() => {
     async function carregar() {
       setCarregando(true)
-      const incluirPesosFuncaoDistribuicao = incluirIndisponibilidade || incluirPacoteGenteDu || !!valesPerdasTabela || incluirLogonDu || incluirDevolucao || incluirPresenteismoDu
-      const [l, p, m, r, rl, ml, rl1, ml1, rg, mg, rlo, mlo, rv, mv, rf, mf, rt, mt, ri, mi, rvd, mvd, rDistBi, mLogonDu, rDevMeta, rPresMeta, rPesosFuncao, rCivf, mCivf, rStressTest, mStressTest, rArmBi, mArmEfc, pArmEfc, mArmTmaT2, pArmTmaT2, mArmPresT2, pArmPresT2, mArmRefugo, rArmT1Bi, mArmTmaT1, pArmTmaT1, mArmDispT1, pArmDispT1, mArmPresT1, pArmPresT1, mArmQuebras, mArmT1Quebras, rArmQuebras] = await Promise.all([
+      const incluirPesosFuncaoDistribuicao = indisponibilidadeTabela === 'rv_indisponibilidade_meta' || incluirPacoteGenteDu || valesPerdasTabela === 'rv_vales_distribuicao_meta' || incluirLogonDu || incluirDevolucao || incluirPresenteismoDu
+
+      // GTY/TMV/Tempo de Rendição são nomes T1 de indicadores já cadastrados
+      // na Reunião Resultados (setor Distribuição) — precisa achar a linha de
+      // configuração (id, ano, natureza) antes de poder filtrar
+      // reuniao_resultados_mensais por indicador_id (mesmo padrão sequencial
+      // de useReuniaoDados.ts: indicadores primeiro, resultados depois).
+      const nomesImportados = [
+        ...(incluirGty ? ['GTY'] : []),
+        ...(incluirTmv ? ['TMV'] : []),
+        ...(incluirTempoRendicao ? ['TEMPO RENDIÇÃO'] : []),
+      ]
+      let indicadoresImportados: ReuniaoIndicador[] = []
+      if (nomesImportados.length > 0) {
+        const { data, error } = await supabase
+          .from('reuniao_resultados_indicadores')
+          .select('*')
+          .eq('setor', 'distribuicao')
+          .eq('ativo', true)
+          .or(nomesImportados.map(n => `nome.eq.${n},nome_t1.eq.${n}`).join(','))
+        if (error) toast({ title: 'Erro ao carregar indicadores da Reunião Resultados', description: error.message, variant: 'destructive' })
+        indicadoresImportados = (data as ReuniaoIndicador[]) ?? []
+      }
+      const idsImportados = indicadoresImportados.map(i => i.id)
+
+      const [l, p, m, r, rl, ml, rl1, ml1, rg, mg, rlo, mlo, rv, mv, rf, mf, rt, mt, ri, mi, rvd, mvd, rDistBi, mLogonDu, rDevMeta, rPresMeta, rPesosFuncao, rCivf, mCivf, rStressTest, mStressTest, rArmBi, mArmEfc, pArmEfc, mArmTmaT2, pArmTmaT2, mArmPresT2, pArmPresT2, mArmRefugo, rArmT1Bi, mArmTmaT1, pArmTmaT1, mArmDispT1, pArmDispT1, mArmPresT1, pArmPresT1, mArmQuebras, mArmT1Quebras, rArmQuebras, rImportados, mGty, mTmv, mRendicao, mAvaria] = await Promise.all([
         supabase.from('rv_liderancas').select('*'),
         tabelaPesos ? supabase.from(tabelaPesos).select('*') : Promise.resolve({ data: [], error: null }),
         incluirIndicadoresBi ? supabase.from('metas_gente').select('*') : Promise.resolve({ data: [], error: null }),
@@ -253,8 +307,8 @@ export function useRvApuracao({
         incluirFai ? supabase.from('rv_fai_meta').select('*') : Promise.resolve({ data: [], error: null }),
         incluirTri ? supabase.from('resultados_tri').select('*') : Promise.resolve({ data: [], error: null }),
         incluirTri ? supabase.from('rv_tri_meta').select('*').maybeSingle() : Promise.resolve({ data: null, error: null }),
-        incluirIndisponibilidade ? supabase.from('painel_perdas_aux').select('*').eq('indicador', 'indisponibilidade') : Promise.resolve({ data: [], error: null }),
-        incluirIndisponibilidade ? supabase.from('rv_indisponibilidade_meta').select('*').maybeSingle() : Promise.resolve({ data: null, error: null }),
+        indisponibilidadeTabela ? supabase.from('painel_perdas_aux').select('*').eq('indicador', 'indisponibilidade') : Promise.resolve({ data: [], error: null }),
+        indisponibilidadeTabela ? supabase.from(indisponibilidadeTabela).select('*').maybeSingle() : Promise.resolve({ data: null, error: null }),
         valesPerdasTabela ? supabase.from('metas_perdas_indicadores').select('*').eq('indicador', 'vales') : Promise.resolve({ data: [], error: null }),
         valesPerdasTabela ? supabase.from(valesPerdasTabela).select('*').maybeSingle() : Promise.resolve({ data: null, error: null }),
         (incluirLogonDu || incluirDevolucao || incluirPresenteismoDu) ? supabase.from('resultados_distribuicao_bi').select('*') : Promise.resolve({ data: [], error: null }),
@@ -284,11 +338,16 @@ export function useRvApuracao({
         incluirArmazemQuebras ? supabase.from('rv_armazem_quebras_meta').select('*').maybeSingle() : Promise.resolve({ data: null, error: null }),
         incluirArmazemQuebras ? supabase.from('rv_armazem_t1_quebras_meta').select('*').maybeSingle() : Promise.resolve({ data: null, error: null }),
         incluirArmazemQuebras ? supabase.from('resultados_armazem_quebras').select('*') : Promise.resolve({ data: [], error: null }),
+        idsImportados.length > 0 ? supabase.from('reuniao_resultados_mensais').select('*').in('indicador_id', idsImportados) : Promise.resolve({ data: [], error: null }),
+        incluirGty ? supabase.from('rv_empurrada_gty_meta').select('*').maybeSingle() : Promise.resolve({ data: null, error: null }),
+        incluirTmv ? supabase.from('rv_empurrada_tmv_meta').select('*').maybeSingle() : Promise.resolve({ data: null, error: null }),
+        incluirTempoRendicao ? supabase.from('rv_empurrada_rendicao_meta').select('*').maybeSingle() : Promise.resolve({ data: null, error: null }),
+        incluirAvariaTransporte ? supabase.from('rv_empurrada_avaria_transporte_meta').select('*').maybeSingle() : Promise.resolve({ data: null, error: null }),
       ])
       const erro = l.error ?? p.error ?? m.error ?? r.error ?? rl.error ?? ml.error ?? rl1.error ?? ml1.error ?? rg.error ?? mg.error ?? rlo.error ?? mlo.error ?? rv.error ?? mv.error ?? rf.error ?? mf.error ?? rt.error ?? mt.error ?? ri.error ?? mi.error ?? rvd.error ?? mvd.error ?? rDistBi.error ?? mLogonDu.error ?? rDevMeta.error ?? rPresMeta.error ?? rPesosFuncao.error ?? rCivf.error ?? mCivf.error ?? rStressTest.error ?? mStressTest.error
         ?? rArmBi.error ?? mArmEfc.error ?? pArmEfc.error ?? mArmTmaT2.error ?? pArmTmaT2.error ?? mArmPresT2.error ?? pArmPresT2.error ?? mArmRefugo.error
         ?? rArmT1Bi.error ?? mArmTmaT1.error ?? pArmTmaT1.error ?? mArmDispT1.error ?? pArmDispT1.error ?? mArmPresT1.error ?? pArmPresT1.error
-        ?? mArmQuebras.error ?? mArmT1Quebras.error ?? rArmQuebras.error
+        ?? mArmQuebras.error ?? mArmT1Quebras.error ?? rArmQuebras.error ?? rImportados.error ?? mGty.error ?? mTmv.error ?? mRendicao.error ?? mAvaria.error
       if (erro) toast({ title: 'Erro ao carregar dados da apuração', description: erro.message, variant: 'destructive' })
       setLiderancas((l.data as RvLideranca[]) ?? [])
       setMetas((m.data as MetaGente[]) ?? [])
@@ -339,10 +398,16 @@ export function useRvApuracao({
       setArmazemQuebrasMeta(mArmQuebras.data as MetaArmazemQuebras | null)
       setArmazemT1QuebrasMeta(mArmT1Quebras.data as MetaArmazemT1Quebras | null)
       setResultadosArmazemQuebras((rArmQuebras.data as ResultadoArmazemQuebras[]) ?? [])
+      setIndicadoresImportadosDistribuicao(indicadoresImportados)
+      setResultadosImportadosDistribuicao((rImportados.data as ReuniaoResultadoMensal[]) ?? [])
+      setGtyPeso(mGty.data ? Number((mGty.data as { peso: number }).peso) : null)
+      setTmvPeso(mTmv.data ? Number((mTmv.data as { peso: number }).peso) : null)
+      setRendicaoPeso(mRendicao.data ? Number((mRendicao.data as { peso: number }).peso) : null)
+      setAvariaTransporteMeta(mAvaria.data as { meta_valor: number; peso: number } | null)
       setCarregando(false)
     }
     carregar()
-  }, [tabelaPesos, incluirIndicadoresBi, incluirDtoT2, incluirDtoT1, incluirGsd, incluirLogon, incluirExcessoVelocidade, incluirFai, incluirTri, incluirIndisponibilidade, valesPerdasTabela, incluirPacoteGenteDu, incluirLogonDu, incluirDevolucao, incluirPresenteismoDu, incluirDescontoCivf, incluirDescontoStressTest, incluirArmazemBi, incluirArmazemEfc, incluirArmazemTmaT2, incluirArmazemPresenteismoAlT2, incluirArmazemRefugo, incluirArmazemT1Bi, incluirArmazemTmaT1, incluirArmazemDisponibilidadeGenteT1, incluirArmazemPresenteismoAlT1, incluirArmazemQuebras]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tabelaPesos, incluirIndicadoresBi, incluirDtoT2, incluirDtoT1, incluirGsd, incluirLogon, incluirExcessoVelocidade, incluirFai, incluirTri, indisponibilidadeTabela, valesPerdasTabela, incluirGty, incluirTmv, incluirTempoRendicao, incluirAvariaTransporte, incluirPacoteGenteDu, incluirLogonDu, incluirDevolucao, incluirPresenteismoDu, incluirDescontoCivf, incluirDescontoStressTest, incluirArmazemBi, incluirArmazemEfc, incluirArmazemTmaT2, incluirArmazemPresenteismoAlT2, incluirArmazemRefugo, incluirArmazemT1Bi, incluirArmazemTmaT1, incluirArmazemDisponibilidadeGenteT1, incluirArmazemPresenteismoAlT1, incluirArmazemQuebras]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Filtros ─────────────────────────────────────────────────────────────────
   const anosDisponiveis = useMemo(
@@ -369,8 +434,11 @@ export function useRvApuracao({
       ...armazemDisponibilidadeGenteT1Metas.map(m => m.ano),
       ...armazemPresenteismoAlT1Metas.map(m => m.ano),
       ...resultadosArmazemQuebras.map(r => r.ano),
+      ...resultadosImportadosDistribuicao
+        .map(r => indicadoresImportadosDistribuicao.find(i => i.id === r.indicador_id)?.ano)
+        .filter((a): a is number => a !== undefined),
     ])).sort((a, b) => b - a),
-    [metas, resultados, rowsDre, resultadosDtoT2, resultadosDtoT1, resultadosGsd, resultadosLogon, resultadosExcessoVelocidade, resultadosFai, resultadosTri, resultadosIndisponibilidade, resultadosDistribuicaoBi, presenteismoDuMetas, resultadosDescontoCivf, resultadosDescontoStressTest, resultadosArmazemBi, armazemPresenteismoAlT2Metas, resultadosArmazemT1Bi, armazemTmaT1Metas, armazemDisponibilidadeGenteT1Metas, armazemPresenteismoAlT1Metas, resultadosArmazemQuebras],
+    [metas, resultados, rowsDre, resultadosDtoT2, resultadosDtoT1, resultadosGsd, resultadosLogon, resultadosExcessoVelocidade, resultadosFai, resultadosTri, resultadosIndisponibilidade, resultadosDistribuicaoBi, presenteismoDuMetas, resultadosDescontoCivf, resultadosDescontoStressTest, resultadosArmazemBi, armazemPresenteismoAlT2Metas, resultadosArmazemT1Bi, armazemTmaT1Metas, armazemDisponibilidadeGenteT1Metas, armazemPresenteismoAlT1Metas, resultadosArmazemQuebras, resultadosImportadosDistribuicao, indicadoresImportadosDistribuicao],
   )
   const [verAnoInterno, setVerAnoInterno] = useState('')
   const [verMesInterno, setVerMesInterno] = useState('')
@@ -379,10 +447,17 @@ export function useRvApuracao({
   const [filtroOperacao, setFiltroOperacao] = useState('todos')
 
   const liderancasSetor = useMemo(() => {
-    const doSetor = liderancas.filter(l => ehDoSetor(l.setor))
-    if (!filtrarUnidade) return doSetor
-    return doSetor.filter(l => resolverUnidade(l.operacao, unidades)?.codigo === filtrarUnidade)
-  }, [liderancas, ehDoSetor, filtrarUnidade, unidades])
+    let filtrado = liderancas.filter(l => ehDoSetor(l.setor))
+    if (filtrarUnidade) filtrado = filtrado.filter(l => resolverUnidade(l.operacao, unidades)?.codigo === filtrarUnidade)
+    // Unidades com 2 gerentes (ex: Camaçari: CDL/rota e CDR/armazém) — cada
+    // um só pode ver a própria liderança, nunca a do outro. Usa o prefixo da
+    // OPERAÇÃO (CDL→ROTA, CDR→ARM, ver `negocioPorPrefixo`), não o campo
+    // `negocio` da liderança — esse campo às vezes é 'CONS' de propósito
+    // (quando o resultado da RV da pessoa vem do DRE consolidado), o que não
+    // tem relação com de qual gerente ela é.
+    if (filtrarNegocio) filtrado = filtrado.filter(l => negocioPorPrefixo(l.operacao) === normalizarNomeUnidade(filtrarNegocio))
+    return filtrado
+  }, [liderancas, ehDoSetor, filtrarUnidade, filtrarNegocio, unidades])
 
   useEffect(() => {
     if (anosDisponiveis.length > 0 && !anosDisponiveis.includes(Number(verAnoInterno))) {
@@ -410,7 +485,7 @@ export function useRvApuracao({
                   ? resultadosFai.filter(r => r.ano === ano).map(r => r.mes)
                   : incluirTri
                     ? resultadosTri.filter(r => r.ano === ano).map(r => r.mes)
-                    : incluirIndisponibilidade
+                    : indisponibilidadeTabela
                       ? resultadosIndisponibilidade.filter(r => r.ano === ano).map(r => r.mes)
                       : incluirPresenteismoDu
                         ? presenteismoDuMetas.filter(m => m.ano === ano).map(m => m.mes)
@@ -426,9 +501,13 @@ export function useRvApuracao({
                                   ? resultadosArmazemT1Bi.filter(r => r.ano === ano).map(r => r.mes)
                                   : incluirArmazemQuebras
                                     ? resultadosArmazemQuebras.filter(r => r.ano === ano).map(r => r.mes)
-                                    : rowsDre.filter(r => r.tipo_periodo === 'MENSAL' && r.ano === ano).map(r => r.mes)
+                                    : (incluirGty || incluirTmv || incluirTempoRendicao)
+                                      ? resultadosImportadosDistribuicao
+                                        .filter(r => indicadoresImportadosDistribuicao.find(i => i.id === r.indicador_id)?.ano === ano)
+                                        .map(r => r.mes)
+                                      : rowsDre.filter(r => r.tipo_periodo === 'MENSAL' && r.ano === ano).map(r => r.mes)
     setVerMesInterno(String(mesesComDado.length > 0 ? Math.max(...mesesComDado) : new Date().getMonth() + 1))
-  }, [verAno, verMes, resultados, rowsDre, incluirIndicadoresBi, incluirDtoT2, resultadosDtoT2, incluirDtoT1, resultadosDtoT1, incluirGsd, resultadosGsd, incluirLogon, resultadosLogon, incluirExcessoVelocidade, resultadosExcessoVelocidade, incluirFai, resultadosFai, incluirTri, resultadosTri, incluirIndisponibilidade, resultadosIndisponibilidade, incluirPresenteismoDu, presenteismoDuMetas, incluirLogonDu, incluirDevolucao, resultadosDistribuicaoBi, incluirDescontoCivf, resultadosDescontoCivf, incluirDescontoStressTest, resultadosDescontoStressTest, incluirArmazemBi, resultadosArmazemBi, incluirArmazemT1Bi, resultadosArmazemT1Bi, incluirArmazemQuebras, resultadosArmazemQuebras])
+  }, [verAno, verMes, resultados, rowsDre, incluirIndicadoresBi, incluirDtoT2, resultadosDtoT2, incluirDtoT1, resultadosDtoT1, incluirGsd, resultadosGsd, incluirLogon, resultadosLogon, incluirExcessoVelocidade, resultadosExcessoVelocidade, incluirFai, resultadosFai, incluirTri, resultadosTri, indisponibilidadeTabela, resultadosIndisponibilidade, incluirPresenteismoDu, presenteismoDuMetas, incluirLogonDu, incluirDevolucao, resultadosDistribuicaoBi, incluirDescontoCivf, resultadosDescontoCivf, incluirDescontoStressTest, resultadosDescontoStressTest, incluirArmazemBi, resultadosArmazemBi, incluirArmazemT1Bi, resultadosArmazemT1Bi, incluirArmazemQuebras, resultadosArmazemQuebras, incluirGty, incluirTmv, incluirTempoRendicao, resultadosImportadosDistribuicao, indicadoresImportadosDistribuicao, valesPerdasTabela])
 
   const operacoesDisponiveis = useMemo(
     () => Array.from(new Set(liderancasSetor.map(l => l.operacao))).sort(),
@@ -804,20 +883,19 @@ export function useRvApuracao({
         // Indicador Quebras do Armazém (cadastro manual, resultado
         // compartilhado entre T2 e T1) — meta e peso vêm de
         // rv_armazem_quebras_meta pras unidades do T2 ou
-        // rv_armazem_t1_quebras_meta pra Estância/CDR Bahia. Quanto menor melhor.
+        // rv_armazem_t1_quebras_meta pra Estância/CDR Bahia. Quanto menor
+        // melhor. Mês sem nenhum resultado cadastrado conta como zero quebras
+        // (bateu a meta) — mesma regra do FAI/TRI/Excesso de Velocidade, senão
+        // a liderança nunca receberia esse pedaço da RV em meses sem quebra.
         if (incluirArmazemQuebras) {
           const metaQuebras = armazemT1Codigos.has(unidade.codigo) ? armazemT1QuebrasMeta : armazemQuebrasMeta
           if (metaQuebras && metaQuebras.peso > 0) {
-            const resultado = resultadosArmazemQuebras.find(r => r.unidade === unidade.codigo && r.ano === ano && r.mes === mes)?.valor
-            let status: StatusItem
-            let detalhe: string
-            if (resultado === undefined) {
-              status = 'pendente'
-              detalhe = 'Sem resultado cadastrado pro mês'
-            } else {
-              status = resultado <= metaQuebras.meta_valor ? 'bateu' : 'perdeu'
-              detalhe = `Resultado R$ ${fmtValor(resultado)} · Meta R$ ${fmtValor(metaQuebras.meta_valor)}`
-            }
+            const resultadoRow = resultadosArmazemQuebras.find(r => r.unidade === unidade.codigo && r.ano === ano && r.mes === mes)
+            const resultado = resultadoRow?.valor ?? 0
+            const status: StatusItem = resultado <= metaQuebras.meta_valor ? 'bateu' : 'perdeu'
+            const detalhe = resultadoRow
+              ? `Resultado R$ ${fmtValor(resultado)} · Meta R$ ${fmtValor(metaQuebras.meta_valor)}`
+              : `Sem resultado cadastrado — assumido R$ 0 · Meta R$ ${fmtValor(metaQuebras.meta_valor)}`
             itens.push({
               chave: 'armazem_quebras',
               rotulo: 'Quebras',
@@ -825,7 +903,7 @@ export function useRvApuracao({
               status,
               detalhe: `Peso ${fmtPeso(metaQuebras.peso)}% · ${detalhe}`,
               metaFmt: `R$ ${fmtValor(metaQuebras.meta_valor)}`,
-              resultadoFmt: resultado !== undefined ? `R$ ${fmtValor(resultado)}` : null,
+              resultadoFmt: `R$ ${fmtValor(resultado)}`,
             })
           }
         }
@@ -833,8 +911,14 @@ export function useRvApuracao({
         // Indicador DTO T2 (meta e peso únicos, resultado direto por unidade)
         // — em unidade com split de negócio (Camaçari/Ponta Grossa), o BI só
         // cobre a ROTA (a empurrada usa o DTO T1), então não conta pra ARM.
+        // Também não vale pra ESTÂNCIA — é T1 puro (junto com Ponta Grossa e
+        // Camaçari ARM), mas como não tem split de negócio (não abre
+        // ROTA/ARM) cairia no "!unidadeSplit" e herdaria o DTO T2 por
+        // engano; como a meta é única (não por unidade, ao contrário do DTO
+        // T1), não tem "sem meta cadastrada" pra barrar sozinho — precisa
+        // do mesmo check explícito que o GSD já usa.
         const unidadeSplit = unidadeSplitNegocio(unidade.codigo, unidade.nome)
-        const dtoT2Aplicavel = !unidadeSplit || negocioCompativel('ROTA', pessoa.negocio)
+        const dtoT2Aplicavel = unidade.codigo !== estanciaCodigo && (!unidadeSplit || negocioCompativel('ROTA', pessoa.negocio))
         if (incluirDtoT2 && dtoT2Aplicavel && dtoT2Meta && dtoT2Meta.peso > 0) {
           const resultado = resultadosDtoT2.find(r => r.unidade === unidade.codigo && r.ano === ano && r.mes === mes)?.valor
           let status: StatusItem
@@ -944,20 +1028,19 @@ export function useRvApuracao({
         // Indicador Excesso de Velocidade (meta e peso por unidade; quanto
         // menor a contagem melhor) — não vale pra ESTÂNCIA (sem meta
         // cadastrada) nem pra Camaçari ARM (só a ROTA é contada no import).
+        // Mês sem nenhum resultado importado conta como zero ocorrências
+        // (bateu a meta) — não fica pendente, mesma regra do FAI/TRI, senão
+        // a liderança nunca receberia esse pedaço da RV em meses sem excesso.
         const excessoVelocidadeAplicavel = !unidadeSplit || negocioCompativel('ROTA', pessoa.negocio)
         if (incluirExcessoVelocidade && excessoVelocidadeAplicavel) {
           const excessoMeta = excessoVelocidadeMetas.get(unidade.codigo)
           if (excessoMeta && excessoMeta.peso > 0) {
-            const resultado = resultadosExcessoVelocidade.find(r => r.unidade === unidade.codigo && r.ano === ano && r.mes === mes)?.valor
-            let status: StatusItem
-            let detalhe: string
-            if (resultado === undefined) {
-              status = 'pendente'
-              detalhe = 'Sem resultado importado pro mês'
-            } else {
-              status = resultado <= excessoMeta.meta_max ? 'bateu' : 'perdeu'
-              detalhe = `Excessos ${fmtContagem(resultado)} · Máx. ${fmtContagem(excessoMeta.meta_max)}`
-            }
+            const resultadoRow = resultadosExcessoVelocidade.find(r => r.unidade === unidade.codigo && r.ano === ano && r.mes === mes)
+            const resultado = resultadoRow?.valor ?? 0
+            const status: StatusItem = resultado <= excessoMeta.meta_max ? 'bateu' : 'perdeu'
+            const detalhe = resultadoRow
+              ? `Excessos ${fmtContagem(resultado)} · Máx. ${fmtContagem(excessoMeta.meta_max)}`
+              : `Sem resultado importado — assumido 0 · Máx. ${fmtContagem(excessoMeta.meta_max)}`
             itens.push({
               chave: 'excesso_velocidade',
               rotulo: 'Excesso de Velocidade',
@@ -965,7 +1048,7 @@ export function useRvApuracao({
               status,
               detalhe: `Peso ${fmtPeso(excessoMeta.peso)}% · ${detalhe}`,
               metaFmt: `Máx. ${fmtContagem(excessoMeta.meta_max)}`,
-              resultadoFmt: resultado !== undefined ? fmtContagem(resultado) : null,
+              resultadoFmt: fmtContagem(resultado),
             })
           }
         }
@@ -1028,13 +1111,13 @@ export function useRvApuracao({
 
         // Indicador Indisponibilidade (painel_perdas_aux × meta única em R$;
         // mesmo dado importado no Painel de Perdas, sem split de negócio) —
-        // só a RV de Distribuição usa. Meta é negativa (convenção de Metas de
-        // Perdas), bateu quando o resultado é maior ou igual (menos negativo
-        // é melhor). Mês sem resultado importado fica pendente, não é
-        // assumido zero — ausência provavelmente significa "não importado
-        // ainda", não "confirmado zero".
-        if (incluirIndisponibilidade && indisponibilidadeMeta) {
-          const peso = pesoDistribuicao('indisponibilidade')
+        // Distribuição e Empurrada usam, cada uma com sua própria tabela.
+        // Meta é negativa (convenção de Metas de Perdas), bateu quando o
+        // resultado é maior ou igual (menos negativo é melhor). Mês sem
+        // resultado importado fica pendente, não é assumido zero — ausência
+        // provavelmente significa "não importado ainda", não "confirmado zero".
+        if (indisponibilidadeTabela && indisponibilidadeMeta) {
+          const peso = indisponibilidadeTabela === 'rv_indisponibilidade_meta' ? pesoDistribuicao('indisponibilidade') : indisponibilidadeMeta.peso
           if (peso && peso > 0) {
             const resultadoRow = resultadosIndisponibilidade.find(r => r.unidade === unidade.codigo && r.ano === ano && r.mes === mes)
             let status: StatusItem
@@ -1064,14 +1147,20 @@ export function useRvApuracao({
         // Indicador Pacote de Gente da Distribuição (158, contas 158+033) —
         // igual ao que antes vinha de indicadoresDre, mas convertido pra
         // bloco próprio porque o peso agora é por função (só conta pra
-        // COORD. DU — sem peso cadastrado pra SUPERVISOR DU). Sempre o
-        // negócio ROTA (é a RV da liderança da rota/distribuição), só conta
-        // pra lideranças da ROTA.
+        // COORD. DU — sem peso cadastrado pra SUPERVISOR DU). Só conta pra
+        // lideranças da ROTA. O negócio do DRE usado depende da unidade: nas
+        // que têm split de verdade (Camaçari, Ponta Grossa — rota E armazém
+        // importados separados) usa sempre ROTA, senão o valor de armazém
+        // vazaria pro indicador; nas demais (só rota, sem armazém — ex: São
+        // Cristóvão) o DRE inteiro é importado como CONS, nunca como ROTA —
+        // aí CONS já É a rota, então usa CONS (senão o filtro por 'ROTA'
+        // nunca acha nada e o indicador fica sempre "sem meta" à toa).
         if (incluirPacoteGenteDu && negocioCompativel('ROTA', pessoa.negocio)) {
           const peso = pesoDistribuicao('pacote_gente')
           if (peso && peso > 0) {
             const indPacoteGente = RV_DISTRIBUICAO_DRE[0]
-            const rowsMesPacoteGente = rowsUnidade.filter(r => r.negocio === 'ROTA' && r.mes === mes)
+            const negocioPacoteGente = unidadeSplitNegocio(unidade.codigo, unidade.nome) ? (indPacoteGente.negocio ?? 'ROTA') : 'CONS'
+            const rowsMesPacoteGente = rowsUnidade.filter(r => r.negocio === negocioPacoteGente && r.mes === mes)
             let status: StatusItem
             let detalhe: string
             let metaFmt: string | null = null
@@ -1083,7 +1172,7 @@ export function useRvApuracao({
               const calc = normalizarParaCalculo(rowsMesPacoteGente)
               const avr = avrPorPrefixo(calc, indPacoteGente.prefixos)
               const meta = buscarMetaOrcamento(orcamentos, {
-                unidade: unidade.codigo, negocio: 'ROTA', ano, codigo: indPacoteGente.id, mes,
+                unidade: unidade.codigo, negocio: negocioPacoteGente, ano, codigo: indPacoteGente.id, mes,
               })
               resultadoFmt = `${fmtPct(avr)}%`
               if (meta === null) {
@@ -1100,7 +1189,7 @@ export function useRvApuracao({
               rotulo: indPacoteGente.nome,
               peso,
               status,
-              detalhe: `ROTA · Peso ${fmtPeso(peso)}% · ${detalhe}`,
+              detalhe: `${negocioPacoteGente} · Peso ${fmtPeso(peso)}% · ${detalhe}`,
               metaFmt,
               resultadoFmt,
             })
@@ -1149,6 +1238,81 @@ export function useRvApuracao({
               resultadoFmt,
             })
           }
+        }
+
+        // Indicador Avaria de Transporte (só a RV de Empurrada usa) — mesmo
+        // resultado do indicador Vales (soma da diferença do DRE, contas
+        // 051/052, independente do negócio), mas com meta direta em R$ (não
+        // % da Meta de Perdas anual como Distribuição/Financeiro usam).
+        // Peso único, direto da tabela.
+        if (incluirAvariaTransporte && avariaTransporteMeta && avariaTransporteMeta.peso > 0) {
+          let status: StatusItem
+          let detalhe: string
+          let resultadoFmt: string | null = null
+          if (rowsMes.length === 0) {
+            status = 'pendente'
+            detalhe = 'Sem DRE importado pro mês'
+          } else {
+            const resultado = rowsMes
+              .filter(r => r.conta_codigo.startsWith('051') || r.conta_codigo.startsWith('052'))
+              .reduce((acc, r) => acc + (r.diferenca ?? 0), 0)
+            status = resultado >= avariaTransporteMeta.meta_valor ? 'bateu' : 'perdeu'
+            detalhe = `Resultado R$ ${fmtValor(resultado)} · Meta R$ ${fmtValor(avariaTransporteMeta.meta_valor)}`
+            resultadoFmt = `R$ ${fmtValor(resultado)}`
+          }
+          itens.push({
+            chave: 'avaria_transporte',
+            rotulo: 'Avaria de Transporte',
+            peso: avariaTransporteMeta.peso,
+            status,
+            detalhe: `Peso ${fmtPeso(avariaTransporteMeta.peso)}% · ${detalhe}`,
+            metaFmt: `R$ ${fmtValor(avariaTransporteMeta.meta_valor)}`,
+            resultadoFmt,
+          })
+        }
+
+        // Indicadores GTY/TMV/Tempo de Rendição (só a RV de Empurrada usa) —
+        // nomes T1 de indicadores já cadastrados/importados na Reunião
+        // Resultados (setor Distribuição, fonte='importado'): resultado/meta
+        // já vêm prontos de lá, sem reimportar nada aqui — só peso próprio.
+        // Direção (maior/menor melhor) usa a mesma `natureza` cadastrada no
+        // indicador e o mesmo `calcularSemaforo` que a Reunião Resultados usa.
+        for (const [incluir, peso, nome, chave] of [
+          [incluirGty, gtyPeso, 'GTY', 'gty'],
+          [incluirTmv, tmvPeso, 'TMV', 'tmv'],
+          [incluirTempoRendicao, rendicaoPeso, 'TEMPO RENDIÇÃO', 'tempo_rendicao'],
+        ] as const) {
+          if (!incluir || !peso || peso <= 0) continue
+          const indConfig = indicadoresImportadosDistribuicao.find(i => i.ano === ano && (i.nome === nome || i.nome_t1 === nome))
+          let status: StatusItem
+          let detalhe: string
+          let metaFmt: string | null = null
+          let resultadoFmt: string | null = null
+          const linhaResultado = indConfig
+            ? resultadosImportadosDistribuicao.find(r => r.indicador_id === indConfig.id && r.unidade === unidade.codigo && r.negocio === 'CONS' && r.mes === mes)
+            : undefined
+          if (!indConfig) {
+            status = 'pendente'
+            detalhe = 'Indicador não cadastrado na Reunião Resultados pro ano'
+          } else if (!linhaResultado || linhaResultado.resultado === null) {
+            status = 'pendente'
+            detalhe = 'Sem resultado importado pro mês'
+          } else {
+            const bateu = calcularSemaforo(linhaResultado.resultado, linhaResultado.meta, indConfig.natureza).corClasse === 'positivo'
+            status = bateu ? 'bateu' : 'perdeu'
+            resultadoFmt = formatarResultado(linhaResultado.resultado, indConfig.formato)
+            metaFmt = linhaResultado.meta !== null ? formatarResultado(linhaResultado.meta, indConfig.formato) : null
+            detalhe = `Resultado ${resultadoFmt}${metaFmt ? ` · Meta ${metaFmt}` : ''}`
+          }
+          itens.push({
+            chave,
+            rotulo: nome === 'TEMPO RENDIÇÃO' ? 'Tempo de Rendição' : nome,
+            peso,
+            status,
+            detalhe: `Peso ${fmtPeso(peso)}% · ${detalhe}`,
+            metaFmt,
+            resultadoFmt,
+          })
         }
 
         // Indicador LogOn DU (resultado do BI × meta única) — mesma planilha
@@ -1265,7 +1429,7 @@ export function useRvApuracao({
     }).sort((a, b) =>
       a.pessoa.operacao.localeCompare(b.pessoa.operacao) || a.pessoa.nome.localeCompare(b.pessoa.nome),
     )
-  }, [liderancasSetor, metas, resultados, pesosDre, rowsDre, orcamentos, unidades, estanciaCodigo, armazemT1Codigos, verAno, verMes, filtroOperacao, indicadoresDre, incluirDtoT2, resultadosDtoT2, dtoT2Meta, incluirDtoT1, resultadosDtoT1, dtoT1Metas, incluirGsd, resultadosGsd, gsdMeta, incluirLogon, resultadosLogon, logonMeta, incluirExcessoVelocidade, resultadosExcessoVelocidade, excessoVelocidadeMetas, incluirFai, resultadosFai, faiMetas, incluirTri, resultadosTri, triMeta, incluirIndisponibilidade, resultadosIndisponibilidade, indisponibilidadeMeta, valesPerdasTabela, metasPerdasVales, valesMeta, incluirPacoteGenteDu, incluirLogonDu, incluirDevolucao, incluirPresenteismoDu, resultadosDistribuicaoBi, logonDuMeta, devolucaoMetas, presenteismoDuMetas, pesosPorFuncaoDistribuicao, incluirDescontoCivf, resultadosDescontoCivf, descontoCivfMeta, incluirDescontoStressTest, resultadosDescontoStressTest, descontoStressTestMeta, incluirArmazemEfc, armazemEfcMetas, armazemEfcPeso, incluirArmazemTmaT2, armazemTmaT2Metas, armazemTmaT2Peso, incluirArmazemPresenteismoAlT2, armazemPresenteismoAlT2Metas, armazemPresenteismoAlT2Peso, incluirArmazemRefugo, armazemRefugoMeta, resultadosArmazemBi, incluirArmazemTmaT1, armazemTmaT1Metas, armazemTmaT1Peso, incluirArmazemDisponibilidadeGenteT1, armazemDisponibilidadeGenteT1Metas, armazemDisponibilidadeGenteT1Peso, incluirArmazemPresenteismoAlT1, armazemPresenteismoAlT1Metas, armazemPresenteismoAlT1Peso, resultadosArmazemT1Bi, incluirArmazemQuebras, armazemQuebrasMeta, armazemT1QuebrasMeta, resultadosArmazemQuebras])
+  }, [liderancasSetor, metas, resultados, pesosDre, rowsDre, orcamentos, unidades, estanciaCodigo, armazemT1Codigos, verAno, verMes, filtroOperacao, indicadoresDre, incluirDtoT2, resultadosDtoT2, dtoT2Meta, incluirDtoT1, resultadosDtoT1, dtoT1Metas, incluirGsd, resultadosGsd, gsdMeta, incluirLogon, resultadosLogon, logonMeta, incluirExcessoVelocidade, resultadosExcessoVelocidade, excessoVelocidadeMetas, incluirFai, resultadosFai, faiMetas, incluirTri, resultadosTri, triMeta, indisponibilidadeTabela, resultadosIndisponibilidade, indisponibilidadeMeta, valesPerdasTabela, metasPerdasVales, valesMeta, incluirGty, incluirTmv, incluirTempoRendicao, gtyPeso, tmvPeso, rendicaoPeso, indicadoresImportadosDistribuicao, resultadosImportadosDistribuicao, incluirAvariaTransporte, avariaTransporteMeta, incluirPacoteGenteDu, incluirLogonDu, incluirDevolucao, incluirPresenteismoDu, resultadosDistribuicaoBi, logonDuMeta, devolucaoMetas, presenteismoDuMetas, pesosPorFuncaoDistribuicao, incluirDescontoCivf, resultadosDescontoCivf, descontoCivfMeta, incluirDescontoStressTest, resultadosDescontoStressTest, descontoStressTestMeta, incluirArmazemEfc, armazemEfcMetas, armazemEfcPeso, incluirArmazemTmaT2, armazemTmaT2Metas, armazemTmaT2Peso, incluirArmazemPresenteismoAlT2, armazemPresenteismoAlT2Metas, armazemPresenteismoAlT2Peso, incluirArmazemRefugo, armazemRefugoMeta, resultadosArmazemBi, incluirArmazemTmaT1, armazemTmaT1Metas, armazemTmaT1Peso, incluirArmazemDisponibilidadeGenteT1, armazemDisponibilidadeGenteT1Metas, armazemDisponibilidadeGenteT1Peso, incluirArmazemPresenteismoAlT1, armazemPresenteismoAlT1Metas, armazemPresenteismoAlT1Peso, resultadosArmazemT1Bi, incluirArmazemQuebras, armazemQuebrasMeta, armazemT1QuebrasMeta, resultadosArmazemQuebras])
 
   const totalBase = linhas.reduce((acc, l) => acc + l.pessoa.valor, 0)
   const totalReceber = linhas.reduce((acc, l) => acc + l.aReceber, 0)

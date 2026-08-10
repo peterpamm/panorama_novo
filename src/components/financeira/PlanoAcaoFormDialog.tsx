@@ -9,21 +9,33 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/use-toast'
-import type { PlanoAcao, Unidade } from '@/types'
+import type { PlanoAcao, PlanoAcaoTag, Unidade } from '@/types'
 
+const SEM_TAG = '__sem_tag__'
 const FORM_INICIAL = { unidade: '', titulo: '', descricao: '', responsavel: '', tag: '', prazo: '' }
 
 interface PlanoAcaoFormDialogProps {
   open: boolean
   onOpenChange: (v: boolean) => void
   editando: PlanoAcao | null
+  /** Editar um plano já existente continua exclusivo do admin (o botão de editar nem aparece pra quem não é) — só CRIAR foi liberado geral. */
+  isAdmin: boolean
+  /** Unidade de quem está logado — trava o campo Unidade ao criar (não-admin só cria pra própria unidade, ver migration_091). */
+  minhaUnidade: string | null
   unidades: Unidade[]
-  tagsExistentes: string[]
+  /** Catálogo padrão (só as ativas, sem a tag "Corporativo" pra quem não é dono) — ver Plano de Ação > Cadastro. */
+  tags: PlanoAcaoTag[]
   onSalvo: () => void
 }
 
-/** Cadastro/edição de Plano de Ação — só admin abre (a página nem mostra o botão pra unidade). */
-export function PlanoAcaoFormDialog({ open, onOpenChange, editando, unidades, tagsExistentes, onSalvo }: PlanoAcaoFormDialogProps) {
+/**
+ * Criar ação é liberado a qualquer usuário logado (cada unidade só pra ela
+ * mesma — o campo Unidade vem travado nesse caso); editar um plano já
+ * existente continua exclusivo do admin, já que quem abre esse dialog em
+ * modo edição só chega lá pelo botão de lápis (admin-only, ver
+ * PlanoAcaoDetalhe).
+ */
+export function PlanoAcaoFormDialog({ open, onOpenChange, editando, isAdmin, minhaUnidade, unidades, tags, onSalvo }: PlanoAcaoFormDialogProps) {
   const { user, role } = useAuth()
   const { toast } = useToast()
   const [form, setForm] = useState(FORM_INICIAL)
@@ -40,8 +52,8 @@ export function PlanoAcaoFormDialog({ open, onOpenChange, editando, unidades, ta
           tag: editando.tag,
           prazo: editando.prazo,
         }
-      : FORM_INICIAL)
-  }, [open, editando])
+      : { ...FORM_INICIAL, unidade: isAdmin ? '' : (minhaUnidade ?? '') })
+  }, [open, editando, isAdmin, minhaUnidade])
 
   async function handleSalvar() {
     const titulo = form.titulo.trim()
@@ -86,7 +98,7 @@ export function PlanoAcaoFormDialog({ open, onOpenChange, editando, unidades, ta
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Unidade</Label>
-              <Select value={form.unidade} onValueChange={v => setForm(f => ({ ...f, unidade: v }))}>
+              <Select value={form.unidade} onValueChange={v => setForm(f => ({ ...f, unidade: v }))} disabled={!isAdmin}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione..." />
                 </SelectTrigger>
@@ -121,17 +133,18 @@ export function PlanoAcaoFormDialog({ open, onOpenChange, editando, unidades, ta
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="plano-tag">Tag</Label>
-              <Input
-                id="plano-tag"
-                list="plano-acao-tags"
-                value={form.tag}
-                onChange={e => setForm(f => ({ ...f, tag: e.target.value }))}
-                placeholder="Ex: Custos, Processo..."
-              />
-              <datalist id="plano-acao-tags">
-                {tagsExistentes.map(t => <option key={t} value={t} />)}
-              </datalist>
+              <Label>Tag</Label>
+              <Select value={form.tag || SEM_TAG} onValueChange={v => setForm(f => ({ ...f, tag: v === SEM_TAG ? '' : v }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={SEM_TAG}>Sem tag</SelectItem>
+                  {tags.map(t => (
+                    <SelectItem key={t.id} value={t.nome}>{t.nome}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>

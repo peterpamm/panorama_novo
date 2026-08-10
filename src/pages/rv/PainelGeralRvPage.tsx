@@ -1,19 +1,21 @@
-import { useEffect, useMemo, useState } from 'react'
+import { forwardRef, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, ChevronLeft, Loader2 } from 'lucide-react'
+import { AlertTriangle, Camera, Check, ChevronLeft, Loader2 } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { PillToggle } from '@/components/ui/pill-toggle'
+import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { selectGlamour } from '@/components/ui/field-styles'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { TableCard } from '@/components/ui/table-card'
+import { TableCard, tableCardActionClass } from '@/components/ui/table-card'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/context/AuthContext'
 import { useUnidades } from '@/hooks/useUnidades'
+import { useCopiarComoImagem } from '@/hooks/useCopiarComoImagem'
 import { useRvApuracao, MESES_NOMES, fmtPeso, fmtValor, type LinhaApuracao } from '@/hooks/useRvApuracao'
 import { RV_GENTE_DRE, RV_FINANCEIRO_DRE, RV_FROTA_DRE, RV_SEGURANCA_DRE } from '@/lib/constants'
-import { ehSetorRh, ehSetorFinanceiro, ehSetorFrota, ehSetorSeguranca, ehSetorDistribuicao, ehSetorArmazem } from '@/lib/rv-gente'
+import { ehSetorRh, ehSetorFinanceiro, ehSetorFrota, ehSetorSeguranca, ehSetorDistribuicao, ehSetorArmazem, ehSetorEmpurrada } from '@/lib/rv-gente'
 
 type AbaPainelGeral = 'setor' | 'lideranca' | 'indicador'
 
@@ -27,8 +29,8 @@ interface LinhaComSetor extends LinhaApuracao {
   setorNome?: string
 }
 
-/** Mesma tabela de apuração do RvApuracao (linhas já calculadas por useRvApuracao), reaproveitada aqui pra não duplicar a lógica de cálculo — só a apresentação. `setorNome` aparece como coluna extra no modo "Por Liderança". */
-function TabelaApuracao({ titulo, subtitulo, linhas, carregando, semLiderancas, totalBase, totalReceber, mostrarSetor }: {
+/** Mesma tabela de apuração do RvApuracao (linhas já calculadas por useRvApuracao), reaproveitada aqui pra não duplicar a lógica de cálculo — só a apresentação. `setorNome` aparece como coluna extra no modo "Por Liderança". Aceita ref + `acoes` (ex: botão "Copiar imagem") — repassados direto pro TableCard. */
+const TabelaApuracao = forwardRef<HTMLDivElement, {
   titulo: string
   subtitulo: string
   linhas: LinhaComSetor[]
@@ -37,9 +39,10 @@ function TabelaApuracao({ titulo, subtitulo, linhas, carregando, semLiderancas, 
   totalBase: number
   totalReceber: number
   mostrarSetor?: boolean
-}) {
+  acoes?: React.ReactNode
+}>(function TabelaApuracao({ titulo, subtitulo, linhas, carregando, semLiderancas, totalBase, totalReceber, mostrarSetor, acoes }, ref) {
   return (
-    <TableCard titulo={titulo} subtitulo={subtitulo}>
+    <TableCard ref={ref} titulo={titulo} subtitulo={subtitulo} acoes={acoes}>
       {carregando ? (
         <div className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -144,7 +147,7 @@ function TabelaApuracao({ titulo, subtitulo, linhas, carregando, semLiderancas, 
       )}
     </TableCard>
   )
-}
+})
 
 /**
  * Painel Geral da RV — /remuneracao-variavel/painel-geral. Uma unidade não
@@ -157,7 +160,7 @@ function TabelaApuracao({ titulo, subtitulo, linhas, carregando, semLiderancas, 
  * unidade; usuário de unidade fica travado na própria.
  */
 export function PainelGeralRvPage() {
-  const { role, unidade: minhaUnidade } = useAuth()
+  const { role, unidade: minhaUnidade, rvNegocio } = useAuth()
   const { unidades } = useUnidades()
   const [aba, setAba] = useState<AbaPainelGeral>('setor')
 
@@ -178,31 +181,37 @@ export function PainelGeralRvPage() {
 
   const gente = useRvApuracao({
     setorLabel: 'RH', ehDoSetor: ehSetorRh, indicadoresDre: RV_GENTE_DRE, tabelaPesos: 'rv_gente_pesos_dre', incluirIndicadoresBi: true,
-    filtrarUnidade: unidadeSel, anoForcado: verAno || undefined, mesForcado: verMes || undefined,
+    filtrarUnidade: unidadeSel, filtrarNegocio: rvNegocio ?? undefined, anoForcado: verAno || undefined, mesForcado: verMes || undefined,
   })
   const financeiro = useRvApuracao({
     setorLabel: 'FINANCEIRO', ehDoSetor: ehSetorFinanceiro, indicadoresDre: RV_FINANCEIRO_DRE, tabelaPesos: 'rv_financeiro_pesos_dre', valesPerdasTabela: 'rv_vales_financeiro_meta',
-    filtrarUnidade: unidadeSel, anoForcado: verAno || undefined, mesForcado: verMes || undefined,
+    filtrarUnidade: unidadeSel, filtrarNegocio: rvNegocio ?? undefined, anoForcado: verAno || undefined, mesForcado: verMes || undefined,
   })
   const frota = useRvApuracao({
     setorLabel: 'FROTA', ehDoSetor: ehSetorFrota, indicadoresDre: RV_FROTA_DRE, tabelaPesos: 'rv_frota_pesos_dre', incluirDescontoCivf: true, incluirDescontoStressTest: true,
-    filtrarUnidade: unidadeSel, anoForcado: verAno || undefined, mesForcado: verMes || undefined,
+    filtrarUnidade: unidadeSel, filtrarNegocio: rvNegocio ?? undefined, anoForcado: verAno || undefined, mesForcado: verMes || undefined,
   })
   const seguranca = useRvApuracao({
     setorLabel: 'SEGURANÇA', ehDoSetor: ehSetorSeguranca, indicadoresDre: RV_SEGURANCA_DRE, tabelaPesos: 'rv_seguranca_pesos_dre',
     incluirDtoT2: true, incluirDtoT1: true, incluirGsd: true, incluirLogon: true, incluirExcessoVelocidade: true, incluirFai: true, incluirTri: true,
-    filtrarUnidade: unidadeSel, anoForcado: verAno || undefined, mesForcado: verMes || undefined,
+    filtrarUnidade: unidadeSel, filtrarNegocio: rvNegocio ?? undefined, anoForcado: verAno || undefined, mesForcado: verMes || undefined,
   })
   const distribuicao = useRvApuracao({
     setorLabel: 'DISTRIBUIÇÃO', ehDoSetor: ehSetorDistribuicao,
-    incluirIndisponibilidade: true, incluirPacoteGenteDu: true, valesPerdasTabela: 'rv_vales_distribuicao_meta', incluirLogonDu: true, incluirDevolucao: true, incluirPresenteismoDu: true,
-    filtrarUnidade: unidadeSel, anoForcado: verAno || undefined, mesForcado: verMes || undefined,
+    indisponibilidadeTabela: 'rv_indisponibilidade_meta', incluirPacoteGenteDu: true, valesPerdasTabela: 'rv_vales_distribuicao_meta', incluirLogonDu: true, incluirDevolucao: true, incluirPresenteismoDu: true,
+    filtrarUnidade: unidadeSel, filtrarNegocio: rvNegocio ?? undefined, anoForcado: verAno || undefined, mesForcado: verMes || undefined,
   })
   const armazem = useRvApuracao({
     setorLabel: 'ARMAZÉM', ehDoSetor: ehSetorArmazem,
     incluirArmazemEfc: true, incluirArmazemTmaT2: true, incluirArmazemPresenteismoAlT2: true, incluirArmazemRefugo: true,
     incluirArmazemTmaT1: true, incluirArmazemDisponibilidadeGenteT1: true, incluirArmazemPresenteismoAlT1: true, incluirArmazemQuebras: true,
-    filtrarUnidade: unidadeSel, anoForcado: verAno || undefined, mesForcado: verMes || undefined,
+    filtrarUnidade: unidadeSel, filtrarNegocio: rvNegocio ?? undefined, anoForcado: verAno || undefined, mesForcado: verMes || undefined,
+  })
+  const empurrada = useRvApuracao({
+    setorLabel: 'EMPURRADA', ehDoSetor: ehSetorEmpurrada,
+    indisponibilidadeTabela: 'rv_empurrada_indisponibilidade_meta', incluirAvariaTransporte: true,
+    incluirGty: true, incluirTmv: true, incluirTempoRendicao: true,
+    filtrarUnidade: unidadeSel, filtrarNegocio: rvNegocio ?? undefined, anoForcado: verAno || undefined, mesForcado: verMes || undefined,
   })
 
   const setores = useMemo(() => [
@@ -212,8 +221,9 @@ export function PainelGeralRvPage() {
     { label: 'SEGURANÇA', ...seguranca },
     { label: 'DISTRIBUIÇÃO', ...distribuicao },
     { label: 'ARMAZÉM', ...armazem },
+    { label: 'EMPURRADA', ...empurrada },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [gente, financeiro, frota, seguranca, distribuicao, armazem])
+  ], [gente, financeiro, frota, seguranca, distribuicao, armazem, empurrada])
 
   const anosDisponiveis = useMemo(
     () => Array.from(new Set(setores.flatMap(s => s.anosDisponiveis))).sort((a, b) => b - a),
@@ -234,6 +244,8 @@ export function PainelGeralRvPage() {
   const totalReceberGeral = todasLinhas.reduce((acc, l) => acc + l.aReceber, 0)
 
   const nomeUnidadeSel = unidades.find(u => u.codigo === unidadeSel)?.nome ?? unidadeSel
+
+  const { ref: refLideranca, status: statusLideranca, copiar: copiarLideranca } = useCopiarComoImagem(`rv_por_lideranca_${nomeUnidadeSel}`)
 
   // ── Por Indicador: uma liderança só, meta/resultado do mês — pra imprimir/enviar pro colaborador ──
   const [pessoaSel, setPessoaSel] = useState('')
@@ -258,8 +270,9 @@ export function PainelGeralRvPage() {
       </div>
 
       <p className="max-w-2xl text-sm text-muted-foreground">
-        Acompanhamento da RV de todas as lideranças de uma unidade só, reunindo os 6 setores num lugar — mesmos dados
+        Acompanhamento da RV de todas as lideranças de uma unidade só, reunindo os 7 setores num lugar — mesmos dados
         e mesma regra de cálculo das páginas de RV por setor, só filtrado pra essa unidade.
+        {rvNegocio && ' Seu acesso é restrito às lideranças do seu negócio nessa unidade — não aparece a RV de outro gerente.'}
       </p>
 
       <div className="flex flex-wrap items-end gap-3">
@@ -317,16 +330,26 @@ export function PainelGeralRvPage() {
         </div>
       ) : aba === 'lideranca' ? (
         <TabelaApuracao
+          ref={refLideranca}
           titulo={`Todas as lideranças — ${nomeUnidadeSel}`}
           subtitulo={carregandoGeral
             ? 'Carregando...'
-            : `${MESES_NOMES[Number(verMes) - 1] ?? ''} ${verAno} · ${todasLinhas.length} liderança(s) nos 6 setores`}
+            : `${MESES_NOMES[Number(verMes) - 1] ?? ''} ${verAno} · ${todasLinhas.length} liderança(s) nos 7 setores`}
           linhas={todasLinhas}
           carregando={carregandoGeral}
           semLiderancas
           totalBase={totalBaseGeral}
           totalReceber={totalReceberGeral}
           mostrarSetor
+          acoes={
+            <Button
+              variant="outline" size="sm" className={cn('gap-2', tableCardActionClass)}
+              onClick={copiarLideranca} disabled={statusLideranca === 'copiando' || carregandoGeral}
+            >
+              {statusLideranca === 'copiado' ? <Check className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
+              {statusLideranca === 'copiado' ? 'Copiado!' : statusLideranca === 'copiando' ? 'Gerando...' : 'Copiar imagem'}
+            </Button>
+          }
         />
       ) : (
         <div className="space-y-4">

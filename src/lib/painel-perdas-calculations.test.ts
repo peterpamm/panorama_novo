@@ -67,20 +67,31 @@ describe('calcularMatrizPerdas', () => {
     expect(linhaTotal.valores['FOZ']).toBeCloseTo(-500)
   })
 
-  it('FATURAMENTO usa ACUMULADO_ANO, conta 001, remunerado abs do último mes', () => {
+  it('FATURAMENTO usa MENSAL, conta 001, soma do remunerado abs dos meses selecionados', () => {
     const dre = [
       rowDre({ conta_codigo: '021', diferenca: 0 }),
-      rowDre({ tipo_periodo: 'ACUMULADO_ANO', conta_codigo: '001', mes: 1, remunerado: -50000 }),
+      rowDre({ conta_codigo: '001', mes: 1, remunerado: -50000 }),
     ]
     const r = calcularMatrizPerdas(dre, [], [], 2025, [1])
     const linhaFat = r.linhas.find(l => l.tipo === 'faturamento')!
     expect(linhaFat.valores['FOZ']).toBeCloseTo(50000)
   })
 
-  it('PERDAS % = TOTAL / FATURAMENTO', () => {
+  it('FATURAMENTO soma só os meses selecionados no filtro, não o ano inteiro', () => {
+    const dre = [
+      rowDre({ conta_codigo: '001', mes: 1, remunerado: -50000 }),
+      rowDre({ conta_codigo: '001', mes: 2, remunerado: -60000 }),
+      rowDre({ conta_codigo: '001', mes: 3, remunerado: -70000 }),
+    ]
+    const r = calcularMatrizPerdas(dre, [], [], 2025, [2])
+    const linhaFat = r.linhas.find(l => l.tipo === 'faturamento')!
+    expect(linhaFat.valores['FOZ']).toBeCloseTo(60000)
+  })
+
+  it('PERDAS % = TOTAL / FATURAMENTO (mesmo recorte de meses nos dois)', () => {
     const dre = [
       rowDre({ conta_codigo: '051', diferenca: -1000 }),
-      rowDre({ tipo_periodo: 'ACUMULADO_ANO', conta_codigo: '001', mes: 1, remunerado: -100000 }),
+      rowDre({ conta_codigo: '001', mes: 1, remunerado: -100000 }),
     ]
     const r = calcularMatrizPerdas(dre, [], [], 2025, [1])
     const linhaP = r.linhas.find(l => l.tipo === 'perdas_pct')!
@@ -101,7 +112,7 @@ describe('calcularMatrizPerdas', () => {
   it('META (%) = META (R$) / FATURAMENTO', () => {
     const dre = [
       rowDre({ conta_codigo: '021', diferenca: 0 }),
-      rowDre({ tipo_periodo: 'ACUMULADO_ANO', conta_codigo: '001', mes: 1, remunerado: -120000 }),
+      rowDre({ conta_codigo: '001', mes: 1, remunerado: -120000 }),
     ]
     const metas: MetaPerdaIndicador[] = [
       { unidade: 'FOZ', ano: 2025, indicador: 'vales', meta_anual: -12000 },

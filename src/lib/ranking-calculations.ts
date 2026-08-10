@@ -1,14 +1,13 @@
-import type { DreLongoRow, Meta, Natureza, OrcamentoLinha } from '@/types'
+import type { DreLongoRow, Natureza, OrcamentoLinha } from '@/types'
 import { CONTA_RECEITA } from '@/lib/constants'
 import {
   avrPorPrefixo,
-  buscarMetaComFallback,
-  buscarMetaSemestral,
   calcularImpactoFinanceiro,
   calcularReceita,
   calcularSemaforo,
   normalizarParaCalculo,
 } from '@/lib/farol-calculations'
+import { buscarMetaOrcamento } from '@/lib/orcamento-farol'
 
 /** Período do Ranking — mesmas opções do Farol de Metas (Mensal/YTD/1º/2º semestre). */
 export type PeriodoRanking = 'mensal' | 'ytd' | 's1' | 's2'
@@ -140,14 +139,16 @@ export interface RankingLinhaIndicador {
 
 /**
  * Abas Performance/Custos: ranqueia por Δ da meta (avrPorPrefixo - meta, com
- * sinal já correto por natureza via `calcularSemaforo`). Mensal usa o mês
- * selecionado; YTD usa o acumulado do mês mais recente importado; 1º/2º
- * semestre usa a meta semestral (mes=13/14 na tabela `metas`) — mesma régua
- * do Farol de Metas.
+ * sinal já correto por natureza via `calcularSemaforo`). Meta vem só do
+ * Orçamento (`buscarMetaOrcamento` — mesma régua do Farol de Metas): Mensal
+ * usa o mês selecionado (1-12), YTD usa o orçado anual (mes=0 — compara o
+ * acumulado do ano contra o total orçado, mesmo padrão do Farol), 1º/2º
+ * semestre usa o bloco recalculado (mes=13/14 — Administração > Orçamento >
+ * Recalcular semestres). Sem fallback pra tabela `metas`/AVO do DRE.
  */
 export function calcularRankingIndicador(
   rowsNegocioAno: DreLongoRow[],
-  metasNegocioAno: Meta[],
+  orcamentoRows: OrcamentoLinha[],
   pacote: { natureza: Natureza; prefixos: string[] },
   codigo: string,
   params: { negocio: string; ano: number; periodo: PeriodoRanking; mes: number },
@@ -160,14 +161,11 @@ export function calcularRankingIndicador(
     const avr = avrPorPrefixo(calc, pacote.prefixos)
     const receita = calcularReceita(calc)
 
-    const metasUnidade = metasNegocioAno.filter(m => m.unidade === unidade)
-    const meta = params.periodo === 's1' || params.periodo === 's2'
-      ? buscarMetaSemestral(metasUnidade, {
-          unidade, negocio: params.negocio, ano: params.ano, codigo, semestre: params.periodo === 's1' ? 1 : 2,
-        })
-      : buscarMetaComFallback(calc, metasUnidade, {
-          unidade, negocio: params.negocio, ano: params.ano, codigo, isYtd: params.periodo === 'ytd', mes: params.mes, prefixos: pacote.prefixos,
-        })
+    const mesOrcamento = params.periodo === 's1' ? 13
+      : params.periodo === 's2' ? 14
+        : params.periodo === 'ytd' ? 0
+          : params.mes
+    const meta = buscarMetaOrcamento(orcamentoRows, { unidade, negocio: params.negocio, ano: params.ano, codigo, mes: mesOrcamento })
 
     const semaforo = calcularSemaforo(avr, meta, pacote.natureza)
     const impacto = calcularImpactoFinanceiro(avr, meta, receita, pacote.natureza)

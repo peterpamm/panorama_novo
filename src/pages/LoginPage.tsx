@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Lock, Mail } from 'lucide-react'
+import { ChevronDown, Eye, EyeOff, Lock, Mail } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
-import { cn } from '@/lib/utils'
 
-type Modo = 'panorama' | 'sdg'
+type Modo = 'panorama' | 'sdg' | 'sdg-corporativo'
 
-const MODOS: { id: Modo; titulo: string; descricao: string; icone: string }[] = [
-  { id: 'panorama', titulo: 'Panorama Financeiro', descricao: 'Análise completa por unidade', icone: '📊' },
-  { id: 'sdg',      titulo: 'SDG Financeiro',       descricao: 'Modo de apresentação',        icone: '📽️' },
+const MODOS: { id: Modo; titulo: string; rota: string }[] = [
+  { id: 'panorama',        titulo: 'Panorama Financeiro', rota: '/' },
+  { id: 'sdg',             titulo: 'SDG Financeiro',      rota: '/sdg-financeiro' },
+  { id: 'sdg-corporativo', titulo: 'SDG Corporativo',     rota: '/sdg-corporativo' },
 ]
 
 /**
@@ -35,7 +35,7 @@ export function LoginPage() {
     if (error) {
       setError('E-mail ou senha inválidos.')
     } else {
-      navigate(modo === 'sdg' ? '/sdg-financeiro' : '/')
+      navigate(MODOS.find(m => m.id === modo)?.rota ?? '/')
     }
   }
 
@@ -61,26 +61,25 @@ export function LoginPage() {
         {/* Body dark glass */}
         <div className="flex flex-col gap-4 px-6 pb-6 pt-5">
           {/* Seletor de destino */}
-          <div className="grid grid-cols-2 gap-2">
-            {MODOS.map(m => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => setModo(m.id)}
-                className={cn(
-                  'rounded-lg border p-3 text-left transition-all',
-                  modo === m.id
-                    ? 'border-blue-500/60 bg-gradient-to-br from-blue-500/20 to-purple-500/10 shadow-lg shadow-blue-500/10'
-                    : 'border-white/10 bg-slate-900/40 hover:border-white/25',
-                )}
+          <div>
+            <label htmlFor="modo" className="mb-1.5 block text-[11px] font-semibold text-gray-400">
+              Entrar em
+            </label>
+            <div className="relative">
+              <select
+                id="modo"
+                value={modo}
+                onChange={e => setModo(e.target.value as Modo)}
+                className="w-full appearance-none rounded-lg border border-white/10 bg-slate-900/50 py-2 pl-3 pr-9 text-sm text-gray-200 outline-none transition focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/30"
               >
-                <div className="text-lg">{m.icone}</div>
-                <div className={cn('mt-1 text-xs font-semibold', modo === m.id ? 'text-white' : 'text-gray-300')}>
-                  {m.titulo}
-                </div>
-                <div className="text-[10px] leading-tight text-gray-500">{m.descricao}</div>
-              </button>
-            ))}
+                {MODOS.map(m => (
+                  <option key={m.id} value={m.id} className="bg-gray-800 text-gray-200">
+                    {m.titulo}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-3.5">
@@ -137,7 +136,7 @@ export function LoginPage() {
               disabled={loading}
               className="mt-1 w-full rounded-lg bg-white py-2.5 text-sm font-bold text-gray-900 transition hover:bg-gray-100 disabled:opacity-60"
             >
-              {loading ? 'Entrando...' : `Entrar no ${modo === 'sdg' ? 'SDG Financeiro' : 'Panorama'}`}
+              {loading ? 'Entrando...' : `Entrar no ${MODOS.find(m => m.id === modo)?.titulo ?? 'Panorama'}`}
             </button>
           </form>
         </div>

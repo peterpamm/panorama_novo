@@ -73,11 +73,6 @@ export function calcularMatrizPerdas(
     r => r.negocio === 'CONS' && r.tipo_periodo === 'MENSAL' && r.ano === ano && meses.includes(r.mes),
   )
 
-  // ── Dados DRE acumulados: CONS + ACUMULADO_ANO + ano (para FATURAMENTO)
-  const dreAcumulado = rowsDre.filter(
-    r => r.negocio === 'CONS' && r.tipo_periodo === 'ACUMULADO_ANO' && r.ano === ano,
-  )
-
   // ── Dados AUX filtrados: ano + meses selecionados
   const auxFiltrado = rowsAux.filter(r => r.ano === ano && meses.includes(r.mes))
 
@@ -116,14 +111,17 @@ export function calcularMatrizPerdas(
     totalValores[u] = temAlgum ? vals.reduce((acc, v) => (acc ?? 0) + (v ?? 0), 0 as number | null) : null
   }
 
-  // ── FATURAMENTO (ACUMULADO_ANO, conta 001, REMUN, último mes disponível)
+  // ── FATURAMENTO (soma da conta 001, REMUN, dos mesmos meses MENSAL
+  // selecionados no filtro — precisa bater com o recorte de TOTAL, senão o %
+  // de perdas fica errado ao selecionar um subconjunto de meses (ex: só um
+  // mês teria o prejuízo desse mês dividido pelo faturamento do ano inteiro).
+  // Antes usava sempre o acumulado do ano até o último mês disponível
+  // (ACUMULADO_ANO), independente dos meses marcados no filtro.
   const fatValores: Record<string, number | null> = {}
   for (const u of unidades) {
-    const rowsU = dreAcumulado.filter(r => r.unidade === u && r.conta_codigo.startsWith('001'))
+    const rowsU = dreMensal.filter(r => r.unidade === u && r.conta_codigo.startsWith('001'))
     if (rowsU.length === 0) { fatValores[u] = null; continue }
-    const maxMes = Math.max(...rowsU.map(r => r.mes))
-    const rowMes = rowsU.find(r => r.mes === maxMes)
-    fatValores[u] = rowMes ? Math.abs(rowMes.remunerado ?? 0) : null
+    fatValores[u] = rowsU.reduce((acc, r) => acc + Math.abs(r.remunerado ?? 0), 0)
   }
 
   // ── PERDAS ACUMULADAS (%) = TOTAL / FATURAMENTO

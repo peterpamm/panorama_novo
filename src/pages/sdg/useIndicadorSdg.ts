@@ -1,16 +1,17 @@
 import { useMemo } from 'react'
 import {
   normalizarParaCalculo, calcularReceita, avrPorPrefixo,
-  calcularSemaforo, calcularImpactoFinanceiro, buscarMetaComFallback,
+  calcularSemaforo, calcularImpactoFinanceiro,
   calcularSerieAnual, calcularSerieCaptura,
 } from '@/lib/farol-calculations'
+import { buscarMetaOrcamento } from '@/lib/orcamento-farol'
 import { PACOTES } from '@/lib/constants'
-import type { DreCalculoRow, DreLongoRow, Meta } from '@/types'
+import type { DreCalculoRow, DreLongoRow, OrcamentoLinha } from '@/types'
 
 export interface IndicadorSdgParams {
   codigo: string
   rowsAno: DreLongoRow[]
-  metas: Meta[]
+  orcamentoRows: OrcamentoLinha[]
   unidade: string
   negocio: string
   ano: number
@@ -18,8 +19,8 @@ export interface IndicadorSdgParams {
   mesAcumMax: number | null
 }
 
-/** Cálculos compartilhados dos slides de indicador (cards mensal/YTD + séries dos gráficos). */
-export function useIndicadorSdg({ codigo, rowsAno, metas, unidade, negocio, ano, mes, mesAcumMax }: IndicadorSdgParams) {
+/** Cálculos compartilhados dos slides de indicador (cards mensal/YTD + séries dos gráficos). Meta vem só do Orçamento — ver orcamento-farol.ts (mesma fonte do Farol de Metas). */
+export function useIndicadorSdg({ codigo, rowsAno, orcamentoRows, unidade, negocio, ano, mes, mesAcumMax }: IndicadorSdgParams) {
   const info = PACOTES[codigo]
 
   const dfMensal = useMemo(
@@ -37,28 +38,29 @@ export function useIndicadorSdg({ codigo, rowsAno, metas, unidade, negocio, ano,
   const receitaMensal = useMemo(() => calcularReceita(calcMensal), [calcMensal])
   const receitaYtd    = useMemo(() => calcularReceita(calcYtd),    [calcYtd])
 
-  const ctx = { unidade, negocio, ano, codigo, prefixos: info.prefixos }
+  const ctx = { unidade, negocio, ano, codigo }
 
   const mensal = useMemo(() => {
     const avr  = avrPorPrefixo(calcMensal, info.prefixos)
-    const meta = buscarMetaComFallback(calcMensal, metas, { ...ctx, isYtd: false, mes })
+    const meta = buscarMetaOrcamento(orcamentoRows, { ...ctx, mes })
     return { avr, meta, semaforo: calcularSemaforo(avr, meta, info.natureza), impacto: calcularImpactoFinanceiro(avr, meta, receitaMensal, info.natureza) }
-  }, [calcMensal, metas, mes, receitaMensal])
+  }, [calcMensal, orcamentoRows, mes, receitaMensal])
 
   const ytd = useMemo(() => {
     const avr  = avrPorPrefixo(calcYtd, info.prefixos)
-    const meta = buscarMetaComFallback(calcYtd, metas, { ...ctx, isYtd: true, mes: mesAcumMax ?? mes })
+    const meta = buscarMetaOrcamento(orcamentoRows, { ...ctx, mes: 0 })
     return { avr, meta, semaforo: calcularSemaforo(avr, meta, info.natureza), impacto: calcularImpactoFinanceiro(avr, meta, receitaYtd, info.natureza) }
-  }, [calcYtd, metas, mes, mesAcumMax, receitaYtd])
+  }, [calcYtd, orcamentoRows, receitaYtd])
 
-  const serieAnual = useMemo(
-    () => calcularSerieAnual(rowsAno, metas, { ...ctx }),
-    [rowsAno, metas],
-  )
-  const serieCaptura = useMemo(
-    () => calcularSerieCaptura(rowsAno, metas, { ...ctx }),
-    [rowsAno, metas],
-  )
+  const serieAnual = useMemo(() => {
+    const base = calcularSerieAnual(rowsAno, [], { ...ctx, prefixos: info.prefixos })
+    return base.map(ponto => ({ ...ponto, meta: buscarMetaOrcamento(orcamentoRows, { ...ctx, mes: ponto.mes }) }))
+  }, [rowsAno, orcamentoRows])
+
+  const serieCaptura = useMemo(() => {
+    const metaAnual = buscarMetaOrcamento(orcamentoRows, { ...ctx, mes: 0 })
+    return calcularSerieCaptura(rowsAno, [], { ...ctx, prefixos: info.prefixos }, metaAnual)
+  }, [rowsAno, orcamentoRows])
 
   return { info, calcMensal, calcYtd, mensal, ytd, serieAnual, serieCaptura }
 }

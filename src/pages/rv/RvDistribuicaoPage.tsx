@@ -54,7 +54,7 @@ export function RvDistribuicaoPage() {
         <RvApuracao
           setorLabel="DISTRIBUIÇÃO"
           ehDoSetor={ehSetorDistribuicao}
-          incluirIndisponibilidade
+          indisponibilidadeTabela="rv_indisponibilidade_meta"
           incluirPacoteGenteDu
           valesPerdasTabela="rv_vales_distribuicao_meta"
           incluirLogonDu

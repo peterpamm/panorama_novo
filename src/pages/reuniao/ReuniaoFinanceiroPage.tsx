@@ -22,19 +22,19 @@ export function ReuniaoFinanceiroPage() {
         <h2 className="text-base font-semibold text-foreground">Financeiro</h2>
       </div>
 
-      <Tabs defaultValue="apuracao">
+      <Tabs defaultValue="resultado-mes">
         <TabsList>
-          <TabsTrigger value="apuracao">Apuração</TabsTrigger>
           <TabsTrigger value="resultado-mes">Resultado do Mês</TabsTrigger>
+          <TabsTrigger value="apuracao">Apuração</TabsTrigger>
           <TabsTrigger value="cadastro">Cadastro</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="apuracao" className="pt-4">
-          <AcompanhamentoReuniaoTab setor="financeiro" />
-        </TabsContent>
-
         <TabsContent value="resultado-mes" className="pt-4">
           <ResultadoMesReuniaoTab setor="financeiro" />
+        </TabsContent>
+
+        <TabsContent value="apuracao" className="pt-4">
+          <AcompanhamentoReuniaoTab setor="financeiro" />
         </TabsContent>
 
         <TabsContent value="cadastro" className="pt-4">

@@ -24,10 +24,14 @@ function toStr(v: unknown): string {
 }
 
 /**
- * Planilha de ocorrências (Filial, Mês, Data, Turno, Colaborador, CPF,
- * Função, Projeto, Tipo, SIF, Corpo, Trajeto, Local, Ato, Lesão etc) — usamos
- * só Filial e Tipo. Conta como FAI quando Tipo = "FAI". Só ESTÂNCIA e CDR
- * BAHIA entram — qualquer outra unidade no relatório é ignorada.
+ * Planilha de ocorrências — dois layouts aceitos (a Ambev trocou o layout em
+ * algum momento, mas pode mandar qualquer um dos dois):
+ * - Antigo: colunas "Filial" e "Tipo" — conta como FAI quando Tipo = "FAI"
+ *   (igual completo, não é substring).
+ * - Novo: colunas "Operação" e "Classificação de Incidentes" — conta como
+ *   FAI quando o texto CONTÉM "FAI" (aparece tanto como "FAI" puro quanto
+ *   como "FAI - Primeiro Atendimento Ambulatorial").
+ * Só ESTÂNCIA e CDR BAHIA entram — qualquer outra unidade no relatório é ignorada.
  */
 function parseMatriz(matriz: unknown[][]): ParseFaiResultado {
   if (matriz.length === 0) return { agregados: [], erros: [] }
@@ -35,10 +39,21 @@ function parseMatriz(matriz: unknown[][]): ParseFaiResultado {
   const header = matriz[0].map(c => normalizar(toStr(c)))
   const iFilial = header.findIndex(h => h === 'FILIAL')
   const iTipo = header.findIndex(h => h === 'TIPO')
+  const iOperacao = header.findIndex(h => h === 'OPERACAO')
+  const iClassificacao = header.findIndex(h => h === 'CLASSIFICACAO DE INCIDENTES')
 
-  if (iFilial === -1 || iTipo === -1) {
-    return { agregados: [], erros: ['Cabeçalho inválido — esperado colunas Filial e Tipo'] }
+  const layoutAntigo = iFilial !== -1 && iTipo !== -1
+  const layoutNovo = iOperacao !== -1 && iClassificacao !== -1
+  if (!layoutAntigo && !layoutNovo) {
+    return { agregados: [], erros: ['Cabeçalho inválido — esperado colunas Filial e Tipo, ou Operação e Classificação de Incidentes'] }
   }
+
+  const iUnidade = layoutAntigo ? iFilial : iOperacao
+  const iClassificacaoFai = layoutAntigo ? iTipo : iClassificacao
+  // Layout antigo compara igual completo ("Tipo" só tem o código puro); o
+  // novo compara substring, porque "Classificação de Incidentes" também
+  // traz o texto por extenso (ex: "FAI - Primeiro Atendimento Ambulatorial").
+  const casaFai = (texto: string) => layoutAntigo ? texto === 'FAI' : texto.includes('FAI')
 
   // Pré-popula as duas unidades com zero — se o arquivo não tiver nenhuma
   // linha FAI pra uma delas (ou nem mencionar a unidade), ainda assim
@@ -50,13 +65,13 @@ function parseMatriz(matriz: unknown[][]): ParseFaiResultado {
     const cols = matriz[i]
     if (cols.every(c => toStr(c) === '')) continue
 
-    const filial = toStr(cols[iFilial]).toUpperCase()
+    const filial = toStr(cols[iUnidade]).toUpperCase()
     if (!filial) continue
     const norm = normalizarNomeUnidade(filial)
     const canonico = OPERACOES_DTO_T1.find(op => normalizarNomeUnidade(op) === norm)
     if (!canonico) continue
 
-    if (normalizar(toStr(cols[iTipo])) === 'FAI') porFilial.set(canonico, (porFilial.get(canonico) ?? 0) + 1)
+    if (casaFai(normalizar(toStr(cols[iClassificacaoFai])))) porFilial.set(canonico, (porFilial.get(canonico) ?? 0) + 1)
   }
 
   const agregados: FaiUnidadeAgregado[] = Array.from(porFilial.entries()).map(([filial, totalFai]) => ({ filial, totalFai }))

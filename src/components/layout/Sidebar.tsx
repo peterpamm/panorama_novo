@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
-  Gauge, LineChart, Trophy, Target, Upload,
+  Gauge, LineChart, Trophy, Upload,
   Settings, AlertTriangle, HandCoins, Banknote, Award, ChevronDown, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -22,7 +22,7 @@ interface NavItem {
   /** Exige essa página liberada em `permissoes_paginas` (ou ser dono). */
   pagina?: PaginaChave
   /** Subitens que aparecem recolhidos dentro deste item (só no modo expandido da sidebar). */
-  children?: { to: string; label: string; pagina?: PaginaChave }[]
+  children?: { to: string; label: string; pagina?: PaginaChave; adminOnly?: boolean; donoApenas?: boolean }[]
 }
 
 const navItems: NavItem[] = [
@@ -40,7 +40,9 @@ const navItems: NavItem[] = [
       { to: '/remuneracao-variavel/seguranca', label: 'RV de Segurança', pagina: 'rv_seguranca' },
       { to: '/remuneracao-variavel/distribuicao', label: 'RV de Distribuição', pagina: 'rv_distribuicao' },
       { to: '/remuneracao-variavel/armazem', label: 'RV de Armazém', pagina: 'rv_armazem' },
+      { to: '/remuneracao-variavel/empurrada', label: 'RV de Empurrada', pagina: 'rv_empurrada' },
       { to: '/remuneracao-variavel/matriz', label: 'Matriz', pagina: 'rv_matriz' },
+      { to: '/remuneracao-variavel/metas', label: 'Metas', adminOnly: true },
     ],
   },
   {
@@ -48,25 +50,21 @@ const navItems: NavItem[] = [
     children: [
       { to: '/area-financeira/rotinas', label: 'Rotinas' },
       { to: '/area-financeira/plano-de-acao', label: 'Plano de Ação' },
-    ],
-  },
-  {
-    to: '/metas', icon: Target, label: 'Metas', adminOnly: true,
-    children: [
-      { to: '/metas/gerais', label: 'Metas Gerais', pagina: 'metas_gerais' },
-      { to: '/metas/perdas', label: 'Metas de Perdas', pagina: 'metas_perdas' },
-      { to: '/metas/gente', label: 'Metas de Gente', pagina: 'metas_gente' },
-      { to: '/metas/financeiro', label: 'Metas do Financeiro', pagina: 'metas_financeiro' },
-      { to: '/metas/frota', label: 'Metas de Frota', pagina: 'metas_frota' },
-      { to: '/metas/seguranca', label: 'Metas de Segurança', pagina: 'metas_seguranca' },
-      { to: '/metas/distribuicao', label: 'Metas Distribuição', pagina: 'metas_distribuicao' },
-      { to: '/metas/armazem', label: 'Metas de Armazém', pagina: 'metas_armazem' },
+      { to: '/area-financeira/encontro-de-contas', label: 'Encontro de Contas' },
+      { to: '/area-financeira/sdg-financeiro', label: 'SDG Financeiro' },
+      { to: '/area-financeira/sdg-corp-fin', label: 'SDG Corp Fin', donoApenas: true },
     ],
   },
   {
     to: '/reuniao-resultados', icon: Award, label: 'Reunião Resultados',
     children: [
       { to: '/reuniao-resultados/financeiro', label: 'Financeiro', pagina: 'reuniao_financeiro' },
+      { to: '/reuniao-resultados/gente', label: 'Gente', pagina: 'reuniao_gente' },
+      { to: '/reuniao-resultados/frota', label: 'Frota', pagina: 'reuniao_frota' },
+      { to: '/reuniao-resultados/seguranca', label: 'Segurança', pagina: 'reuniao_seguranca' },
+      { to: '/reuniao-resultados/distribuicao', label: 'Distribuição', pagina: 'reuniao_distribuicao' },
+      { to: '/reuniao-resultados/armazem', label: 'Armazém', pagina: 'reuniao_armazem' },
+      { to: '/reuniao-resultados/resumo-geral', label: 'Resumo Geral', pagina: 'reuniao_resumo_geral' },
     ],
   },
   { to: '/importacao',    icon: Upload,         label: 'Importação',     adminOnly: true, pagina: 'importacao' },
@@ -98,7 +96,7 @@ export function Sidebar({ open, onToggle }: SidebarProps) {
   }
 
   const itemsVisiveis = navItems
-    .map(item => item.children ? { ...item, children: item.children.filter(c => itemVisivel(c.pagina)) } : item)
+    .map(item => item.children ? { ...item, children: item.children.filter(c => itemVisivel(c.pagina, c.adminOnly, c.donoApenas)) } : item)
     .filter(item => itemVisivel(item.pagina, item.adminOnly, item.donoApenas) && !(item.children && item.children.length === 0))
 
   const navClass = ({ isActive }: { isActive: boolean }) =>

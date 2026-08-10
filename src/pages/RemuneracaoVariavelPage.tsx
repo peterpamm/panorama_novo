@@ -1,12 +1,15 @@
 import { Link } from 'react-router-dom'
-import { ChevronRight, Landmark, ShieldCheck, Truck, Users, Warehouse, Boxes, LayoutDashboard, Table2 } from 'lucide-react'
+import { ChevronRight, Landmark, ShieldCheck, Truck, Users, Warehouse, Boxes, LayoutDashboard, Table2, Target, PackageSearch } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { useAuth } from '@/context/AuthContext'
 import type { PaginaChave } from '@/lib/permissoes'
 
 interface SetorCard {
   to: string
-  pagina: PaginaChave
+  /** Ausente só no card de Metas — o hub em si não exige uma página específica, cada subpágina dele checa a sua própria. */
+  pagina?: PaginaChave
+  /** Restringe o card a admin, igual à rota (ex: Metas). */
+  adminOnly?: boolean
   titulo: string
   descricao: string
   icone: React.ReactNode
@@ -71,12 +74,28 @@ const SETORES: SetorCard[] = [
     corIcone: 'bg-teal-500/10',
   },
   {
+    to: '/remuneracao-variavel/empurrada',
+    pagina: 'rv_empurrada',
+    titulo: 'RV de Empurrada',
+    descricao: 'Só Estância — Indisponibilidade e Avaria de Transporte (Painel de Perdas) e GTY/TMV/Tempo de Rendição (Reunião Resultados), acompanhamento e apuração mensal.',
+    icone: <PackageSearch className="h-6 w-6 text-orange-500" />,
+    corIcone: 'bg-orange-500/10',
+  },
+  {
     to: '/remuneracao-variavel/matriz',
     pagina: 'rv_matriz',
     titulo: 'Matriz',
     descricao: 'Todas as lideranças dos 6 setores numa lista só, com o valor final a receber no mês — exportável em Excel.',
     icone: <Table2 className="h-6 w-6 text-indigo-500" />,
     corIcone: 'bg-indigo-500/10',
+  },
+  {
+    to: '/remuneracao-variavel/metas',
+    adminOnly: true,
+    titulo: 'Metas',
+    descricao: 'Cadastro de pesos e metas de cada setor, usados no cálculo da RV — Gente, Financeiro, Frota, Segurança, Distribuição e Armazém.',
+    icone: <Target className="h-6 w-6 text-slate-500" />,
+    corIcone: 'bg-slate-500/10',
   },
 ]
 
@@ -87,8 +106,10 @@ const SETORES: SetorCard[] = [
  * unidade só vê o card de Painel Geral, por exemplo.
  */
 export function RemuneracaoVariavelPage() {
-  const { podeAcessarPagina } = useAuth()
-  const setoresVisiveis = SETORES.filter(s => podeAcessarPagina(s.pagina))
+  const { role, podeAcessarPagina } = useAuth()
+  const setoresVisiveis = SETORES.filter(s =>
+    (!s.pagina || podeAcessarPagina(s.pagina)) && (!s.adminOnly || role === 'admin'),
+  )
 
   return (
     <div className="space-y-6">

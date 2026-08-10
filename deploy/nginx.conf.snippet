@@ -1,0 +1,18 @@
+# Nginx — cole isso dentro do seu server { ... } existente (ou peça pro
+# pessoal de infra colar), apontando root pra pasta onde o conteúdo de
+# dist/ foi extraído no servidor.
+
+server {
+    listen 80;
+    server_name SEU-DOMINIO-OU-IP;
+
+    root /caminho/no/servidor/panorama-financeiro;
+    index index.html;
+
+    location / {
+        # SPA fallback: qualquer rota que não bate com um arquivo real
+        # (ex: /area-financeira/rotinas) cai de volta pro index.html —
+        # sem isso, dar F5 numa rota interna do app dá 404.
+        try_files $uri $uri/ /index.html;
+    }
+}

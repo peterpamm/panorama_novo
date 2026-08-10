@@ -14,11 +14,26 @@ export function useCopiarComoImagem(nomeArquivo = 'card') {
   async function copiar() {
     if (!ref.current || status === 'copiando') return
     setStatus('copiando')
+
+    // A página rola dentro do <main> do AppShell (não a janela) — se o card
+    // estiver parcialmente fora da área visível (tabela comprida, precisou
+    // de scroll pra ver o final), o html-to-image mede/recorta errado e a
+    // imagem sai cortada pela metade. Zera o scroll antes de capturar (e
+    // devolve depois) pra sempre capturar o elemento inteiro.
+    const scrollContainer = ref.current.closest('main')
+    const scrollTopAnterior = scrollContainer?.scrollTop ?? 0
+    scrollContainer?.scrollTo({ top: 0 })
+    await new Promise(resolve => requestAnimationFrame(resolve))
+
     const isDark = document.documentElement.classList.contains('dark')
     const opcoes = {
       pixelRatio: 2,
       backgroundColor: isDark ? '#111827' : '#eef2f7',
       filter: (node: HTMLElement) => !('noPrint' in (node.dataset ?? {})),
+      // Força a captura no tamanho total do conteúdo (scrollWidth/Height),
+      // não só na área visível — mesma razão do reset de scroll acima.
+      width: ref.current.scrollWidth,
+      height: ref.current.scrollHeight,
     }
     try {
       const blob = await toBlob(ref.current, opcoes)
@@ -36,9 +51,11 @@ export function useCopiarComoImagem(nomeArquivo = 'card') {
         setStatus('copiado')
       } catch {
         setStatus('idle')
+        scrollContainer?.scrollTo({ top: scrollTopAnterior })
         return
       }
     }
+    scrollContainer?.scrollTo({ top: scrollTopAnterior })
     setTimeout(() => setStatus('idle'), 2000)
   }
 

@@ -24,10 +24,10 @@ const ANOS_IMPORT = (() => {
 
 /**
  * Importa o resultado mensal do indicador Excesso de Velocidade — planilha
- * de eventos (Placa, UO, Limiar, Excesso etc). O parser já conta quantos
- * eventos são excesso de verdade (EXCESSO > LIMIAR) por UO; aqui resolvemos
- * a UO pra unidade e aplicamos a exclusão: não vale pra ESTÂNCIA nem pra
- * Camaçari ARM (empurrada) — só a ROTA de Camaçari conta.
+ * de eventos (Placa, UO, Tipo etc). O parser já conta quantos eventos têm
+ * TIPO contendo "EXCESSO_VELOCIDADE" por UO; aqui resolvemos a UO pra
+ * unidade e aplicamos a exclusão: não vale pra ESTÂNCIA nem pra Camaçari ARM
+ * (empurrada) — só a ROTA de Camaçari conta.
  */
 export function ImportarResultadosExcessoVelocidade() {
   const { toast } = useToast()
@@ -110,8 +110,8 @@ export function ImportarResultadosExcessoVelocidade() {
       <h2 className="text-base font-semibold">Excesso de Velocidade — resultado mensal</h2>
       <p className="text-sm text-muted-foreground">
         Suba a planilha de eventos (Excel ou CSV), com as colunas{' '}
-        <span className="font-mono text-xs">UO · LIMIAR · EXCESSO</span>. Conta como excesso quando EXCESSO (velocidade
-        aferida) é maior que LIMIAR (limite da via) — soma por unidade. Não vale pra ESTÂNCIA nem pra Camaçari ARM.
+        <span className="font-mono text-xs">UO · TIPO</span>. Conta quantas linhas têm TIPO contendo
+        "EXCESSO_VELOCIDADE" — soma por unidade. Não vale pra ESTÂNCIA nem pra Camaçari ARM.
       </p>
 
       <div className="flex items-end gap-3">

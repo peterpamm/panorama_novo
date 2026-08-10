@@ -18,12 +18,17 @@ import { RvFrotaPage } from '@/pages/rv/RvFrotaPage'
 import { RvSegurancaPage } from '@/pages/rv/RvSegurancaPage'
 import { RvDistribuicaoPage } from '@/pages/rv/RvDistribuicaoPage'
 import { RvArmazemPage } from '@/pages/rv/RvArmazemPage'
+import { RvEmpurradaPage } from '@/pages/rv/RvEmpurradaPage'
 import { PainelGeralRvPage } from '@/pages/rv/PainelGeralRvPage'
 import { MatrizRvPage } from '@/pages/rv/MatrizRvPage'
 import { AreaFinanceiraPage } from '@/pages/AreaFinanceiraPage'
 import { RotinasFinanceirasPage } from '@/pages/financeira/RotinasFinanceirasPage'
 import { PlanoDeAcaoPage } from '@/pages/financeira/PlanoDeAcaoPage'
+import { EncontroDeContasPage } from '@/pages/financeira/EncontroDeContasPage'
+import { SdgFinanceiroGestaoPage } from '@/pages/financeira/SdgFinanceiroGestaoPage'
+import { SdgCorpFinGestaoPage } from '@/pages/financeira/SdgCorpFinGestaoPage'
 import { SdgFinanceiroPage } from '@/pages/SdgFinanceiroPage'
+import { SdgCorporativoPage } from '@/pages/SdgCorporativoPage'
 import { MetasGeraisPage } from '@/pages/metas/MetasGeraisPage'
 import { MetasPerdasPage } from '@/pages/metas/MetasPerdasPage'
 import { MetasGentePage } from '@/pages/metas/MetasGentePage'
@@ -32,8 +37,15 @@ import { MetasFrotaPage } from '@/pages/metas/MetasFrotaPage'
 import { MetasSegurancaPage } from '@/pages/metas/MetasSegurancaPage'
 import { MetasDistribuicaoPage } from '@/pages/metas/MetasDistribuicaoPage'
 import { MetasArmazemPage } from '@/pages/metas/MetasArmazemPage'
+import { MetasEmpurradaPage } from '@/pages/metas/MetasEmpurradaPage'
 import { ReuniaoResultadosPage } from '@/pages/ReuniaoResultadosPage'
 import { ReuniaoFinanceiroPage } from '@/pages/reuniao/ReuniaoFinanceiroPage'
+import { ReuniaoGentePage } from '@/pages/reuniao/ReuniaoGentePage'
+import { ReuniaoFrotaPage } from '@/pages/reuniao/ReuniaoFrotaPage'
+import { ReuniaoSegurancaPage } from '@/pages/reuniao/ReuniaoSegurancaPage'
+import { ReuniaoDistribuicaoPage } from '@/pages/reuniao/ReuniaoDistribuicaoPage'
+import { ReuniaoArmazemPage } from '@/pages/reuniao/ReuniaoArmazemPage'
+import { ReuniaoResumoGeralPage } from '@/pages/reuniao/ReuniaoResumoGeralPage'
 
 export default function App() {
   return (
@@ -48,6 +60,18 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <SdgFinanceiroPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* SDG Corporativo — apresentação pra diretoria, todas as unidades juntas. Só o dono do sistema acessa (ver ProtectedRoute donoApenas). Precisa do DataProvider (dados de todas as unidades), diferente do SDG Financeiro (uma unidade por vez, busca própria). */}
+          <Route
+            path="sdg-corporativo"
+            element={
+              <ProtectedRoute donoApenas>
+                <DataProvider>
+                  <SdgCorporativoPage />
+                </DataProvider>
               </ProtectedRoute>
             }
           />
@@ -73,8 +97,28 @@ export default function App() {
               <Route path="seguranca" element={<ProtectedRoute adminOnly pagina="rv_seguranca"><RvSegurancaPage /></ProtectedRoute>} />
               <Route path="distribuicao" element={<ProtectedRoute adminOnly pagina="rv_distribuicao"><RvDistribuicaoPage /></ProtectedRoute>} />
               <Route path="armazem" element={<ProtectedRoute adminOnly pagina="rv_armazem"><RvArmazemPage /></ProtectedRoute>} />
+              <Route path="empurrada" element={<ProtectedRoute adminOnly pagina="rv_empurrada"><RvEmpurradaPage /></ProtectedRoute>} />
               <Route path="painel-geral" element={<ProtectedRoute pagina="rv_painel_geral"><PainelGeralRvPage /></ProtectedRoute>} />
               <Route path="matriz" element={<ProtectedRoute adminOnly pagina="rv_matriz"><MatrizRvPage /></ProtectedRoute>} />
+              <Route
+                path="metas"
+                element={
+                  <ProtectedRoute adminOnly>
+                    <Outlet />
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<MetasPage />} />
+                <Route path="gerais" element={<ProtectedRoute pagina="metas_gerais"><MetasGeraisPage /></ProtectedRoute>} />
+                <Route path="perdas" element={<ProtectedRoute pagina="metas_perdas"><MetasPerdasPage /></ProtectedRoute>} />
+                <Route path="gente" element={<ProtectedRoute pagina="metas_gente"><MetasGentePage /></ProtectedRoute>} />
+                <Route path="financeiro" element={<ProtectedRoute pagina="metas_financeiro"><MetasFinanceiroPage /></ProtectedRoute>} />
+                <Route path="frota" element={<ProtectedRoute pagina="metas_frota"><MetasFrotaPage /></ProtectedRoute>} />
+                <Route path="seguranca" element={<ProtectedRoute pagina="metas_seguranca"><MetasSegurancaPage /></ProtectedRoute>} />
+                <Route path="distribuicao" element={<ProtectedRoute pagina="metas_distribuicao"><MetasDistribuicaoPage /></ProtectedRoute>} />
+                <Route path="armazem" element={<ProtectedRoute pagina="metas_armazem"><MetasArmazemPage /></ProtectedRoute>} />
+                <Route path="empurrada" element={<ProtectedRoute pagina="metas_empurrada"><MetasEmpurradaPage /></ProtectedRoute>} />
+              </Route>
             </Route>
             <Route
               path="area-financeira"
@@ -87,28 +131,19 @@ export default function App() {
               <Route index element={<AreaFinanceiraPage />} />
               <Route path="rotinas" element={<RotinasFinanceirasPage />} />
               <Route path="plano-de-acao" element={<PlanoDeAcaoPage />} />
-            </Route>
-            <Route
-              path="metas"
-              element={
-                <ProtectedRoute adminOnly>
-                  <Outlet />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<MetasPage />} />
-              <Route path="gerais" element={<ProtectedRoute pagina="metas_gerais"><MetasGeraisPage /></ProtectedRoute>} />
-              <Route path="perdas" element={<ProtectedRoute pagina="metas_perdas"><MetasPerdasPage /></ProtectedRoute>} />
-              <Route path="gente" element={<ProtectedRoute pagina="metas_gente"><MetasGentePage /></ProtectedRoute>} />
-              <Route path="financeiro" element={<ProtectedRoute pagina="metas_financeiro"><MetasFinanceiroPage /></ProtectedRoute>} />
-              <Route path="frota" element={<ProtectedRoute pagina="metas_frota"><MetasFrotaPage /></ProtectedRoute>} />
-              <Route path="seguranca" element={<ProtectedRoute pagina="metas_seguranca"><MetasSegurancaPage /></ProtectedRoute>} />
-              <Route path="distribuicao" element={<ProtectedRoute pagina="metas_distribuicao"><MetasDistribuicaoPage /></ProtectedRoute>} />
-              <Route path="armazem" element={<ProtectedRoute pagina="metas_armazem"><MetasArmazemPage /></ProtectedRoute>} />
+              <Route path="encontro-de-contas" element={<EncontroDeContasPage />} />
+              <Route path="sdg-financeiro" element={<SdgFinanceiroGestaoPage />} />
+              <Route path="sdg-corp-fin" element={<ProtectedRoute donoApenas><SdgCorpFinGestaoPage /></ProtectedRoute>} />
             </Route>
             <Route path="reuniao-resultados">
               <Route index element={<ReuniaoResultadosPage />} />
               <Route path="financeiro" element={<ProtectedRoute adminOnly pagina="reuniao_financeiro"><ReuniaoFinanceiroPage /></ProtectedRoute>} />
+              <Route path="gente" element={<ProtectedRoute adminOnly pagina="reuniao_gente"><ReuniaoGentePage /></ProtectedRoute>} />
+              <Route path="frota" element={<ProtectedRoute adminOnly pagina="reuniao_frota"><ReuniaoFrotaPage /></ProtectedRoute>} />
+              <Route path="seguranca" element={<ProtectedRoute adminOnly pagina="reuniao_seguranca"><ReuniaoSegurancaPage /></ProtectedRoute>} />
+              <Route path="distribuicao" element={<ProtectedRoute adminOnly pagina="reuniao_distribuicao"><ReuniaoDistribuicaoPage /></ProtectedRoute>} />
+              <Route path="armazem" element={<ProtectedRoute adminOnly pagina="reuniao_armazem"><ReuniaoArmazemPage /></ProtectedRoute>} />
+              <Route path="resumo-geral" element={<ProtectedRoute pagina="reuniao_resumo_geral"><ReuniaoResumoGeralPage /></ProtectedRoute>} />
             </Route>
             <Route
               path="importacao"

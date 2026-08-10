@@ -2,42 +2,25 @@ import { useMemo, useState } from 'react'
 import { IndicadorChart } from '@/components/farol/IndicadorChart'
 import { CapturaChart } from '@/components/farol/CapturaChart'
 import { PresentationCard } from '@/pages/sdg/PresentationCard'
+import { JustificativaEAcoesCard } from '@/pages/sdg/JustificativaEAcoesCard'
 import { useIndicadorSdg, type IndicadorSdgParams } from '@/pages/sdg/useIndicadorSdg'
 import { useContas } from '@/hooks/useContas'
+import { topContasFaixa } from '@/lib/top-contas'
 import { cn, formatCurrencyCompact } from '@/lib/utils'
-import type { DreCalculoRow } from '@/types'
+import type { PlanoAcao, SdgJustificativa } from '@/types'
 
 const CODIGO = '190'
 /** Faixa das subcontas do pacote Despesas ADM Gerais (a linha 190 é o total do pacote). */
 const CONTA_INI = 191
 const CONTA_FIM = 227
-const TOP_N = 10
 
-interface LinhaTopConta {
-  codigo: string
-  realizado: number
-  gap: number
+interface Props extends Omit<IndicadorSdgParams, 'codigo'> {
+  justificativa: SdgJustificativa | undefined
+  acoesRelacionadas: PlanoAcao[]
 }
 
-/** Agrega a faixa 191–227 por conta e retorna as TOP_N com pior gap (dif mais negativa primeiro). */
-function topContas(rows: DreCalculoRow[]): LinhaTopConta[] {
-  const porConta = new Map<string, LinhaTopConta>()
-  for (const r of rows) {
-    const num = Number(r.conta_codigo)
-    if (!Number.isInteger(num) || num < CONTA_INI || num > CONTA_FIM) continue
-    const atual = porConta.get(r.conta_codigo) ?? { codigo: r.conta_codigo, realizado: 0, gap: 0 }
-    atual.realizado += r.real
-    atual.gap += r.dif
-    porConta.set(r.conta_codigo, atual)
-  }
-  return Array.from(porConta.values())
-    .filter(c => c.realizado !== 0 || c.gap !== 0)
-    .sort((a, b) => a.gap - b.gap)
-    .slice(0, TOP_N)
-}
-
-export function Slide03AdmGeral(props: Omit<IndicadorSdgParams, 'codigo'>) {
-  const { ano, mes, mesAcumMax } = props
+export function Slide03AdmGeral(props: Props) {
+  const { ano, mes, mesAcumMax, justificativa, acoesRelacionadas } = props
   const { info, calcMensal, calcYtd, mensal, ytd, serieAnual, serieCaptura } =
     useIndicadorSdg({ ...props, codigo: CODIGO })
   const { contas } = useContas()
@@ -46,61 +29,64 @@ export function Slide03AdmGeral(props: Omit<IndicadorSdgParams, 'codigo'>) {
   const nomesPorCodigo = useMemo(() => new Map(contas.map(c => [c.codigo, c.descricao])), [contas])
 
   const linhas = useMemo(
-    () => topContas(periodoTabela === 'mensal' ? calcMensal : calcYtd),
+    () => topContasFaixa(periodoTabela === 'mensal' ? calcMensal : calcYtd, CONTA_INI, CONTA_FIM),
     [periodoTabela, calcMensal, calcYtd],
   )
 
   return (
-    <div className="flex h-full flex-col gap-5 p-6">
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-4">
-        <PresentationCard
-          nome={info.nome}
-          periodo={`Mensal — M${mes}`}
-          avr={mensal.avr}
-          meta={mensal.meta}
-          impacto={mensal.impacto}
-          semaforo={mensal.semaforo}
-        />
-        <PresentationCard
-          nome={info.nome}
-          periodo={`YTD — M${mesAcumMax ?? mes}`}
-          avr={ytd.avr}
-          meta={ytd.meta}
-          impacto={ytd.impacto}
-          semaforo={ytd.semaforo}
-        />
-      </div>
+    <div className="h-full overflow-y-auto">
+      <div className="flex flex-col gap-5 p-6">
+        {/* KPI cards */}
+        <div className="grid grid-cols-2 gap-4">
+          <PresentationCard
+            nome={info.nome}
+            periodo={`Mensal — M${mes}`}
+            avr={mensal.avr}
+            meta={mensal.meta}
+            impacto={mensal.impacto}
+            semaforo={mensal.semaforo}
+          />
+          <PresentationCard
+            nome={info.nome}
+            periodo={`YTD — M${mesAcumMax ?? mes}`}
+            avr={ytd.avr}
+            meta={ytd.meta}
+            impacto={ytd.impacto}
+            semaforo={ytd.semaforo}
+          />
+        </div>
 
-      {/* Gráficos + top contas */}
-      <div className="grid flex-1 grid-cols-3 gap-4 min-h-0">
-        <div className="flex flex-col rounded-2xl bg-white shadow dark:bg-slate-800/60 p-5">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-400">
-            Acompanhamento Mensal — {ano}
-          </p>
-          <div className="flex-1 min-h-0">
-            <IndicadorChart
-              serie={serieAnual}
-              gradientId={`sdg-${CODIGO}-mensal`}
-              natureza={info.natureza}
-              nomeSerie="Realizado"
-            />
+        {/* Gráficos */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col rounded-2xl bg-white shadow dark:bg-slate-800/60 p-5">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-400">
+              Acompanhamento Mensal — {ano}
+            </p>
+            <div className="h-[280px]">
+              <IndicadorChart
+                serie={serieAnual}
+                gradientId={`sdg-${CODIGO}-mensal`}
+                natureza={info.natureza}
+                nomeSerie="Realizado"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col rounded-2xl bg-white shadow dark:bg-slate-800/60 p-5">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-400">
+              Curva de Captura da Meta
+            </p>
+            <div className="h-[280px]">
+              <CapturaChart
+                serie={serieCaptura}
+                natureza={info.natureza}
+                nomeSerie="Realizado"
+              />
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-col rounded-2xl bg-white shadow dark:bg-slate-800/60 p-5">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-400">
-            Curva de Captura da Meta
-          </p>
-          <div className="flex-1 min-h-0">
-            <CapturaChart
-              serie={serieCaptura}
-              natureza={info.natureza}
-              nomeSerie="Realizado"
-            />
-          </div>
-        </div>
-
+        {/* Top contas */}
         <div className="flex flex-col overflow-hidden rounded-2xl bg-white shadow dark:bg-slate-800/60 p-5">
           <div className="mb-3 flex items-center justify-between gap-2">
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-400">
@@ -125,11 +111,11 @@ export function Slide03AdmGeral(props: Omit<IndicadorSdgParams, 'codigo'>) {
           </div>
 
           {linhas.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center text-sm text-gray-400 dark:text-slate-500">
+            <div className="flex h-[220px] items-center justify-center text-sm text-gray-400 dark:text-slate-500">
               Sem dados na faixa de contas.
             </div>
           ) : (
-            <div className="flex-1 min-h-0 overflow-y-auto">
+            <div className="max-h-[320px] overflow-y-auto">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-white dark:bg-slate-800">
                   <tr className="border-b border-gray-200 text-left text-xs text-gray-400 dark:border-slate-700 dark:text-slate-500">
@@ -161,6 +147,8 @@ export function Slide03AdmGeral(props: Omit<IndicadorSdgParams, 'codigo'>) {
             </div>
           )}
         </div>
+
+        <JustificativaEAcoesCard justificativa={justificativa} acoes={acoesRelacionadas} />
       </div>
     </div>
   )

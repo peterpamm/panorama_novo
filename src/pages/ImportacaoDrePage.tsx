@@ -11,7 +11,6 @@ import { PastaDropzone } from '@/components/importacao/PastaDropzone'
 import { ResolverUnidadesPanel } from '@/components/importacao/ResolverUnidadesPanel'
 import { RelatorioAlteracoes } from '@/components/importacao/RelatorioAlteracoes'
 import { ImportarPainelPerdasAuxDialog } from '@/components/importacao/ImportarPainelPerdasAuxDialog'
-import { ImportarMetasPerdasDialog } from '@/components/metas/ImportarMetasPerdasDialog'
 import { ImportacaoGentePanel } from '@/components/importacao/ImportacaoGentePanel'
 import { ImportarResultadosDtoT2 } from '@/components/importacao/ImportarResultadosDtoT2'
 import { ImportarResultadosDtoT1 } from '@/components/importacao/ImportarResultadosDtoT1'
@@ -403,7 +402,6 @@ export function ImportacaoDrePage() {
               <h2 className="text-base font-semibold">Dados auxiliares</h2>
               <p className="text-sm text-muted-foreground">Importações independentes do DRE.</p>
               <div className="flex flex-wrap gap-3">
-                <ImportarMetasPerdasDialog unidades={unidadesState} onImportado={() => {}} />
                 <ImportarPainelPerdasAuxDialog unidades={unidadesState} onImportado={() => {}} />
               </div>
             </div>

@@ -1,11 +1,10 @@
 import * as XLSX from 'xlsx'
-import { parseNumeroPtBr } from '@/lib/utils'
 
 /** Contagem agregada de excessos de velocidade de uma unidade (UO), linha por linha (cada linha = 1 veículo/evento). */
 export interface ExcessoVelocidadeUnidadeAgregado {
   /** Texto de "UO" como veio na planilha (ex: "CD FRANCISCO BELTRÃO - LOG20"). */
   uo: string
-  /** Quantidade de linhas onde EXCESSO (velocidade aferida) > LIMIAR (limite da via). */
+  /** Quantidade de linhas onde TIPO contém "EXCESSO_VELOCIDADE". */
   totalExcessos: number
 }
 
@@ -22,37 +21,26 @@ function toStr(v: unknown): string {
   return String(v ?? '').trim()
 }
 
-/** "43 Km/h" → 43; aceita número puro também. */
-function parseVelocidade(raw: unknown): number | null {
-  if (typeof raw === 'number') return raw
-  const str = toStr(raw).replace(/km\/?h/i, '').trim()
-  if (str === '') return null
-  const n = parseNumeroPtBr(str)
-  return Number.isNaN(n) ? null : n
-}
-
 /**
  * Planilha de excessos de velocidade (várias colunas — placa, prefixo,
- * motorista, CPF etc — usamos só UO, LIMIAR e EXCESSO). Cada linha é um
- * evento; conta como excesso quando a velocidade aferida (EXCESSO) é maior
- * que o limite da via (LIMIAR). Agregamos a contagem por unidade (UO) — a
- * exclusão de ESTÂNCIA/Camaçari ARM é feita depois, na importação (que
- * resolve a UO pra unidade de verdade e sabe o negócio).
+ * motorista, CPF etc — usamos só UO e TIPO). Cada linha é um evento; conta
+ * como excesso quando TIPO contém "EXCESSO_VELOCIDADE". Agregamos a
+ * contagem por unidade (UO) — a exclusão de ESTÂNCIA/Camaçari ARM é feita
+ * depois, na importação (que resolve a UO pra unidade de verdade e sabe o
+ * negócio).
  */
 function parseMatriz(matriz: unknown[][]): ParseExcessoVelocidadeResultado {
   if (matriz.length === 0) return { agregados: [], erros: [] }
 
   const header = matriz[0].map(c => normalizar(toStr(c)))
   const iUo = header.findIndex(h => h === 'UO')
-  const iLimiar = header.findIndex(h => h.startsWith('LIMIAR'))
-  const iExcesso = header.findIndex(h => h.startsWith('EXCESSO'))
+  const iTipo = header.findIndex(h => h === 'TIPO')
 
-  if (iUo === -1 || iLimiar === -1 || iExcesso === -1) {
-    return { agregados: [], erros: ['Cabeçalho inválido — esperado colunas UO, LIMIAR e EXCESSO'] }
+  if (iUo === -1 || iTipo === -1) {
+    return { agregados: [], erros: ['Cabeçalho inválido — esperado colunas UO e TIPO'] }
   }
 
   const porUo = new Map<string, number>()
-  const erros: string[] = []
 
   for (let i = 1; i < matriz.length; i++) {
     const cols = matriz[i]
@@ -61,20 +49,13 @@ function parseMatriz(matriz: unknown[][]): ParseExcessoVelocidadeResultado {
     const uo = toStr(cols[iUo]).toUpperCase()
     if (!uo) continue
 
-    const limiar = parseVelocidade(cols[iLimiar])
-    const excesso = parseVelocidade(cols[iExcesso])
-    if (limiar === null || excesso === null) {
-      erros.push(`Linha ${i + 1}: LIMIAR/EXCESSO inválido para "${uo}"`)
-      continue
-    }
-
-    if (excesso > limiar) porUo.set(uo, (porUo.get(uo) ?? 0) + 1)
+    if (normalizar(toStr(cols[iTipo])).includes('EXCESSO_VELOCIDADE')) porUo.set(uo, (porUo.get(uo) ?? 0) + 1)
   }
 
   const agregados: ExcessoVelocidadeUnidadeAgregado[] = Array.from(porUo.entries())
     .map(([uo, totalExcessos]) => ({ uo, totalExcessos }))
 
-  return { agregados, erros }
+  return { agregados, erros: [] }
 }
 
 /** Lê o CSV (separador ; ou tab). */

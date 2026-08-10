@@ -3,12 +3,12 @@ import { ChevronLeft } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { MetasGeraisTab } from '@/components/metas/MetasGeraisTab'
 
-/** Subpágina Metas Gerais — /metas/gerais. */
+/** Subpágina Metas Gerais — /remuneracao-variavel/metas/gerais. */
 export function MetasGeraisPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
-        <Link to="/metas" className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground">
+        <Link to="/remuneracao-variavel/metas" className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground">
           <ChevronLeft className="h-4 w-4" />
           Metas
         </Link>

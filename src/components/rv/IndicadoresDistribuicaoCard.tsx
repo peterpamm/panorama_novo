@@ -5,6 +5,7 @@ import { useUnidades } from '@/hooks/useUnidades'
 import { useDreLongoTodasUnidades } from '@/hooks/useDreLongoTodasUnidades'
 import { useOrcamentoTodasUnidades } from '@/hooks/useOrcamentoTodasUnidades'
 import { RV_DISTRIBUICAO_DRE } from '@/lib/constants'
+import { unidadeSplitNegocio } from '@/lib/rv-gente'
 import { avrPorPrefixo, normalizarParaCalculo } from '@/lib/farol-calculations'
 import { buscarMetaOrcamento } from '@/lib/orcamento-farol'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -69,9 +70,10 @@ const NEGOCIO_PACOTE_GENTE = INDICADOR_PACOTE_GENTE.negocio ?? 'ROTA'
 /**
  * Acompanhamento dos indicadores de RV da Distribuição — Indisponibilidade
  * (mesmo dado do Painel de Perdas, sem split de negócio), Pacote de Gente
- * (158, contas 158+033, origem no DRE, AVR vs meta do Orçamento — sempre o
- * resultado do negócio ROTA, a mesma regra da apuração, já que é a RV da
- * liderança da rota/distribuição), e LogOn DU / Devolução / Presenteísmo DU
+ * (158, contas 158+033, origem no DRE, AVR vs meta do Orçamento — negócio
+ * ROTA nas unidades com split de verdade tipo Camaçari/Ponta Grossa, CONS
+ * nas demais que só têm rota e importam o DRE inteiro assim, mesma regra da
+ * apuração), e LogOn DU / Devolução / Presenteísmo DU
  * (planilha compartilhada do BI, filtrada por indicador — mesmos dados e
  * mesma regra da apuração). Um seletor alterna entre eles. Vales tem card
  * próprio (ValesPerdasCard), reaproveitado também pelo Financeiro.
@@ -177,11 +179,19 @@ export function IndicadoresDistribuicaoCard() {
 
   const linhasPacoteGente = useMemo<LinhaPacoteGente[]>(() => {
     const anoNum = Number(ano)
-    // Sempre o negócio ROTA — é a RV da liderança da rota/distribuição, não o consolidado da unidade.
-    const mensal = rowsDre.filter(r => r.tipo_periodo === 'MENSAL' && r.ano === anoNum && r.negocio === NEGOCIO_PACOTE_GENTE)
-    if (!anoNum || mensal.length === 0) return []
+    const mensalTodas = rowsDre.filter(r => r.tipo_periodo === 'MENSAL' && r.ano === anoNum)
+    if (!anoNum || mensalTodas.length === 0) return []
 
-    const codigosUnidades = Array.from(new Set(mensal.map(r => r.unidade)))
+    // Unidades com split de verdade (Camaçari, Ponta Grossa — rota e armazém
+    // importados separados) usam sempre o negócio ROTA do indicador; as
+    // demais (só rota, sem armazém — ex: São Cristóvão) importam o DRE
+    // inteiro como CONS, nunca como ROTA — aí CONS já É a rota.
+    const negocioDaUnidade = (codigo: string) =>
+      unidadeSplitNegocio(codigo, nomesUnidades.get(codigo) ?? codigo) ? NEGOCIO_PACOTE_GENTE : 'CONS'
+
+    const codigosUnidades = Array.from(new Set(
+      mensalTodas.filter(r => r.negocio === negocioDaUnidade(r.unidade)).map(r => r.unidade),
+    ))
       .sort((a, b) => {
         if (a === 'AMBEV') return 1
         if (b === 'AMBEV') return -1
@@ -189,7 +199,8 @@ export function IndicadoresDistribuicaoCard() {
       })
 
     return codigosUnidades.map(unidade => {
-      const rowsUnidade = mensal.filter(r => r.unidade === unidade)
+      const negocioUnidade = negocioDaUnidade(unidade)
+      const rowsUnidade = mensalTodas.filter(r => r.unidade === unidade && r.negocio === negocioUnidade)
       const meses = Array.from({ length: 12 }, (_, i) => {
         const mes = i + 1
         const rowsMes = rowsUnidade.filter(r => r.mes === mes)
@@ -197,7 +208,7 @@ export function IndicadoresDistribuicaoCard() {
         const calc = normalizarParaCalculo(rowsMes)
         const avr = avrPorPrefixo(calc, INDICADOR_PACOTE_GENTE.prefixos)
         const meta = buscarMetaOrcamento(orcamentos, {
-          unidade, negocio: NEGOCIO_PACOTE_GENTE, ano: anoNum, codigo: INDICADOR_PACOTE_GENTE.id, mes,
+          unidade, negocio: negocioUnidade, ano: anoNum, codigo: INDICADOR_PACOTE_GENTE.id, mes,
         })
         return { avr, meta }
       })
@@ -345,7 +356,7 @@ export function IndicadoresDistribuicaoCard() {
           titulo={INDICADOR_PACOTE_GENTE.nome}
           subtitulo={carregando
             ? 'Carregando...'
-            : `${ano} · AVR das contas 158+033 (negócio ROTA) vs meta do Orçamento · quanto menor melhor · só conta pra lideranças da ROTA na apuração`}
+            : `${ano} · AVR das contas 158+033 (negócio ROTA, ou CONS nas unidades sem split) vs meta do Orçamento · quanto menor melhor · só conta pra lideranças da ROTA na apuração`}
         >
           {carregando ? (
             <div className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground">

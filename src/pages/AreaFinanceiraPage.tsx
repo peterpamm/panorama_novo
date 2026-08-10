@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { ChevronRight, ClipboardCheck, ListChecks } from 'lucide-react'
+import { ChevronRight, ClipboardCheck, ListChecks, MonitorPlay, Presentation, Receipt } from 'lucide-react'
+import { useAuth } from '@/context/AuthContext'
 import { Toaster } from '@/components/ui/toaster'
 
 interface SubpaginaCard {
@@ -8,6 +9,8 @@ interface SubpaginaCard {
   descricao: string
   icone: React.ReactNode
   corIcone: string
+  /** Só o dono do sistema vê — mesma trava da rota (ver App.tsx). */
+  donoApenas?: boolean
 }
 
 const SUBPAGINAS: SubpaginaCard[] = [
@@ -25,6 +28,28 @@ const SUBPAGINAS: SubpaginaCard[] = [
     icone: <ClipboardCheck className="h-6 w-6 text-emerald-500" />,
     corIcone: 'bg-emerald-500/10',
   },
+  {
+    to: '/area-financeira/encontro-de-contas',
+    titulo: 'Encontro de Contas',
+    descricao: 'Descontos (ECs) lançados pela Ambev — importação, tratativa por unidade e validação do financeiro.',
+    icone: <Receipt className="h-6 w-6 text-violet-500" />,
+    corIcone: 'bg-violet-500/10',
+  },
+  {
+    to: '/area-financeira/sdg-financeiro',
+    titulo: 'SDG Financeiro',
+    descricao: 'Justificativa do mês (Pontos Positivos/Negativos) por indicador — exibida no modo apresentação (SDG Financeiro).',
+    icone: <MonitorPlay className="h-6 w-6 text-amber-500" />,
+    corIcone: 'bg-amber-500/10',
+  },
+  {
+    to: '/area-financeira/sdg-corp-fin',
+    titulo: 'SDG Corp Fin',
+    descricao: 'Assuntos Gerais e Lucro pra apresentação corporativa (SDG Corporativo, diretoria) — só o dono acessa.',
+    icone: <Presentation className="h-6 w-6 text-indigo-500" />,
+    corIcone: 'bg-indigo-500/10',
+    donoApenas: true,
+  },
 ]
 
 /**
@@ -33,6 +58,9 @@ const SUBPAGINAS: SubpaginaCard[] = [
  * no sidebar dentro de "Área Financeira" (ver navItems em Sidebar.tsx).
  */
 export function AreaFinanceiraPage() {
+  const { souDono } = useAuth()
+  const subpaginasVisiveis = SUBPAGINAS.filter(s => !s.donoApenas || souDono)
+
   return (
     <div className="space-y-6">
       <p className="max-w-2xl text-sm text-muted-foreground">
@@ -40,7 +68,7 @@ export function AreaFinanceiraPage() {
       </p>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {SUBPAGINAS.map(s => (
+        {subpaginasVisiveis.map(s => (
           <Link
             key={s.to}
             to={s.to}

@@ -9,7 +9,7 @@ export interface ParseRvLiderancasResultado {
   erros: string[]
 }
 
-const COLUNAS_ESPERADAS = ['operacao', 'negocio', 'setor', 'funcao', 'nome', 'valor']
+const COLUNAS_ESPERADAS = ['matricula', 'operacao', 'negocio', 'setor', 'funcao', 'nome', 'valor']
 
 function normalizar(texto: string): string {
   return texto.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -37,9 +37,9 @@ function parseMatriz(matriz: unknown[][]): ParseRvLiderancasResultado {
   const header = matriz[0].map(c => normalizar(toStr(c)))
   const indices = COLUNAS_ESPERADAS.map(c => header.indexOf(c))
   if (indices.some(i => i === -1)) {
-    return { linhas: [], erros: ['Cabeçalho inválido — esperado: OPERAÇÃO;NEGOCIO;SETOR;FUNÇÃO;NOME;VALOR'] }
+    return { linhas: [], erros: ['Cabeçalho inválido — esperado: MATRICULA;OPERAÇÃO;NEGOCIO;SETOR;FUNÇÃO;NOME;VALOR'] }
   }
-  const [iOperacao, iNegocio, iSetor, iFuncao, iNome, iValor] = indices
+  const [iMatricula, iOperacao, iNegocio, iSetor, iFuncao, iNome, iValor] = indices
 
   const porNome = new Map<string, ParsedRvLiderancaRow>()
   const erros: string[] = []
@@ -49,6 +49,8 @@ function parseMatriz(matriz: unknown[][]): ParseRvLiderancasResultado {
     // Pula linhas totalmente vazias (comum em export de Excel)
     if (cols.every(c => toStr(c) === '')) continue
 
+    const matriculaTexto = toStr(cols[iMatricula])
+    const matricula = matriculaTexto === '' ? null : matriculaTexto
     const operacao = toStr(cols[iOperacao]).toUpperCase()
     const negocio = toStr(cols[iNegocio]).toUpperCase()
     const setor = toStr(cols[iSetor]).toUpperCase()
@@ -65,7 +67,7 @@ function parseMatriz(matriz: unknown[][]): ParseRvLiderancasResultado {
       continue
     }
 
-    porNome.set(nome, { operacao, negocio, setor, funcao, nome, valor })
+    porNome.set(nome, { matricula, operacao, negocio, setor, funcao, nome, valor })
   }
 
   return { linhas: Array.from(porNome.values()), erros }

@@ -48,6 +48,8 @@ export const MES_ABREV: Record<number, string> = {
 
 export const COR_AVR = '#4f46e5'
 export const COR_META = '#94a3b8'
+/** Meta em destaque (amarelo) — usada quando a linha de meta precisa chamar mais atenção que o cinza neutro padrão (ex: SDG Corporativo). */
+export const COR_META_DESTAQUE = '#eab308'
 // Mesmos tons dos cards (emerald-500 / red-500, ver CORES_FAROL) — ficam bem no light e no dark.
 export const COR_POSITIVO = '#10b981'
 export const COR_NEGATIVO = '#ef4444'

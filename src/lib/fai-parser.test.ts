@@ -51,4 +51,33 @@ describe('parseFaiCsv', () => {
   it('retorna vazio para arquivo vazio', () => {
     expect(parseFaiCsv('')).toEqual({ agregados: [], erros: [] })
   })
+
+  it('layout novo (Operação/Classificação de Incidentes) conta FAI puro e por extenso', () => {
+    const texto = [
+      'Operação;Mês;Classificação de Incidentes',
+      'ESTÂNCIA;JULHO;FAI',
+      'ESTÂNCIA;JULHO;FAI - Primeiro Atendimento Ambulatorial',
+      'CDR BAHIA;JUNHO;FAI - Primeiro Atendimento Ambulatorial',
+      'CDD LONDRINA;JUNHO;FAI',
+    ].join('\n')
+    const { agregados, erros } = parseFaiCsv(texto)
+    expect(erros).toEqual([])
+    expect(agregados).toEqual([
+      { filial: 'ESTÂNCIA', totalFai: 2 },
+      { filial: 'CDR BAHIA', totalFai: 1 },
+    ])
+  })
+
+  it('layout novo ignora classificações que não contêm FAI', () => {
+    const texto = [
+      'Operação;Mês;Classificação de Incidentes',
+      'ESTÂNCIA;JULHO;Quase Acidente',
+      'ESTÂNCIA;JULHO;FAI',
+    ].join('\n')
+    const { agregados } = parseFaiCsv(texto)
+    expect(agregados).toEqual([
+      { filial: 'ESTÂNCIA', totalFai: 1 },
+      { filial: 'CDR BAHIA', totalFai: 0 },
+    ])
+  })
 })

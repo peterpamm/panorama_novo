@@ -8,6 +8,8 @@ interface AuthContextValue {
   user: User | null
   role: 'admin' | 'unidade' | null
   unidade: string | null
+  /** Restringe o Painel Geral da RV ao negócio da própria liderança (ROTA/ARM) — só usado quando uma unidade tem 2 gerentes (ex: Camaçari: CDL/rota e CDR/armazém), pra um não ver quanto o outro recebe. null = vê todos os negócios da unidade. */
+  rvNegocio: string | null
   /** Flag ortogonal ao `role` — só o dono do sistema tem `true` (concedido via SQL, ver migration_065). */
   souDono: boolean
   /** `false` até a primeira busca de `permissoes_paginas` terminar — evita `ProtectedRoute` redirecionar cedo demais. */
@@ -39,9 +41,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const user = session?.user ?? null
-  const meta = user?.user_metadata ?? {}
+  // `app_metadata` (não `user_metadata`) — só o dono consegue escrever nesse
+  // campo (via SQL Editor/Admin API), o próprio usuário logado não. Usar
+  // `user_metadata` aqui permitiria qualquer login se autopromover a
+  // admin/dono chamando a API padrão de troca de perfil do Supabase (ver
+  // migration_089_auth_app_metadata.sql).
+  const meta = user?.app_metadata ?? {}
   const role = (meta.role as 'admin' | 'unidade') ?? null
   const unidade = (meta.unidade as string) ?? null
+  const rvNegocio = (meta.rv_negocio as string) ?? null
   const souDono = meta.dono === true
 
   const [paginasPermitidas, setPaginasPermitidas] = useState<Set<PaginaChave>>(new Set())
@@ -82,7 +90,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      session, user, role, unidade, souDono, permissoesCarregadas, podeAcessarPagina, loading, signIn, signOut,
+      session, user, role, unidade, rvNegocio, souDono, permissoesCarregadas, podeAcessarPagina, loading, signIn, signOut,
     }}>
       {children}
     </AuthContext.Provider>

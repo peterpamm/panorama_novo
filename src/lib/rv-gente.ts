@@ -19,6 +19,24 @@ export function unidadeSplitNegocio(codigo: string, nome: string): boolean {
   return norm.includes('PONTA GROSSA') || norm.includes('CAMACARI') || norm.includes('CAMACAR')
 }
 
+/**
+ * As duas opções de negócio de uma unidade com split (ver
+ * `unidadeSplitNegocio`) — Camaçari é Rota+Armazém (DRE importado como
+ * ROTA/ARMAZEM); Ponta Grossa é Empurrada+Armazém (nunca teve DRE importado
+ * como ROTA, só CONSOLIDADO/ARMAZEM/EMPURRADA — ver TIPO_PARA_NEGOCIO em
+ * dre-filename-parser.ts). Usado no seletor "de qual negócio é esse
+ * usuário" (Administração > Usuários) — escolher o valor errado deixa o
+ * Painel Geral da RV sem nenhum dado pra essa pessoa, já que o negócio dela
+ * nunca bate com nenhuma linha do DRE.
+ */
+export function opcoesNegocioSplit(codigo: string, nome: string): { valor: string; label: string }[] {
+  const norm = `${codigo} ${nome}`.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  const primeiraOpcao = norm.includes('PONTA GROSSA')
+    ? { valor: 'EMP', label: 'Empurrada' }
+    : { valor: 'ROTA', label: 'Rota' }
+  return [primeiraOpcao, { valor: 'ARM', label: 'Armazém' }]
+}
+
 function tokensSetor(setor: string): string[] {
   return setor.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^A-Z]+/)
 }
@@ -59,6 +77,12 @@ export function ehSetorDistribuicao(setor: string): boolean {
 export function ehSetorArmazem(setor: string): boolean {
   const tokens = tokensSetor(setor)
   return tokens.includes('ARMAZEM') || tokens.includes('ARM')
+}
+
+/** Setor de empurrada: aceita "EMPURRADA" ou "EMP" (mesmo prefixo usado em dre-filename-parser.ts, palavra inteira, sem acentos). */
+export function ehSetorEmpurrada(setor: string): boolean {
+  const tokens = tokensSetor(setor)
+  return tokens.includes('EMPURRADA') || tokens.includes('EMP')
 }
 
 /**

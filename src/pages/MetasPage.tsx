@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ChevronRight, AlertTriangle, Users, Banknote, Truck, ShieldCheck, Target, Warehouse, Boxes } from 'lucide-react'
+import { ChevronLeft, ChevronRight, AlertTriangle, Users, Banknote, Truck, ShieldCheck, Target, Warehouse, Boxes, PackageSearch } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { useAuth } from '@/context/AuthContext'
 import type { PaginaChave } from '@/lib/permissoes'
@@ -15,7 +15,7 @@ interface SubpaginaCard {
 
 const SUBPAGINAS: SubpaginaCard[] = [
   {
-    to: '/metas/gerais',
+    to: '/remuneracao-variavel/metas/gerais',
     pagina: 'metas_gerais',
     titulo: 'Metas Gerais',
     descricao: 'Metas usadas só quando o período importado não traz AVO — arquivos antigos ou indicadores fora do plano de contas.',
@@ -23,7 +23,7 @@ const SUBPAGINAS: SubpaginaCard[] = [
     corIcone: 'bg-blue-500/10',
   },
   {
-    to: '/metas/perdas',
+    to: '/remuneracao-variavel/metas/perdas',
     pagina: 'metas_perdas',
     titulo: 'Metas de Perdas',
     descricao: 'Meta percentual e financeira anual por unidade — base do Painel de Perdas.',
@@ -31,7 +31,7 @@ const SUBPAGINAS: SubpaginaCard[] = [
     corIcone: 'bg-amber-500/10',
   },
   {
-    to: '/metas/gente',
+    to: '/remuneracao-variavel/metas/gente',
     pagina: 'metas_gente',
     titulo: 'Metas de Gente',
     descricao: 'Pesos dos indicadores do DRE e do BI, metas por operação/mês da RV de Gente.',
@@ -39,7 +39,7 @@ const SUBPAGINAS: SubpaginaCard[] = [
     corIcone: 'bg-purple-500/10',
   },
   {
-    to: '/metas/financeiro',
+    to: '/remuneracao-variavel/metas/financeiro',
     pagina: 'metas_financeiro',
     titulo: 'Metas do Financeiro',
     descricao: 'Metas de RV (pesos dos indicadores do DRE) e Metas de Resultado (ex: aderência das Rotinas Financeiras).',
@@ -47,7 +47,7 @@ const SUBPAGINAS: SubpaginaCard[] = [
     corIcone: 'bg-emerald-500/10',
   },
   {
-    to: '/metas/frota',
+    to: '/remuneracao-variavel/metas/frota',
     pagina: 'metas_frota',
     titulo: 'Metas de Frota',
     descricao: 'Pesos dos indicadores do DRE e metas de Desconto CIVF / Desconto Stress Test.',
@@ -55,7 +55,7 @@ const SUBPAGINAS: SubpaginaCard[] = [
     corIcone: 'bg-orange-500/10',
   },
   {
-    to: '/metas/seguranca',
+    to: '/remuneracao-variavel/metas/seguranca',
     pagina: 'metas_seguranca',
     titulo: 'Metas de Segurança',
     descricao: 'Pesos do DRE e metas de DTO T1/T2, GSD, LogOn, Excesso de Velocidade, FAI e TRI.',
@@ -63,7 +63,7 @@ const SUBPAGINAS: SubpaginaCard[] = [
     corIcone: 'bg-red-500/10',
   },
   {
-    to: '/metas/distribuicao',
+    to: '/remuneracao-variavel/metas/distribuicao',
     pagina: 'metas_distribuicao',
     titulo: 'Metas Distribuição',
     descricao: 'Meta (R$) e peso da Indisponibilidade — resultado vem da mesma planilha importada no Painel de Perdas.',
@@ -71,12 +71,20 @@ const SUBPAGINAS: SubpaginaCard[] = [
     corIcone: 'bg-cyan-500/10',
   },
   {
-    to: '/metas/armazem',
+    to: '/remuneracao-variavel/metas/armazem',
     pagina: 'metas_armazem',
     titulo: 'Metas de Armazém',
     descricao: 'Metas e pesos de Presenteísmo AL, EFC, TMA, Refugo e Quebras (T2) e do T1 (Estância/CDR Bahia).',
     icone: <Boxes className="h-6 w-6 text-teal-500" />,
     corIcone: 'bg-teal-500/10',
+  },
+  {
+    to: '/remuneracao-variavel/metas/empurrada',
+    pagina: 'metas_empurrada',
+    titulo: 'Metas de Empurrada',
+    descricao: 'Só Estância — meta/peso de Indisponibilidade e Avaria de Transporte, e peso de GTY, TMV e Tempo de Rendição.',
+    icone: <PackageSearch className="h-6 w-6 text-orange-500" />,
+    corIcone: 'bg-orange-500/10',
   },
 ]
 
@@ -91,6 +99,18 @@ export function MetasPage() {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <Link
+          to="/remuneracao-variavel"
+          className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Remuneração Variável
+        </Link>
+        <span className="text-muted-foreground/40">/</span>
+        <h2 className="text-base font-semibold text-foreground">Metas</h2>
+      </div>
+
       <p className="max-w-2xl text-sm text-muted-foreground">
         Cadastro de metas por área — cada uma vira uma subpágina aqui e no menu lateral.
       </p>

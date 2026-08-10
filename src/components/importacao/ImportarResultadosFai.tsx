@@ -94,10 +94,12 @@ export function ImportarResultadosFai() {
     <div className="max-w-xl space-y-3">
       <h2 className="text-base font-semibold">FAI — resultado mensal</h2>
       <p className="text-sm text-muted-foreground">
-        Suba a planilha de ocorrências (Excel ou CSV), com as colunas{' '}
-        <span className="font-mono text-xs">Filial</span> e{' '}
-        <span className="font-mono text-xs">Tipo</span>. Só ESTÂNCIA e CDR BAHIA se enquadram — qualquer outra unidade
-        no relatório é ignorada. Conta quantas linhas têm Tipo = "FAI" por unidade.
+        Suba a planilha de ocorrências (Excel ou CSV) — aceita os dois layouts que a Ambev já usou: colunas{' '}
+        <span className="font-mono text-xs">Filial</span>/<span className="font-mono text-xs">Tipo</span> (conta
+        Tipo = "FAI") ou <span className="font-mono text-xs">Operação</span>/
+        <span className="font-mono text-xs">Classificação de Incidentes</span> (conta qualquer texto que contenha
+        "FAI", inclusive "FAI - Primeiro Atendimento Ambulatorial"). Só ESTÂNCIA e CDR BAHIA se enquadram — qualquer
+        outra unidade no relatório é ignorada.
       </p>
 
       <div className="flex items-end gap-3">

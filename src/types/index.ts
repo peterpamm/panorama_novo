@@ -118,6 +118,8 @@ export interface AlteracaoRetroativa {
 /** RV (remuneração variável) por liderança — cadastro corrente, atualizado por upsert no nome. */
 export interface RvLideranca {
   id?: string
+  /** Matrícula da liderança — exigida pelo time de Matriz/Folha pra importar o valor de RV na folha de pagamento. */
+  matricula: string | null
   operacao: string
   /** ROTA / ARMAZEM / EMPURRADA etc — usado depois pra puxar o resultado separado do DRE. */
   negocio: string
@@ -391,15 +393,122 @@ export interface PlanoAcaoHistorico {
   created_at: string
 }
 
+/**
+ * Indicadores "de resultado" do SDG Financeiro (apresentação) — cada um com
+ * slide próprio, fora Encontro de Contas/Rotinas/Plano de Ação (esses já são
+ * o próprio acompanhamento). Vales abre em 4 slides (Financeiros/Físicos/
+ * Refugo/Quebras, cada um com sua Justificativa e ações) — o pacote geral
+ * ('vales') não mostra Justificativa própria, só cards/gráfico/ranking.
+ */
+export type SdgIndicador =
+  | 'ebitda' | 'adm-geral' | 'despesa-adm' | 'vales' | 'multas'
+  | 'vales-financeiros' | 'vales-fisicos' | 'refugo' | 'quebras'
+  | 'encontro-contas'
+  /** Slide final — texto livre (usa só `pontos_positivos`), sem ações do Plano de Ação vinculadas. */
+  | 'assuntos-gerais'
+
+/** Catálogo padrão de tags do Plano de Ação (Cadastro, admin-only) — substitui o texto livre de antes. `sdg_indicador` é opcional: quando setado, as ações com essa tag aparecem no slide daquele indicador no SDG. */
+export interface PlanoAcaoTag {
+  id: string
+  nome: string
+  ativo: boolean
+  ordem: number
+  sdg_indicador: SdgIndicador | null
+}
+
+/**
+ * Justificativa do mês de um indicador do SDG (Área Financeira > SDG
+ * Financeiro) — Pontos Positivos/Negativos em texto livre (uma ideia por
+ * linha), editados pela própria unidade (ou pelo admin em nome dela) antes da
+ * reunião, e só exibidos (read-only) no modo apresentação. Sem histórico —
+ * é só o apoio da fala, não um status auditado.
+ */
+export interface SdgJustificativa {
+  id: string
+  unidade: string
+  ano: number
+  mes: number
+  indicador: SdgIndicador
+  pontos_positivos: string
+  pontos_negativos: string
+  /** Caminho no bucket `sdg-prints` (Storage) do print anexado pela unidade — null = nenhum anexado. Sempre .jpg (recomprimido no upload, ver comprimirImagem). */
+  print_path: string | null
+  updated_by_email: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Status do EC (chamado de desconto da Ambev) — mesmo enum/fluxo do Plano de Ação: unidade avança até 'concluido', só admin valida. */
+export type EncontroContasStatus = 'pendente' | 'em_andamento' | 'concluido' | 'validado'
+
+/** Categoria cadastrável do motivo de um EC (Encontro de Contas > Tratativas — CRUD embutido no Select de Motivo). */
+export interface EncontroContasMotivo {
+  id: string
+  nome: string
+  ativo: boolean
+  ordem: number
+}
+
+/**
+ * EC (chamado de desconto da Ambev) — Encontro de Contas (Área Financeira).
+ * `unidade` fica null até alguém atribuir (a planilha importada não traz
+ * unidade); um EC de mais de uma unidade vira N linhas com o mesmo
+ * `numero_chamado` (ver "Desmembrar"). Status muda só via
+ * `registrar_status_encontro_contas` (RPC); `justificativa` muda só via
+ * `atualizar_justificativa_encontro_contas` (RPC, unidade só edita a
+ * própria) — os demais campos são admin-only, por UPDATE direto.
+ */
+export interface EncontroContas {
+  id: string
+  data: string // date (YYYY-MM-DD)
+  descricao_original: string
+  numero_chamado: string
+  solicitante: string
+  valor: number
+  unidade: string | null
+  tem_evidencia: boolean
+  motivo: string | null
+  justificativa: string
+  nota_debito: 'OK' | 'NOK' | 'N/A'
+  status: EncontroContasStatus
+  /** Setado pela RPC quando o status vira 'validado' — só existe aqui, o Plano de Ação não tem esse carimbo. */
+  validado_por_email: string | null
+  criado_por_email: string | null
+  criado_por_role: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Uma entrada do histórico de mudança de status de um EC. */
+export interface EncontroContasHistorico {
+  id: string
+  ec_id: string
+  status_anterior: EncontroContasStatus
+  status_novo: EncontroContasStatus
+  observacao: string
+  usuario_email: string | null
+  usuario_role: string | null
+  usuario_unidade: string | null
+  created_at: string
+}
+
 export type ReuniaoSetor = 'financeiro' | 'gente' | 'frota' | 'seguranca' | 'armazem' | 'distribuicao'
 export type ReuniaoFormato = 'percentual' | 'monetario' | 'duracao' | 'numero'
 /**
  * 'perdas' = indicador do Painel de Perdas (fonte_chave = key de
  * INDICADORES_PERDAS); 'farol_pacote' = pacote do Farol (fonte_chave =
  * código de PACOTES); 'rotinas' = % de aderência das Rotinas Financeiras
- * (Área Financeira > Rotinas) — sem fonte_chave, só existe uma métrica.
+ * (Área Financeira > Rotinas) — sem fonte_chave, só existe uma métrica;
+ * 'termometro' = planilha mensal importada (aba Importação), sem meta — a
+ * pontuação ganha é o próprio valor importado, capado no `pontos` cadastrado
+ * — sem fonte_chave. 'importado' = planilha padrão de Reunião Resultados
+ * (colunas Unidade/Indicador/Meta/Peso/Result/Pts — ver `Import_RR -
+ * Arm&DU.xlsx`), meta/resultado/pontos vêm todos prontos da planilha, por
+ * unidade — o app nunca calcula a pontuação desse fonte, só guarda o que
+ * foi importado (`reuniao_resultados_mensais.meta`/`.pontos`) — sem
+ * fonte_chave.
  */
-export type ReuniaoFonte = 'manual' | 'perdas' | 'farol_pacote' | 'rotinas'
+export type ReuniaoFonte = 'manual' | 'perdas' | 'farol_pacote' | 'rotinas' | 'termometro' | 'importado'
 
 /**
  * Indicador da Reunião Resultados (ranking mensal de pontos por setor, pra
@@ -416,7 +525,11 @@ export interface ReuniaoIndicador {
   setor: ReuniaoSetor
   ano: number
   nome: string
+  /** Rótulo alternativo pra unidades T1 (ex: nome="DEV PDV", nome_t1="GTY") — qualquer setor/fonte pode usar, opcional. null = mesmo nome pros dois. */
+  nome_t1: string | null
   meta: number | null
+  /** Só pra fonte 'perdas': quando preenchida, substitui a meta do Painel de Perdas (metas_perdas_indicadores/12) na apuração da Reunião — ex: meta combinada de 0 pra uma indicador que tem orçamento > 0. null = mantém a meta do Painel de Perdas. */
+  meta_fixa: number | null
   formato: ReuniaoFormato
   natureza: Natureza
   pontos: number
@@ -426,13 +539,66 @@ export interface ReuniaoIndicador {
   fonte_chave: string | null
 }
 
-/** Resultado mensal de um indicador da Reunião Resultados, por unidade — `resultado` null = ainda não lançado. */
+/**
+ * Resultado mensal de um indicador da Reunião Resultados, por unidade+negócio
+ * — `resultado` null = ainda não lançado. `negocio` é sempre 'CONS' exceto
+ * Camaçari fora do Financeiro, que abre em 'ROTA'/'ARM' (dois gerentes
+ * diferentes — ver `unidadesParticipaveis` em `reuniao-resultados.ts`).
+ * `meta`/`pontos` só são usados pela fonte 'importado' (planilha já traz os
+ * dois prontos) — as demais fontes deixam esses dois campos null.
+ */
 export interface ReuniaoResultadoMensal {
   id?: string
   indicador_id: string
   unidade: string
+  negocio: string
   mes: number
   resultado: number | null
+  meta: number | null
+  pontos: number | null
+}
+
+/** Setores que têm um Ranking Ambev próprio — cada um com colocação independente (ex: 1º no de Gente, 3º no de Frota). */
+export type ResumoGeralAmbevSetor = 'gente' | 'frota' | 'seguranca'
+
+/**
+ * Posição da unidade em UM dos 3 Rankings Ambev, lançada manualmente pelo
+ * admin — o bônus (1º=+50, 2º-5º=+30, resto=0) é calculado em código a
+ * partir da posição, somado os 3, não guardado aqui (ver
+ * `resumo-geral-calculations.ts`). `negocio` é 'CONS' pra quem não separa —
+ * só Camaçari varia (CDL/Rota e CDR/Armazém têm colocações diferentes entre
+ * si), mesma convenção do resto da Reunião Resultados.
+ */
+export interface ResumoGeralRankingAmbev {
+  id?: string
+  unidade: string
+  negocio: string
+  ano: number
+  mes: number
+  setor: ResumoGeralAmbevSetor
+  posicao: number
+}
+
+/**
+ * Acumulado de pontos de uma unidade até um mês de corte (`mes_final`, ex:
+ * até Junho), por setor — importado de planilha (Resumo Geral > Importação
+ * de Histórico: Unidade + uma coluna por setor; o mês de corte é escolhido
+ * na tela, não vem por linha; a coluna Total da planilha é só informativa,
+ * recalculada em código como a soma dos 6). No Ranking Anual (e no "YTD" do
+ * Ranking por Setor), cada setor vira a base e o cálculo ao vivo soma só os
+ * meses APÓS `mes_final` — nunca conta o mesmo mês duas vezes.
+ */
+export interface ResumoGeralHistorico {
+  id?: string
+  unidade: string
+  ano: number
+  mes_final: number
+  financeiro: number
+  gente: number
+  frota: number
+  seguranca: number
+  distribuicao: number
+  armazem: number
 }
 
 /** Registro de Indisponibilidade ou Devolução no Painel de Perdas (fonte AUX — não vem da DRE). */

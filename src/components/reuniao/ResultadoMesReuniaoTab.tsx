@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Loader2, Trophy } from 'lucide-react'
-import { useReuniaoDados, valorFarolPacoteUnidadeMes } from '@/hooks/useReuniaoDados'
+import { useReuniaoDados, valorFarolPacoteUnidadeMes, deltaFarolPacoteUnidadeMes } from '@/hooks/useReuniaoDados'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { TableCard } from '@/components/ui/table-card'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { atribuirRankComDesempate, calcularPontosGanhos, resolverNaturezaFormato } from '@/lib/reuniao-resultados'
+import { atribuirRankComDesempate, TERMOMETRO_LIMIAR_BOM } from '@/lib/reuniao-resultados'
 import { RankingTabelaPontos, type RankingLinhaPontos } from '@/components/ranking/RankingTabelas'
 import { mesAnterior } from '@/lib/rotinas-financeiras'
 import type { ReuniaoSetor } from '@/types'
@@ -32,20 +32,23 @@ export function ResultadoMesReuniaoTab({ setor }: ResultadoMesReuniaoTabProps) {
 
   const {
     carregando, indicadores, participantesPorIndicador,
-    resultadoEMeta, unidadesDoTotal, totalPorUnidadeMes, maiorPorMes, nomesUnidades, rowsDre,
+    pontosGanhos, unidadesDoTotal, totalPorUnidadeMes, maiorPorMes, nomesParticipaveis, rowsDre, orcamentos,
   } = useReuniaoDados(setor, ano)
 
-  const nomesUnidadeMap = useMemo(() => new Map(Object.entries(nomesUnidades)), [nomesUnidades])
+  const nomesUnidadeMap = useMemo(() => new Map(Object.entries(nomesParticipaveis)), [nomesParticipaveis])
 
   const linhasRanking = useMemo<RankingLinhaPontos[]>(() => {
-    const base = unidadesDoTotal.map(unidade => ({
-      unidade,
-      pontos: totalPorUnidadeMes[`${unidade}|${mesNum}`] ?? null,
-      ebitdaAvr: valorFarolPacoteUnidadeMes(rowsDre, '232', unidade, Number(ano), mesNum),
+    const base = unidadesDoTotal.map(({ unidade, negocio }) => ({
+      unidade: `${unidade}|${negocio}`,
+      pontos: totalPorUnidadeMes[`${unidade}|${negocio}|${mesNum}`] ?? null,
+      // ebitdaAvr só pra exibir (coluna/detalhe do pódio); o desempate em si
+      // usa o delta vs meta (ebitdaDelta), mesma régua do Ranking de EBITDA.
+      ebitdaAvr: valorFarolPacoteUnidadeMes(rowsDre, '232', unidade, Number(ano), mesNum, negocio),
+      ebitdaDelta: deltaFarolPacoteUnidadeMes(rowsDre, orcamentos, '232', unidade, Number(ano), mesNum, negocio),
       rank: null as number | null,
     }))
-    return atribuirRankComDesempate(base, l => l.pontos, l => l.ebitdaAvr)
-  }, [unidadesDoTotal, totalPorUnidadeMes, rowsDre, ano, mesNum])
+    return atribuirRankComDesempate(base, l => l.pontos, l => l.ebitdaDelta)
+  }, [unidadesDoTotal, totalPorUnidadeMes, rowsDre, orcamentos, ano, mesNum])
 
   return (
     <div className="space-y-6">
@@ -91,26 +94,24 @@ export function ResultadoMesReuniaoTab({ setor }: ResultadoMesReuniaoTabProps) {
                   <TableRow>
                     <TableHead className="sticky left-0 z-10 min-w-[160px] bg-inherit">Unidade</TableHead>
                     {indicadores.map(ind => (
-                      <TableHead key={ind.id} className="min-w-[140px] text-center">{ind.nome}</TableHead>
+                      <TableHead key={ind.id} className="min-w-[140px] text-center">{ind.nome_t1 ? `${ind.nome} / ${ind.nome_t1}` : ind.nome}</TableHead>
                     ))}
                     <TableHead className="min-w-[120px] border-l-2 border-primary/30 bg-primary/10 text-center font-bold">Total</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {unidadesDoTotal.map(unidadeCodigo => {
-                    const total = totalPorUnidadeMes[`${unidadeCodigo}|${mesNum}`] ?? null
+                  {unidadesDoTotal.map(p => {
+                    const total = totalPorUnidadeMes[`${p.unidade}|${p.negocio}|${mesNum}`] ?? null
                     const ehMelhor = total !== null && total === maiorPorMes[mesNum] && total > 0
                     return (
-                      <TableRow key={unidadeCodigo}>
-                        <TableCell className="sticky left-0 z-10 bg-inherit text-sm font-medium">{nomesUnidades[unidadeCodigo] ?? unidadeCodigo}</TableCell>
+                      <TableRow key={`${p.unidade}|${p.negocio}`}>
+                        <TableCell className="sticky left-0 z-10 bg-inherit text-sm font-medium">{nomesParticipaveis[`${p.unidade}|${p.negocio}`] ?? p.unidade}</TableCell>
                         {indicadores.map(ind => {
-                          const participa = (participantesPorIndicador[ind.id] ?? []).includes(unidadeCodigo)
+                          const participa = (participantesPorIndicador[ind.id] ?? []).some(part => part.unidade === p.unidade && part.negocio === p.negocio)
                           if (!participa) {
                             return <TableCell key={ind.id} className="text-center text-sm text-muted-foreground">—</TableCell>
                           }
-                          const { resultado, meta } = resultadoEMeta(ind, unidadeCodigo, mesNum)
-                          const { natureza } = resolverNaturezaFormato(ind)
-                          const pontos = calcularPontosGanhos(resultado, meta, natureza, ind.pontos)
+                          const pontos = pontosGanhos(ind, p.unidade, p.negocio, mesNum)
                           return (
                             <TableCell key={ind.id} className="text-center text-sm">
                               {pontos === null ? (
@@ -118,7 +119,9 @@ export function ResultadoMesReuniaoTab({ setor }: ResultadoMesReuniaoTabProps) {
                               ) : (
                                 <span className={cn(
                                   'font-semibold tabular-nums',
-                                  pontos > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
+                                  (ind.fonte === 'termometro' ? pontos >= TERMOMETRO_LIMIAR_BOM : pontos > 0)
+                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                    : 'text-red-600 dark:text-red-400',
                                 )}>
                                   {pontos} pts
                                 </span>

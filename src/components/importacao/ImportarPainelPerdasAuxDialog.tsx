@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Upload } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { parsePainelPerdasAuxCsv, type ParsedPainelPerdasAuxRow } from '@/lib/painel-perdas-aux-csv-parser'
+import { resolverUnidade } from '@/lib/unidade-resolver'
 import { FileDropzone } from '@/components/importacao/FileDropzone'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -25,7 +26,7 @@ export function ImportarPainelPerdasAuxDialog({ unidades, onImportado }: Importa
   const [importando, setImportando] = useState(false)
 
   function codigoConhecido(cod: string): string | undefined {
-    return unidades.find(u => u.codigo === cod || u.nome_ginfo === cod)?.codigo
+    return resolverUnidade(cod, unidades)?.codigo
   }
 
   const validas = linhas

@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { calcularPontosGanhos, formatarResultado, resolverNaturezaFormato } from '@/lib/reuniao-resultados'
+import { formatarResultado, resolverNaturezaFormato, TERMOMETRO_LIMIAR_BOM } from '@/lib/reuniao-resultados'
 import type { ReuniaoSetor } from '@/types'
 
 const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
@@ -26,7 +26,7 @@ export function AcompanhamentoReuniaoTab({ setor }: AcompanhamentoReuniaoTabProp
   const {
     carregando, indicadores, participantesPorIndicador,
     valoresInput, setValoresInput, salvando, handleSalvar,
-    resultadoEMeta, unidadesDoTotal, totalPorUnidadeMes, maiorPorMes, nomesUnidades,
+    resultadoEMeta, pontosGanhos, unidadesDoTotal, totalPorUnidadeMes, maiorPorMes, nomesParticipaveis,
   } = useReuniaoDados(setor, ano)
 
   return (
@@ -57,10 +57,14 @@ export function AcompanhamentoReuniaoTab({ setor }: AcompanhamentoReuniaoTabProp
             return (
               <TableCard
                 key={ind.id}
-                titulo={ind.nome}
-                subtitulo={automatico
-                  ? `Automático · ${natureza === 'custo' ? 'menor é melhor' : 'maior é melhor'} · vale ${ind.pontos} pontos`
-                  : `Meta: ${natureza === 'custo' ? '≤' : '≥'} ${ind.meta} · vale ${ind.pontos} pontos`}
+                titulo={ind.nome_t1 ? `${ind.nome} / ${ind.nome_t1}` : ind.nome}
+                subtitulo={ind.fonte === 'termometro'
+                  ? `Automático · pontuação direta da planilha (máx. ${ind.pontos}) · sem meta`
+                  : ind.nome_t1
+                    ? `Automático · meta/resultado/pontos vêm prontos da planilha (direção pode variar entre ${ind.nome}/${ind.nome_t1}) · vale ${ind.pontos} pontos`
+                    : automatico
+                      ? `Automático · ${natureza === 'custo' ? 'menor é melhor' : 'maior é melhor'} · vale ${ind.pontos} pontos`
+                      : `Meta: ${natureza === 'custo' ? '≤' : '≥'} ${ind.meta} · vale ${ind.pontos} pontos`}
               >
                 {participantes.length === 0 ? (
                   <p className="p-4 text-center text-sm text-muted-foreground">Nenhuma unidade participando — configure em Cadastro &gt; Participantes.</p>
@@ -75,34 +79,49 @@ export function AcompanhamentoReuniaoTab({ setor }: AcompanhamentoReuniaoTabProp
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {participantes.map(unidadeCodigo => (
-                        <TableRow key={unidadeCodigo}>
-                          <TableCell className="sticky left-0 z-10 bg-inherit text-sm font-medium">{nomesUnidades[unidadeCodigo] ?? unidadeCodigo}</TableCell>
+                      {participantes.map(p => (
+                        <TableRow key={`${p.unidade}|${p.negocio}`}>
+                          <TableCell className="sticky left-0 z-10 bg-inherit text-sm font-medium">{nomesParticipaveis[`${p.unidade}|${p.negocio}`] ?? p.unidade}</TableCell>
                           {Array.from({ length: 12 }, (_, i) => i + 1).map(mes => {
-                            const chave = `${ind.id}|${unidadeCodigo}|${mes}`
-                            const { resultado, meta } = resultadoEMeta(ind, unidadeCodigo, mes)
-                            const pontos = calcularPontosGanhos(resultado, meta, natureza, ind.pontos)
+                            const chave = `${ind.id}|${p.unidade}|${p.negocio}|${mes}`
+                            const { resultado } = resultadoEMeta(ind, p.unidade, p.negocio, mes)
+                            const pontos = pontosGanhos(ind, p.unidade, p.negocio, mes)
                             return (
                               <TableCell key={mes} className="p-1.5 text-center">
-                                {automatico ? (
-                                  <p className="text-xs tabular-nums text-foreground">{formatarResultado(resultado, formato)}</p>
+                                {ind.fonte === 'termometro' ? (
+                                  pontos === null ? (
+                                    <span className="text-xs text-muted-foreground">—</span>
+                                  ) : (
+                                    <p className={cn(
+                                      'text-sm font-semibold tabular-nums',
+                                      pontos >= TERMOMETRO_LIMIAR_BOM ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
+                                    )}>
+                                      {pontos} pts
+                                    </p>
+                                  )
                                 ) : (
-                                  <Input
-                                    value={valoresInput[chave] ?? ''}
-                                    onChange={e => setValoresInput(prev => ({ ...prev, [chave]: e.target.value }))}
-                                    onBlur={() => handleSalvar(ind, unidadeCodigo, mes)}
-                                    disabled={salvando === chave}
-                                    className="h-8 w-full text-center text-xs tabular-nums"
-                                    placeholder="—"
-                                  />
-                                )}
-                                {pontos !== null && (
-                                  <p className={cn(
-                                    'mt-1 text-[11px] font-semibold',
-                                    pontos > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
-                                  )}>
-                                    {pontos} pts
-                                  </p>
+                                  <>
+                                    {automatico ? (
+                                      <p className="text-xs tabular-nums text-foreground">{formatarResultado(resultado, formato)}</p>
+                                    ) : (
+                                      <Input
+                                        value={valoresInput[chave] ?? ''}
+                                        onChange={e => setValoresInput(prev => ({ ...prev, [chave]: e.target.value }))}
+                                        onBlur={() => handleSalvar(ind, p.unidade, p.negocio, mes)}
+                                        disabled={salvando === chave}
+                                        className="h-8 w-full text-center text-xs tabular-nums"
+                                        placeholder="—"
+                                      />
+                                    )}
+                                    {pontos !== null && (
+                                      <p className={cn(
+                                        'mt-1 text-[11px] font-semibold',
+                                        pontos > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400',
+                                      )}>
+                                        {pontos} pts
+                                      </p>
+                                    )}
+                                  </>
                                 )}
                               </TableCell>
                             )
@@ -127,11 +146,11 @@ export function AcompanhamentoReuniaoTab({ setor }: AcompanhamentoReuniaoTabProp
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {unidadesDoTotal.map(unidadeCodigo => (
-                  <TableRow key={unidadeCodigo}>
-                    <TableCell className="sticky left-0 z-10 bg-inherit text-sm font-medium">{nomesUnidades[unidadeCodigo] ?? unidadeCodigo}</TableCell>
+                {unidadesDoTotal.map(p => (
+                  <TableRow key={`${p.unidade}|${p.negocio}`}>
+                    <TableCell className="sticky left-0 z-10 bg-inherit text-sm font-medium">{nomesParticipaveis[`${p.unidade}|${p.negocio}`] ?? p.unidade}</TableCell>
                     {Array.from({ length: 12 }, (_, i) => i + 1).map(mes => {
-                      const total = totalPorUnidadeMes[`${unidadeCodigo}|${mes}`] ?? null
+                      const total = totalPorUnidadeMes[`${p.unidade}|${p.negocio}|${mes}`] ?? null
                       const ehMelhor = total !== null && total === maiorPorMes[mes] && total > 0
                       return (
                         <TableCell key={mes} className={cn('text-center text-sm font-semibold tabular-nums', total === null && 'text-muted-foreground font-normal')}>

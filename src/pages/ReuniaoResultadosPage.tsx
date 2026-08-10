@@ -1,9 +1,14 @@
 import { Link } from 'react-router-dom'
-import { ChevronRight, Landmark } from 'lucide-react'
+import { ChevronRight, Landmark, ShieldCheck, Truck, Users, Warehouse, Boxes, Crown } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
+import { useAuth } from '@/context/AuthContext'
+import type { PaginaChave } from '@/lib/permissoes'
 
 interface SetorCard {
   to: string
+  pagina: PaginaChave
+  /** Restringe o card a admin, igual à rota — só o Resumo Geral usa isso hoje. */
+  adminOnly?: boolean
   titulo: string
   descricao: string
   icone: React.ReactNode
@@ -13,19 +18,72 @@ interface SetorCard {
 const SETORES: SetorCard[] = [
   {
     to: '/reuniao-resultados/financeiro',
+    pagina: 'reuniao_financeiro',
     titulo: 'Financeiro',
     descricao: 'Indicadores, metas e pontos do setor Financeiro — ranking mensal de pontos por unidade.',
     icone: <Landmark className="h-6 w-6 text-emerald-500" />,
     corIcone: 'bg-emerald-500/10',
+  },
+  {
+    to: '/reuniao-resultados/gente',
+    pagina: 'reuniao_gente',
+    titulo: 'Gente',
+    descricao: 'AVR do Pacote de Gente e pontuação do Termômetro — ranking mensal de pontos por unidade.',
+    icone: <Users className="h-6 w-6 text-blue-500" />,
+    corIcone: 'bg-blue-500/10',
+  },
+  {
+    to: '/reuniao-resultados/frota',
+    pagina: 'reuniao_frota',
+    titulo: 'Frota',
+    descricao: 'Pacotes de Manutenção, Combustível e Pneu (DRE) e pontuação do Termômetro — ranking mensal de pontos por unidade.',
+    icone: <Truck className="h-6 w-6 text-amber-500" />,
+    corIcone: 'bg-amber-500/10',
+  },
+  {
+    to: '/reuniao-resultados/seguranca',
+    pagina: 'reuniao_seguranca',
+    titulo: 'Segurança',
+    descricao: 'Pacote Segurança (DRE) e pontuação do Termômetro — ranking mensal de pontos por unidade.',
+    icone: <ShieldCheck className="h-6 w-6 text-rose-500" />,
+    corIcone: 'bg-rose-500/10',
+  },
+  {
+    to: '/reuniao-resultados/distribuicao',
+    pagina: 'reuniao_distribuicao',
+    titulo: 'Distribuição',
+    descricao: 'DEV PDV/GTY, ON TIME/TMV, DEV HL/TEMPO RENDIÇÃO, JORNADA e INDISPONIBILIDADE — importados de planilha, ranking mensal por unidade.',
+    icone: <Warehouse className="h-6 w-6 text-cyan-500" />,
+    corIcone: 'bg-cyan-500/10',
+  },
+  {
+    to: '/reuniao-resultados/armazem',
+    pagina: 'reuniao_armazem',
+    titulo: 'Armazém',
+    descricao: 'Indicadores importados de planilha (aba Import RR_ARM), ranking mensal por unidade.',
+    icone: <Boxes className="h-6 w-6 text-teal-500" />,
+    corIcone: 'bg-teal-500/10',
+  },
+  {
+    to: '/reuniao-resultados/resumo-geral',
+    pagina: 'reuniao_resumo_geral',
+    adminOnly: true,
+    titulo: 'Resumo Geral',
+    descricao: 'Consolida a pontuação dos 6 setores por unidade, soma bonificações (EBITDA + Ranking Ambev) e define o vencedor do mês/ano — só Corporativo.',
+    icone: <Crown className="h-6 w-6 text-amber-600" />,
+    corIcone: 'bg-amber-600/10',
   },
 ]
 
 /**
  * Hub da Reunião Resultados: ranking mensal de pontos por setor (até 200
  * pontos), pra eleger a melhor liderança — não é RV. Um card por setor,
- * novos setores entram como novos cards (só Financeiro construído por ora).
+ * filtrado por permissão (mesmo padrão de `RemuneracaoVariavelPage.tsx`).
  */
 export function ReuniaoResultadosPage() {
+  const { role, podeAcessarPagina } = useAuth()
+  const setoresVisiveis = SETORES.filter(s => podeAcessarPagina(s.pagina) && (!s.adminOnly || role === 'admin'))
+
   return (
     <div className="space-y-6">
       <p className="max-w-2xl text-sm text-muted-foreground">
@@ -34,7 +92,7 @@ export function ReuniaoResultadosPage() {
       </p>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {SETORES.map(s => (
+        {setoresVisiveis.map(s => (
           <Link
             key={s.to}
             to={s.to}

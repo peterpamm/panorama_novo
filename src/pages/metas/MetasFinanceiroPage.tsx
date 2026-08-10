@@ -14,7 +14,7 @@ const ABAS = [
 ] as const
 
 /**
- * Subpágina Metas do Financeiro — /metas/financeiro. "Metas de RV" são os
+ * Subpágina Metas do Financeiro — /remuneracao-variavel/metas/financeiro. "Metas de RV" são os
  * pesos dos indicadores da RV do Financeiro (todos vindos do DRE); "Metas de
  * Resultado" são metas que não são peso de RV, só um valor de comparação
  * (ex: % de aderência das Rotinas Financeiras).
@@ -26,7 +26,7 @@ export function MetasFinanceiroPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Link to="/metas" className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground">
+          <Link to="/remuneracao-variavel/metas" className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground">
             <ChevronLeft className="h-4 w-4" />
             Metas
           </Link>

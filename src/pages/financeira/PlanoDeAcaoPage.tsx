@@ -4,7 +4,7 @@ import { AlertTriangle, CheckCircle2, ChevronLeft, Clock, Loader2, PlayCircle, P
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { useUnidades } from '@/hooks/useUnidades'
-import { usePlanosAcao } from '@/hooks/usePlanosAcao'
+import { usePlanosAcao, usePlanoAcaoTags } from '@/hooks/usePlanosAcao'
 import { PillToggle } from '@/components/ui/pill-toggle'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -18,9 +18,10 @@ import { cn } from '@/lib/utils'
 import { STATUS_LABEL, STATUS_PILL, estaAtrasado, formatDataBr, hojeIso } from '@/lib/plano-acao'
 import { PlanoAcaoDetalhe } from '@/components/financeira/PlanoAcaoDetalhe'
 import { PlanoAcaoFormDialog } from '@/components/financeira/PlanoAcaoFormDialog'
+import { CadastroTagsPlanoAcaoTab } from '@/components/financeira/CadastroTagsPlanoAcaoTab'
 import type { PlanoAcao, PlanoAcaoStatus } from '@/types'
 
-type Aba = 'ativas' | 'historico'
+type Aba = 'ativas' | 'historico' | 'cadastro'
 type FiltroPrazo = 'todos' | 'atrasadas' | 'este_mes' | 'proximo_mes'
 
 function dentroDoPrazo(prazo: string, filtro: FiltroPrazo): boolean {
@@ -40,11 +41,12 @@ function dentroDoPrazo(prazo: string, filtro: FiltroPrazo): boolean {
  * aba Histórico (ver comentário em PlanoAcaoDetalhe/migration_063).
  */
 export function PlanoDeAcaoPage() {
-  const { role, unidade: minhaUnidade } = useAuth()
+  const { role, unidade: minhaUnidade, souDono } = useAuth()
   const isAdmin = role === 'admin'
   const { toast } = useToast()
   const { planos, loading, recarregar } = usePlanosAcao()
   const { unidades } = useUnidades()
+  const { tags } = usePlanoAcaoTags()
 
   const nomesUnidades = useMemo(() => {
     const m: Record<string, string> = {}
@@ -59,6 +61,10 @@ export function PlanoDeAcaoPage() {
   const [filtroStatus, setFiltroStatus] = useState<PlanoAcaoStatus | null>(null)
   const [selecionadoId, setSelecionadoId] = useState<string | null>(null)
 
+  // "Corporativo" só aparece pro dono no seletor de tag — ações com essa tag
+  // são exclusivas dele (ver migration_091), então nem faz sentido outra
+  // pessoa conseguir escolher essa tag ao criar uma ação.
+  const tagsAtivas = useMemo(() => tags.filter(t => t.ativo && (t.nome !== 'Corporativo' || souDono)), [tags, souDono])
   const tagsExistentes = useMemo(
     () => Array.from(new Set(planos.map(p => p.tag).filter(Boolean))).sort(),
     [planos],
@@ -150,12 +156,14 @@ export function PlanoDeAcaoPage() {
           <h2 className="text-base font-semibold text-foreground">Plano de Ação</h2>
         </div>
         <div className="flex items-center gap-3">
-          <PillToggle
-            opcoes={[{ value: 'ativas', label: 'Ações' }, { value: 'historico', label: 'Histórico' }] as const}
+          <PillToggle<Aba>
+            opcoes={isAdmin
+              ? [{ value: 'ativas', label: 'Ações' }, { value: 'historico', label: 'Histórico' }, { value: 'cadastro', label: 'Cadastro' }]
+              : [{ value: 'ativas', label: 'Ações' }, { value: 'historico', label: 'Histórico' }]}
             value={aba}
             onChange={v => { setAba(v); setFiltroStatus(null) }}
           />
-          {isAdmin && (
+          {aba !== 'cadastro' && (
             <Button onClick={abrirNova} className="gap-2">
               <Plus className="h-4 w-4" />
               Nova ação
@@ -164,6 +172,10 @@ export function PlanoDeAcaoPage() {
         </div>
       </div>
 
+      {aba === 'cadastro' ? (
+        <CadastroTagsPlanoAcaoTab />
+      ) : (
+      <>
       {aba === 'ativas' && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {CARDS.map(c => {
@@ -297,6 +309,8 @@ export function PlanoDeAcaoPage() {
           )}
         </TableCard>
       )}
+      </>
+      )}
 
       <Dialog open={selecionado !== null} onOpenChange={v => { if (!v) setSelecionadoId(null) }}>
         <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
@@ -313,16 +327,16 @@ export function PlanoDeAcaoPage() {
         </DialogContent>
       </Dialog>
 
-      {isAdmin && (
-        <PlanoAcaoFormDialog
-          open={dialogAberto}
-          onOpenChange={setDialogAberto}
-          editando={editando}
-          unidades={unidades}
-          tagsExistentes={tagsExistentes}
-          onSalvo={recarregar}
-        />
-      )}
+      <PlanoAcaoFormDialog
+        open={dialogAberto}
+        onOpenChange={setDialogAberto}
+        editando={editando}
+        isAdmin={isAdmin}
+        minhaUnidade={minhaUnidade}
+        unidades={unidades}
+        tags={tagsAtivas}
+        onSalvo={recarregar}
+      />
 
       <Dialog open={excluindo !== null} onOpenChange={v => { if (!v) setExcluindo(null) }}>
         <DialogContent className="max-w-sm">

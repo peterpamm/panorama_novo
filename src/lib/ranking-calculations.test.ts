@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { DreLongoRow, Meta, OrcamentoLinha } from '@/types'
+import type { DreLongoRow, OrcamentoLinha } from '@/types'
 import { calcularRankingIndicador, calcularRankingReceita, corClasseAtingimento } from './ranking-calculations'
 
 function linha(
@@ -14,12 +14,18 @@ function linha(
   return { unidade, negocio: 'ROTA', ano: 2025, mes, tipo_periodo, conta_codigo, remunerado, realizado, diferenca: realizado - remunerado, avo: null, avr }
 }
 
-function meta(unidade: string, codigo: string, mes: number, meta_avr: number): Meta {
-  return { unidade, negocio: 'ROTA', ano: 2025, codigo, mes, meta_avr }
-}
-
 function orcamento(unidade: string, mes: number, orcado: number): OrcamentoLinha {
   return { unidade, negocio: 'ROTA', ano: 2025, mes, conta_codigo: '002', conta_nome: 'Receita Líquida Operacional', orcado, av: 100, ah: 0 }
+}
+
+/**
+ * Linha de orçamento pra pacote do Farol (PACOTE_CONTA_ORCAMENTO) — `av` é o
+ * valor bruto da planilha, que `buscarMetaOrcamento` ajusta de sinal
+ * (`ajustarSinal`): custo (não-performance) vira positivo invertendo o sinal
+ * bruto, então `av` negativo aqui vira meta positiva.
+ */
+function orcamentoPacote(unidade: string, mes: number, contaCodigo: string, av: number): OrcamentoLinha {
+  return { unidade, negocio: 'ROTA', ano: 2025, mes, conta_codigo: contaCodigo, conta_nome: 'x', orcado: 0, av, ah: 0 }
 }
 
 describe('calcularRankingReceita', () => {
@@ -90,44 +96,50 @@ describe('calcularRankingReceita', () => {
 })
 
 describe('calcularRankingIndicador', () => {
-  it('conta de custo: delta positivo (gastou menos que a meta) ranqueia primeiro', () => {
+  it('conta de custo: delta positivo (gastou menos que a meta) ranqueia primeiro — meta vem do Orçamento (conta 012, sinal invertido)', () => {
     const rows: DreLongoRow[] = [
       linha('A', '021', 1, 'MENSAL', -1000000, -900000, -90),
       linha('B', '021', 1, 'MENSAL', -1000000, -1000000, -100),
     ]
-    const metas: Meta[] = [meta('A', '021', 0, 100), meta('B', '021', 0, 100)]
+    const orcamentos: OrcamentoLinha[] = [orcamentoPacote('A', 1, '012', -100), orcamentoPacote('B', 1, '012', -100)]
 
-    const ranking = calcularRankingIndicador(rows, metas, { natureza: 'custo', prefixos: ['021'] }, '021', { negocio: 'ROTA', ano: 2025, periodo: 'mensal', mes: 1 })
+    const ranking = calcularRankingIndicador(rows, orcamentos, { natureza: 'custo', prefixos: ['021'] }, '021', { negocio: 'ROTA', ano: 2025, periodo: 'mensal', mes: 1 })
 
     expect(ranking.map(r => r.unidade)).toEqual(['A', 'B'])
     expect(ranking[0]).toMatchObject({ rank: 1, avr: 90, meta: 100, delta: 10 })
     expect(ranking[1]).toMatchObject({ rank: 2, avr: 100, meta: 100, delta: 0 })
   })
 
-  it('conta de performance: delta positivo (superou a meta) ranqueia primeiro, sem inverter sinal', () => {
+  it('conta de performance: delta positivo (superou a meta) ranqueia primeiro, sem inverter sinal — meta vem do Orçamento (conta 133)', () => {
     const rows: DreLongoRow[] = [
       linha('A', '232', 1, 'MENSAL', 100000, 120000, 120),
       linha('B', '232', 1, 'MENSAL', 100000, 80000, 80),
     ]
-    const metas: Meta[] = [meta('A', '232', 0, 100), meta('B', '232', 0, 100)]
+    const orcamentos: OrcamentoLinha[] = [orcamentoPacote('A', 1, '133', 100), orcamentoPacote('B', 1, '133', 100)]
 
-    const ranking = calcularRankingIndicador(rows, metas, { natureza: 'performance', prefixos: ['232'] }, '232', { negocio: 'ROTA', ano: 2025, periodo: 'mensal', mes: 1 })
+    const ranking = calcularRankingIndicador(rows, orcamentos, { natureza: 'performance', prefixos: ['232'] }, '232', { negocio: 'ROTA', ano: 2025, periodo: 'mensal', mes: 1 })
 
     expect(ranking.map(r => r.unidade)).toEqual(['A', 'B'])
     expect(ranking[0]).toMatchObject({ delta: 20 })
     expect(ranking[1]).toMatchObject({ delta: -20 })
   })
 
-  it('1º semestre: usa a meta semestral (mes=13) e reconstrói o realizado somando jan-jun', () => {
+  it('1º semestre: usa o bloco recalculado do Orçamento (mes=13) e reconstrói o realizado somando jan-jun', () => {
     const rows: DreLongoRow[] = [
       linha('A', '021', 1, 'MENSAL', -500000, -450000, -90),
       linha('A', '021', 2, 'MENSAL', -500000, -460000, -92),
     ]
-    const metas: Meta[] = [meta('A', '021', 13, 100)]
+    const orcamentos: OrcamentoLinha[] = [orcamentoPacote('A', 13, '012', -100)]
 
-    const ranking = calcularRankingIndicador(rows, metas, { natureza: 'custo', prefixos: ['021'] }, '021', { negocio: 'ROTA', ano: 2025, periodo: 's1', mes: 0 })
+    const ranking = calcularRankingIndicador(rows, orcamentos, { natureza: 'custo', prefixos: ['021'] }, '021', { negocio: 'ROTA', ano: 2025, periodo: 's1', mes: 0 })
 
     expect(ranking[0].meta).toBe(100)
+  })
+
+  it('sem linha de orçamento pro período, meta é null (sem fallback pra tabela metas/AVO)', () => {
+    const rows: DreLongoRow[] = [linha('A', '021', 6, 'MENSAL', -500000, -450000, -90)]
+    const ranking = calcularRankingIndicador(rows, [], { natureza: 'custo', prefixos: ['021'] }, '021', { negocio: 'ROTA', ano: 2025, periodo: 'mensal', mes: 6 })
+    expect(ranking[0].meta).toBeNull()
   })
 })
 

@@ -20,12 +20,21 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY
  * continua sendo feito direto no dashboard do Supabase (Authentication >
  * Users). Editar QUAIS páginas ele acessa, isso sim dá pra fazer por aqui —
  * ver `permissoes-api.ts`.
+ *
+ * IMPORTANTE: `signUp` só consegue gravar em `user_metadata` (nunca em
+ * `app_metadata` — só a Admin API/service_role escreve lá, é proposital do
+ * Supabase). Desde a migration_089, é `app_metadata` que vale pra RLS e pro
+ * `role`/`unidade`/`dono` no app — ou seja, o usuário criado aqui SÓ ganha
+ * acesso de verdade depois de alguém rodar `SELECT sync_auth_app_metadata();`
+ * no SQL Editor do Supabase (ver aviso na tela de Administração > Usuários).
  */
 export async function criarUsuario(params: {
   email: string
   senha: string
   role: 'admin' | 'unidade'
   unidade?: string
+  /** Restringe o Painel Geral da RV ao negócio da própria liderança (ROTA/ARM) — só pra unidades com 2 gerentes (ex: Camaçari). */
+  rvNegocio?: string
   paginasIniciais: PaginaChave[]
 }): Promise<void> {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) throw new Error('Configuração do Supabase ausente')
@@ -39,7 +48,9 @@ export async function criarUsuario(params: {
     email,
     password: params.senha,
     options: {
-      data: params.role === 'admin' ? { role: params.role } : { role: params.role, unidade: params.unidade },
+      data: params.role === 'admin'
+        ? { role: params.role }
+        : { role: params.role, unidade: params.unidade, ...(params.rvNegocio ? { rv_negocio: params.rvNegocio } : {}) },
     },
   })
   if (error) throw error

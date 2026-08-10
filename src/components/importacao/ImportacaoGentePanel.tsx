@@ -122,12 +122,13 @@ export function ImportacaoGentePanel() {
 
   // ── Edição / exclusão ──────────────────────────────────────────────────────
   const [editando, setEditando] = useState<RvLideranca | null>(null)
-  const [form, setForm] = useState({ operacao: '', negocio: '', setor: '', funcao: '', nome: '', valor: '' })
+  const [form, setForm] = useState({ matricula: '', operacao: '', negocio: '', setor: '', funcao: '', nome: '', valor: '' })
   const [excluindo, setExcluindo] = useState<RvLideranca | null>(null)
   const [salvando, setSalvando] = useState(false)
 
   function abrirEdicao(r: RvLideranca) {
     setForm({
+      matricula: r.matricula ?? '',
       operacao: r.operacao,
       negocio: r.negocio,
       setor: r.setor,
@@ -149,6 +150,7 @@ export function ImportacaoGentePanel() {
     const { error } = await supabase
       .from('rv_liderancas')
       .update({
+        matricula: form.matricula.trim() || null,
         operacao: form.operacao.trim().toUpperCase(),
         negocio: form.negocio.trim().toUpperCase(),
         setor: form.setor.trim().toUpperCase(),
@@ -222,7 +224,7 @@ export function ImportacaoGentePanel() {
           <h2 className="text-base font-semibold">RV das Lideranças</h2>
           <p className="text-sm text-muted-foreground">
             Suba a planilha de RV (Excel ou CSV) com as colunas{' '}
-            <span className="font-mono text-xs">OPERAÇÃO · NEGOCIO · SETOR · FUNÇÃO · NOME · VALOR</span>.
+            <span className="font-mono text-xs">MATRICULA · OPERAÇÃO · NEGOCIO · SETOR · FUNÇÃO · NOME · VALOR</span>.
             O cadastro é atualizado pelo <strong>nome</strong> da liderança — reimportar substitui os valores existentes.
           </p>
           <FilePickerButton label="Planilha de RV (.xlsx ou .csv)" accept=".xlsx,.xls,.csv,.txt" file={file} onFile={handleFile} />
@@ -372,6 +374,7 @@ export function ImportacaoGentePanel() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Matrícula</TableHead>
                 <TableHead>Operação</TableHead>
                 <TableHead>Negócio</TableHead>
                 <TableHead>Setor</TableHead>
@@ -384,6 +387,7 @@ export function ImportacaoGentePanel() {
             <TableBody>
               {registrosFiltrados.map(r => (
                 <TableRow key={r.id ?? r.nome} className="border-gray-200/30 dark:border-gray-700/30 hover:bg-gray-50/50 dark:hover:bg-gray-700/30">
+                  <TableCell className="text-sm text-muted-foreground">{r.matricula || '—'}</TableCell>
                   <TableCell className="text-sm font-medium">{r.operacao}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{r.negocio || '—'}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{r.setor || '—'}</TableCell>
@@ -430,23 +434,27 @@ export function ImportacaoGentePanel() {
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="rv-operacao">Operação</Label>
-                <Input id="rv-operacao" value={form.operacao} onChange={e => setForm(f => ({ ...f, operacao: e.target.value }))} />
+                <Label htmlFor="rv-matricula">Matrícula</Label>
+                <Input id="rv-matricula" value={form.matricula} onChange={e => setForm(f => ({ ...f, matricula: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="rv-negocio">Negócio</Label>
-                <Input id="rv-negocio" value={form.negocio} onChange={e => setForm(f => ({ ...f, negocio: e.target.value }))} placeholder="ROTA / ARMAZEM..." />
+                <Label htmlFor="rv-operacao">Operação</Label>
+                <Input id="rv-operacao" value={form.operacao} onChange={e => setForm(f => ({ ...f, operacao: e.target.value }))} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
+                <Label htmlFor="rv-negocio">Negócio</Label>
+                <Input id="rv-negocio" value={form.negocio} onChange={e => setForm(f => ({ ...f, negocio: e.target.value }))} placeholder="ROTA / ARMAZEM..." />
+              </div>
+              <div className="space-y-1.5">
                 <Label htmlFor="rv-setor">Setor</Label>
                 <Input id="rv-setor" value={form.setor} onChange={e => setForm(f => ({ ...f, setor: e.target.value }))} />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="rv-funcao">Função</Label>
-                <Input id="rv-funcao" value={form.funcao} onChange={e => setForm(f => ({ ...f, funcao: e.target.value }))} />
-              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="rv-funcao">Função</Label>
+              <Input id="rv-funcao" value={form.funcao} onChange={e => setForm(f => ({ ...f, funcao: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="rv-nome">Nome</Label>

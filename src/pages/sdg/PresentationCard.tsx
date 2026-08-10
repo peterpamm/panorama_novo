@@ -23,26 +23,26 @@ export function PresentationCard({ nome, periodo, avr, meta, impacto, semaforo, 
 
   return (
     <div className={cn(
-      'flex flex-col justify-between rounded-2xl border-l-4 bg-white shadow-md dark:bg-slate-800/60 p-6 dark:backdrop-blur-sm',
+      'flex flex-col justify-between rounded-2xl border-l-4 bg-white shadow-md dark:bg-slate-800/60 p-4 dark:backdrop-blur-sm',
       cor.borda, className,
     )}>
       <div className="flex items-start justify-between gap-2">
-        <span className="text-base font-semibold text-gray-800 dark:text-slate-200">{nome}</span>
+        <span className="text-sm font-semibold text-gray-800 dark:text-slate-200">{nome}</span>
         <span className="rounded-full bg-gray-100 dark:bg-slate-700 px-3 py-0.5 text-xs font-medium text-gray-600 dark:text-slate-300 whitespace-nowrap">
           {periodo}
         </span>
       </div>
 
-      <div className="mt-4">
-        <div className={cn('text-5xl font-bold tracking-tight', cor.texto)}>
+      <div className="mt-3">
+        <div className={cn('text-4xl font-bold tracking-tight', cor.texto)}>
           {formatPercent(avr, 2)}
         </div>
-        <div className={cn('mt-1 text-2xl font-semibold', COR[corImpacto].texto)}>
+        <div className={cn('mt-1 text-xl font-semibold', COR[corImpacto].texto)}>
           {meta === null ? '—' : formatCurrencyCompact(impacto)}
         </div>
       </div>
 
-      <div className="mt-4 flex items-center justify-between border-t border-gray-200 dark:border-slate-700 pt-4 text-sm">
+      <div className="mt-3 flex items-center justify-between border-t border-gray-200 dark:border-slate-700 pt-3 text-sm">
         <span className="text-gray-500 dark:text-slate-400">
           Meta: <span className="font-medium text-gray-800 dark:text-slate-200">{meta === null ? 'N/A' : formatPercent(meta, 2)}</span>
         </span>

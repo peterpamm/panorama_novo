@@ -18,9 +18,14 @@ export function useMetasTodasUnidades() {
       const todas: Meta[] = []
       let from = 0
       while (true) {
+        // .order() é obrigatório com .range() — sem ordem explícita o
+        // Postgres não garante a mesma ordem entre duas chamadas separadas,
+        // então uma página pode pular/repetir linhas (bug real já visto em
+        // mv_dre_longo, ver DataContext.tsx).
         const { data, error: err } = await supabase
           .from('metas')
           .select('*')
+          .order('id', { ascending: true })
           .range(from, from + PAGE_SIZE - 1)
 
         if (err) throw err
