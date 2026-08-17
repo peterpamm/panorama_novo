@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { useToast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
 import { LancamentoEmMassaDialog } from '@/components/financeira/LancamentoEmMassaDialog'
-import { mesAnterior } from '@/lib/rotinas-financeiras'
+import { mapaStatusExibicao, mesAnterior } from '@/lib/rotinas-financeiras'
 import type { RotinaFinanceira, RotinaFinanceiraStatus } from '@/types'
 
 const MESES_NOMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -75,35 +75,11 @@ export function AcompanhamentoRotinasTab({ podeEditar }: AcompanhamentoRotinasTa
     return mapa
   }, [statusLista])
 
-  /**
-   * Célula do mês atual, com fallback pro N/A do mês anterior quando ainda
-   * não foi respondida neste mês — N/A normalmente é estrutural (a rotina não
-   * se aplica àquela unidade/negócio), então tende a se repetir mês a mês.
-   * OK/NOK nunca herdam: são um julgamento que precisa ser refeito toda vez.
-   * `herdado: true` só existe na tela — confirmar ou mudar grava uma linha
-   * de verdade neste mês.
-   */
-  const statusExibicaoPorChave = useMemo(() => {
-    const anteriorPorChave = new Map<string, RotinaFinanceiraStatus>()
-    for (const s of statusListaAnterior) anteriorPorChave.set(`${s.rotina_id}|${s.unidade}`, s)
-
-    const mapa = new Map<string, { status: 'OK' | 'NOK' | 'N/A' | null; observacao: string; herdado: boolean }>()
-    for (const rotina of rotinas) {
-      for (const u of unidadesFiltro) {
-        const chave = `${rotina.id}|${u.codigo}`
-        const atual = statusPorChave.get(chave)
-        if (atual) {
-          mapa.set(chave, { status: atual.status, observacao: atual.observacao, herdado: false })
-          continue
-        }
-        const anteriorStatus = anteriorPorChave.get(chave)
-        if (anteriorStatus?.status === 'N/A') {
-          mapa.set(chave, { status: 'N/A', observacao: '', herdado: true })
-        }
-      }
-    }
-    return mapa
-  }, [rotinas, unidadesFiltro, statusPorChave, statusListaAnterior])
+  /** Resposta do mês, com herança do N/A do mês anterior — regra compartilhada com o Calendário (ver `mapaStatusExibicao`). */
+  const statusExibicaoPorChave = useMemo(
+    () => mapaStatusExibicao(statusLista, statusListaAnterior),
+    [statusLista, statusListaAnterior],
+  )
 
   // ── Edição de uma célula ────────────────────────────────────────────────
   const [editando, setEditando] = useState<{ rotina: RotinaFinanceira; unidadeCodigo: string; unidadeNome: string } | null>(null)

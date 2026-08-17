@@ -6,12 +6,14 @@ import { Toaster } from '@/components/ui/toaster'
 import { PillToggle } from '@/components/ui/pill-toggle'
 import { CadastroRotinasTab } from '@/components/financeira/CadastroRotinasTab'
 import { AcompanhamentoRotinasTab } from '@/components/financeira/AcompanhamentoRotinasTab'
+import { CalendarioRotinasTab } from '@/components/financeira/CalendarioRotinasTab'
 import { DashboardRotinasTab } from '@/components/financeira/DashboardRotinasTab'
 
-type AbaRotinas = 'acompanhamento' | 'dashboard' | 'cadastro'
+type AbaRotinas = 'acompanhamento' | 'calendario' | 'dashboard' | 'cadastro'
 
 const ABAS_BASE = [
   { value: 'acompanhamento', label: 'Acompanhamento' },
+  { value: 'calendario', label: 'Calendário' },
   { value: 'dashboard', label: 'Dashboard' },
 ] as const
 
@@ -53,6 +55,8 @@ export function RotinasFinanceirasPage() {
 
       {aba === 'acompanhamento' ? (
         <AcompanhamentoRotinasTab podeEditar={isAdmin} />
+      ) : aba === 'calendario' ? (
+        <CalendarioRotinasTab podeEditar={isAdmin} />
       ) : aba === 'dashboard' ? (
         <DashboardRotinasTab />
       ) : (

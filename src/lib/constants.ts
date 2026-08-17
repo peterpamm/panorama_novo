@@ -33,6 +33,14 @@ export const PACOTES_FROTA     = ['113', '117', '131', '115']
 export const PACOTES_SEGURANCA = ['073', '074', '075']
 export const PACOTES_ADM       = ['159', '190', '217', '218']
 
+/**
+ * Contas totalizadoras da faixa da Despesa Administrativa (157–227) — cada
+ * uma é a soma de subcontas que já aparecem na própria faixa, então elas
+ * ocupariam o topo do Top Contas repetindo o que está logo abaixo. Ficam de
+ * fora do ranking (ver `topContasFaixa`, opção `excluir`).
+ */
+export const CONTAS_TOTALIZADORAS_ADM = ['157', '158', '159', '162', '171', '183', '187', '190', '217']
+
 /** Código da conta "Receita Líquida Operacional", usado como base de todo cálculo de % de faturamento e impacto financeiro. */
 export const CONTA_RECEITA = '002'
 export const NOME_RECEITA = 'Receita Líquida Operacional'

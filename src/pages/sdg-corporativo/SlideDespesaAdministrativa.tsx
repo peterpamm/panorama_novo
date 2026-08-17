@@ -10,7 +10,7 @@ import { useContas } from '@/hooks/useContas'
 import { COR_AVR, COR_META_DESTAQUE, MES_ABREV, getChartColors } from '@/components/farol/chart-shared'
 import { corBarraCorporativo } from '@/pages/sdg-corporativo/cores'
 import { cn, formatCurrencyCompact, formatPercent } from '@/lib/utils'
-import { PACOTES } from '@/lib/constants'
+import { CONTAS_TOTALIZADORAS_ADM, PACOTES } from '@/lib/constants'
 import type { DreLongoRow, OrcamentoLinha, Unidade } from '@/types'
 
 const CODIGO = '157'
@@ -53,7 +53,8 @@ function TooltipDespesas({ active, payload, label }: { active?: boolean; payload
  * mesmo modelo de Receita/EBITDA: evolução mensal do AVR consolidado (AMBEV)
  * em barra, meta orçada em linha, tabela de Ranking (todas as unidades +
  * total AMBEV) com toggle Mensal/YTD — e, abaixo, o Top Contas de 157 a 227
- * (mesmo período do toggle).
+ * (mesmo período do toggle), sem as contas totalizadoras da faixa
+ * (`CONTAS_TOTALIZADORAS_ADM`), que só repetiriam a soma das subcontas.
  */
 export function SlideDespesaAdministrativa({ rowsAno, orcamentoAno, unidades, negocio, ano, mes }: Props) {
   const { axis, legend } = getChartColors()
@@ -88,8 +89,11 @@ export function SlideDespesaAdministrativa({ rowsAno, orcamentoAno, unidades, ne
     return rowsAmbev.filter(r => r.tipo_periodo === 'MENSAL' && r.mes === mes)
   }, [rowsAmbev, periodoTabela, mes])
 
+  // Sem as totalizadoras (157, 158, ... — ver `CONTAS_TOTALIZADORAS_ADM`):
+  // elas são a soma de subcontas que já estão na mesma faixa, então subiriam
+  // pro topo do ranking sem dizer nada de novo.
   const topContas = useMemo(
-    () => topContasFaixa(normalizarParaCalculo(rowsAmbevPeriodo), CONTA_INI, CONTA_FIM),
+    () => topContasFaixa(normalizarParaCalculo(rowsAmbevPeriodo), CONTA_INI, CONTA_FIM, { excluir: CONTAS_TOTALIZADORAS_ADM }),
     [rowsAmbevPeriodo],
   )
 

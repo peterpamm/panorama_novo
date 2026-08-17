@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import { useUnidades } from '@/hooks/useUnidades'
-import { useDreLongoTodasUnidades } from '@/hooks/useDreLongoTodasUnidades'
+import { useRankingDados } from '@/hooks/useRankingDados'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PillToggle } from '@/components/ui/pill-toggle'
 import { FilterLabel, filterTriggerClass } from '@/components/farol/FarolFilters'
@@ -9,23 +8,27 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RankingTabelaIndicador, RankingTabelaPerdas, RankingTabelaReceita, type RankingLinhaPerda } from '@/components/ranking/RankingTabelas'
 import { UnidadesMultiSelect } from '@/components/ranking/UnidadesMultiSelect'
-import { usePainelPerdasAux } from '@/hooks/usePainelPerdasAux'
-import { CONTAS_ORCAMENTO_USADAS, PACOTES, RANKING_CUSTOS, RANKING_PERFORMANCE } from '@/lib/constants'
+import { PACOTES, RANKING_CUSTOS, RANKING_PERFORMANCE } from '@/lib/constants'
 import { calcularRankingIndicador, calcularRankingReceita, type PeriodoRanking } from '@/lib/ranking-calculations'
 import { calcularMatrizPerdas, INDICADORES_PERDAS } from '@/lib/painel-perdas-calculations'
-import { fetchOrcamentoPaginado } from '@/lib/orcamento-fetch'
 import { MES_ABREV } from '@/components/farol/chart-shared'
 import { cn } from '@/lib/utils'
-import type { OrcamentoLinha } from '@/types'
 
 function unicos<T>(valores: T[]): T[] {
   return Array.from(new Set(valores))
 }
 
+/**
+ * Ranking mostra TODAS as unidades pra qualquer usuário logado (mesmo as
+ * que não são liberadas pra ele em nenhuma outra tela) — o objetivo aqui é
+ * incentivar a competição entre unidades, então usa `useRankingDados`
+ * (fontes sem restrição de unidade, ver migration_093) em vez do cache
+ * global do DataContext, que continua restrito à própria unidade + AMBEV
+ * pro resto do app.
+ */
 export function RankingPage() {
   const { unidades, loading: loadingUnidades } = useUnidades()
-  const { rows, loading: loadingDre } = useDreLongoTodasUnidades()
-  const { rows: rowsAux } = usePainelPerdasAux()
+  const { rows, rowsAux, orcamentos: orcamentosTodos, loading: loadingDre } = useRankingDados(unidades)
 
   const nomesUnidade = useMemo(() => new Map(unidades.map(u => [u.codigo, u.nome])), [unidades])
 
@@ -96,24 +99,14 @@ export function RankingPage() {
         ? '2º Semestre'
         : `Mensal — M${selMes ?? '-'}`
 
-  // Orçamento (tabela `orcamentos`) — todas as unidades, restrito às contas
-  // realmente usadas por algum pacote do Farol/Ranking (`CONTAS_ORCAMENTO_USADAS`,
-  // já inclui a Receita) — base única pra Receita, Performance e Custos, sem
-  // fallback pra tabela `metas`/AVO do DRE.
-  const [orcamentoRows, setOrcamentoRows] = useState<OrcamentoLinha[]>([])
-  useEffect(() => {
-    if (selNegocio === '' || selAno === null) { setOrcamentoRows([]); return }
-    let cancelado = false
-    fetchOrcamentoPaginado((from, to) =>
-      supabase.from('orcamentos').select('*')
-        .eq('negocio', selNegocio).eq('ano', selAno).in('conta_codigo', CONTAS_ORCAMENTO_USADAS)
-        .order('id', { ascending: true })
-        .range(from, to),
-    )
-      .then(rows => { if (!cancelado) setOrcamentoRows(rows) })
-      .catch(() => { if (!cancelado) setOrcamentoRows([]) })
-    return () => { cancelado = true }
-  }, [selNegocio, selAno])
+  // Orçamento — já vem de `useRankingDados` restrito às contas usadas por
+  // algum pacote do Farol/Ranking e aos últimos anos (ver migration_093);
+  // aqui só filtra em memória pelo negócio/ano selecionados — base única
+  // pra Receita, Performance e Custos, sem fallback pra tabela `metas`/AVO.
+  const orcamentoRows = useMemo(
+    () => (selNegocio === '' || selAno === null ? [] : orcamentosTodos.filter(o => o.negocio === selNegocio && o.ano === selAno)),
+    [orcamentosTodos, selNegocio, selAno],
+  )
 
   const rankingReceita = useMemo(
     () => calcularRankingReceita(rowsNegocioAno, orcamentoRows, { negocio: selNegocio, ano: selAno ?? 0, periodo, mes: selMes ?? 0 }),

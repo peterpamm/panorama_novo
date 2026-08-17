@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Loader2, Trophy } from 'lucide-react'
-import { useReuniaoDados, valorFarolPacoteUnidadeMes, deltaFarolPacoteUnidadeMes } from '@/hooks/useReuniaoDados'
+import { useReuniaoDados, deltaFarolPacoteUnidadeMes } from '@/hooks/useReuniaoDados'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { TableCard } from '@/components/ui/table-card'
 import { Label } from '@/components/ui/label'
@@ -41,9 +41,8 @@ export function ResultadoMesReuniaoTab({ setor }: ResultadoMesReuniaoTabProps) {
     const base = unidadesDoTotal.map(({ unidade, negocio }) => ({
       unidade: `${unidade}|${negocio}`,
       pontos: totalPorUnidadeMes[`${unidade}|${negocio}|${mesNum}`] ?? null,
-      // ebitdaAvr só pra exibir (coluna/detalhe do pódio); o desempate em si
-      // usa o delta vs meta (ebitdaDelta), mesma régua do Ranking de EBITDA.
-      ebitdaAvr: valorFarolPacoteUnidadeMes(rowsDre, '232', unidade, Number(ano), mesNum, negocio),
+      // Delta do EBITDA vs meta — é o critério de desempate E o que aparece
+      // na coluna/pódio, mesma régua do Ranking de EBITDA.
       ebitdaDelta: deltaFarolPacoteUnidadeMes(rowsDre, orcamentos, '232', unidade, Number(ano), mesNum, negocio),
       rank: null as number | null,
     }))
@@ -149,7 +148,7 @@ export function ResultadoMesReuniaoTab({ setor }: ResultadoMesReuniaoTabProps) {
               linhas={linhasRanking}
               nomesUnidade={nomesUnidadeMap}
               titulo="Ranking do Mês"
-              subtitulo={`${MESES_NOMES[mesNum - 1]}/${ano} — total de pontos · desempate: melhor % de EBITDA`}
+              subtitulo={`${MESES_NOMES[mesNum - 1]}/${ano} · critério de desempate: Δ EBITDA`}
             />
           </div>
         </>

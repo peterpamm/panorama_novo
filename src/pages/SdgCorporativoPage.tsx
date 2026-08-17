@@ -10,6 +10,7 @@ import { useTheme } from '@/hooks/useTheme'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SlideReceita } from '@/pages/sdg-corporativo/SlideReceita'
 import { SlideIndicadorFarol } from '@/pages/sdg-corporativo/SlideIndicadorFarol'
+import { SlideLucro } from '@/pages/sdg-corporativo/SlideLucro'
 import { SlideDespesaAdministrativa } from '@/pages/sdg-corporativo/SlideDespesaAdministrativa'
 import { SlideIndicadorPerdas } from '@/pages/sdg-corporativo/SlideIndicadorPerdas'
 import { SlideAssuntosGerais } from '@/pages/sdg/SlideAssuntosGerais'
@@ -19,7 +20,9 @@ const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov'
 
 const SLIDES = [
   { id: 'receita',       titulo: 'Receita Líquida'       },
+  { id: 'caixa',         titulo: 'Geração de Caixa'       },
   { id: 'ebitda',        titulo: 'EBITDA'                 },
+  { id: 'lucro',         titulo: 'Lucro'                  },
   { id: 'gastos-totais', titulo: 'Gastos Totais'          },
   { id: 'despesas',      titulo: 'Despesa Administrativa' },
   { id: 'vales',         titulo: 'Vales'                   },
@@ -31,7 +34,9 @@ function unicos<T>(arr: T[]): T[] { return Array.from(new Set(arr)) }
 
 /**
  * SDG Corporativo — apresentação pra diretoria, consolidando todas as
- * unidades (visão AMBEV) por setor. Só o dono do sistema acessa (ver rota em
+ * unidades (visão AMBEV) por setor, na ordem: Receita Líquida, Geração de
+ * Caixa, EBITDA, Lucro (Ambev), Gastos Totais, Despesa Administrativa,
+ * Vales, Multas e Assuntos Gerais. Só o dono do sistema acessa (ver rota em
  * App.tsx, `ProtectedRoute donoApenas`). Diferente do SDG Financeiro (uma
  * unidade por vez, busca própria fora do DataProvider), aqui os dados vêm do
  * cache global (`DataContext`) porque o próprio propósito é mostrar todas as
@@ -220,6 +225,18 @@ export function SdgCorporativoPage() {
             )}
             {slideIdx === 1 && (
               <SlideIndicadorFarol
+                titulo="Geração de Caixa"
+                codigo="275"
+                rowsAno={rowsAno}
+                orcamentoAno={orcamentoAno}
+                unidades={unidades}
+                negocio={selNegocio}
+                ano={selAno}
+                mes={selMes}
+              />
+            )}
+            {slideIdx === 2 && (
+              <SlideIndicadorFarol
                 titulo="EBITDA"
                 codigo="232"
                 rowsAno={rowsAno}
@@ -230,7 +247,10 @@ export function SdgCorporativoPage() {
                 mes={selMes}
               />
             )}
-            {slideIdx === 2 && (
+            {slideIdx === 3 && (
+              <SlideLucro unidades={unidades} ano={selAno} mes={selMes} />
+            )}
+            {slideIdx === 4 && (
               <SlideIndicadorFarol
                 titulo="Gastos Totais"
                 codigo="900"
@@ -242,7 +262,7 @@ export function SdgCorporativoPage() {
                 mes={selMes}
               />
             )}
-            {slideIdx === 3 && (
+            {slideIdx === 5 && (
               <SlideDespesaAdministrativa
                 rowsAno={rowsAno}
                 orcamentoAno={orcamentoAno}
@@ -252,7 +272,7 @@ export function SdgCorporativoPage() {
                 mes={selMes}
               />
             )}
-            {slideIdx === 4 && (
+            {slideIdx === 6 && (
               <SlideIndicadorPerdas
                 titulo="Vales"
                 indicador="vales"
@@ -263,7 +283,7 @@ export function SdgCorporativoPage() {
                 mes={selMes}
               />
             )}
-            {slideIdx === 5 && (
+            {slideIdx === 7 && (
               <SlideIndicadorPerdas
                 titulo="Multas"
                 indicador="multas"
@@ -274,7 +294,7 @@ export function SdgCorporativoPage() {
                 mes={selMes}
               />
             )}
-            {slideIdx === 6 && (
+            {slideIdx === 8 && (
               <SlideAssuntosGerais justificativa={justificativasCorp['assuntos-gerais']} />
             )}
           </>

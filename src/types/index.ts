@@ -295,6 +295,53 @@ export interface ResultadoTri {
   valor: number
 }
 
+/**
+ * Disponibilidade Rota acumulada (Importação > Financeiro > Dados
+ * auxiliares) — snapshot único por unidade, sem ano/mês (já vem acumulado
+ * da fonte); cada importação substitui o conteúdo inteiro da tabela.
+ * Alimenta o indicador "Disp. Rota" do Farol Gerentes. `meta`/`real` em
+ * escala de percentual (ex: 85.3 = 85,3%).
+ */
+export interface DisponibilidadeRotaAcumulada {
+  id?: string
+  unidade: string
+  meta: number
+  real: number
+}
+
+/**
+ * Disponibilidade Armazém acumulada (Importação > Financeiro > Dados
+ * auxiliares) — mesmo espírito da `DisponibilidadeRotaAcumulada`, snapshot
+ * único por unidade. `meta` é opcional aqui: quando a planilha não traz a
+ * coluna de meta, a importação preserva a última meta já salva (só
+ * atualiza `real`) — por isso pode ficar `null` até a primeira importação
+ * que trouxer meta pra aquela unidade. Alimenta o "Disp. Armazém" do Farol
+ * Gerentes.
+ */
+export interface DisponibilidadeArmazemAcumulada {
+  id?: string
+  unidade: string
+  meta: number | null
+  real: number
+}
+
+/**
+ * Scorecard acumulado (Importação > Financeiro > Dados auxiliares) —
+ * snapshot único por unidade × negócio, sem ano/mês; cada importação
+ * substitui o conteúdo inteiro da tabela. O `negocio` vem do "Canal" da
+ * planilha ("Apoio Logístico" = ARM, "Distribuição Urbana" = ROTA,
+ * "Empurrada" = EMP, ver `scorecard-parser.ts`). `score` em escala de
+ * percentual (ex: 97.4 = 97,4%); a meta é fixa em 80% no código
+ * (`META_SCORECARD`), não vem da planilha. Alimenta as linhas "Scorecard
+ * Rota./Arm./Empur." do Farol Gerentes.
+ */
+export interface ScorecardAcumulado {
+  id?: string
+  unidade: string
+  negocio: 'ARM' | 'ROTA' | 'EMP'
+  score: number
+}
+
 /** Meta (máximo de TRI) e peso do indicador TRI — cadastro único, vale pra todas as unidades. */
 export interface TriMeta {
   meta_max: number
@@ -337,14 +384,75 @@ export interface OrcamentoLinha {
  * em planilha. `nome`/`prazo` são editáveis livremente porque o status mensal
  * (RotinaFinanceiraStatus) referencia a rotina por `id`, não por texto.
  */
+/**
+ * Como ler o `prazo_dia` de uma rotina: dia do mês, n-ésimo dia útil, ou
+ * nenhum dia (prazo que depende de outro evento). Ver `rotina-prazo.ts`.
+ */
+export type PrazoTipo = 'dia_fixo' | 'dia_util' | 'sem_data'
+
 export interface RotinaFinanceira {
   id?: string
   setor: string
   nome: string
-  /** Texto livre do prazo, ex: "Dia 10", "4º dia útil", "1 dia após envio da matriz". */
+  /** Texto livre do prazo, ex: "Dia 10", "4º dia útil", "1 dia após envio da matriz". É o que aparece na tela. */
   prazo: string
+  /**
+   * Versão estruturada do prazo (migration 099), usada só pra posicionar a
+   * rotina no Calendário — ver `rotina-prazo.ts`. 'sem_data' (padrão) = fica
+   * na lista de "sem data definida", fora da grade.
+   */
+  prazo_tipo: PrazoTipo
+  /** Dia do mês (prazo_tipo 'dia_fixo') ou o n-ésimo dia útil ('dia_util'); null em 'sem_data'. */
+  prazo_dia: number | null
   ordem: number
   ativo: boolean
+}
+
+/** Valor de `unidade` num ajuste de dia que vale pra todas as unidades (sentinela, ver migration 100). */
+export const AJUSTE_TODAS_UNIDADES = '*'
+
+/**
+ * Ajuste de dia de uma rotina no Calendário (migration 100) — o resultado de
+ * arrastar o chip. Exceção por cima do prazo cadastrado; qual vence quando
+ * mais de um se aplica está em `rotina-ajuste-dia.ts`.
+ */
+export interface RotinaAjusteDia {
+  id?: string
+  rotina_id: string
+  /** Código da unidade, ou `AJUSTE_TODAS_UNIDADES` ('*') quando vale pra todas. */
+  unidade: string
+  /** Mês em que foi arrastado — com `permanente`, é a vigência inicial. */
+  ano: number
+  mes: number
+  dia: number
+  /** false = só nesse mês; true = desse mês em diante. */
+  permanente: boolean
+}
+
+export type EventoRecorrencia = 'unico' | 'semanal' | 'mensal'
+export type EventoCor = 'roxo' | 'azul' | 'ambar' | 'verde'
+
+/**
+ * Evento do Calendário (migration 101) — RPS, visita, o que a unidade
+ * precisar ver na agenda. NÃO é rotina: não tem OK/NOK e não entra na
+ * aderência nem em pontuação nenhuma.
+ */
+export interface CalendarioEvento {
+  id?: string
+  titulo: string
+  descricao: string
+  /** Código da unidade, ou `AJUSTE_TODAS_UNIDADES` ('*') quando vale pra todas. */
+  unidade: string
+  tipo: EventoRecorrencia
+  /** 0=domingo … 6=sábado — só em `tipo` 'semanal'. */
+  dia_semana: number | null
+  /** Dia do mês (31 = último dia) — só em `tipo` 'mensal'. */
+  dia_mes: number | null
+  /** Evento único: a data dele. Semanal/mensal: a partir de quando vale. Formato YYYY-MM-DD. */
+  data_inicio: string
+  /** Quando deixa de valer (YYYY-MM-DD); null = sem fim. */
+  data_fim: string | null
+  cor: EventoCor
 }
 
 /** Status (OK/NOK/N-A) de uma rotina financeira, por unidade e mês — null = ainda não preenchido. */
@@ -765,4 +873,21 @@ export interface PesoDistribuicaoFuncao {
   funcao: 'COORD. DU' | 'SUPERVISOR DU'
   indicador: 'indisponibilidade' | 'pacote_gente' | 'vales' | 'logon_du' | 'devolucao' | 'presenteismo_du'
   peso: number
+}
+
+/**
+ * Lucro pago pela Ambev por unidade×negócio×mês (SDG Corp Fin > Lucro) —
+ * Volume Atual × R$/HL, importado da planilha da Ambev. `negocio` vem do
+ * prefixo da coluna "Vigencia" (ex: "ROTA_2_3_2026" → 'ROTA') — hoje ROTA e
+ * AS, Armazém entra depois com outra planilha, sem lista fixa de valores.
+ */
+export interface LucroAmbevRow {
+  id?: string
+  unidade: string
+  negocio: string
+  ano: number
+  mes: number
+  volume: number
+  valor_hl: number
+  lucro: number
 }

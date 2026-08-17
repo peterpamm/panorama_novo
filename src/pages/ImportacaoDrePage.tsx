@@ -11,6 +11,9 @@ import { PastaDropzone } from '@/components/importacao/PastaDropzone'
 import { ResolverUnidadesPanel } from '@/components/importacao/ResolverUnidadesPanel'
 import { RelatorioAlteracoes } from '@/components/importacao/RelatorioAlteracoes'
 import { ImportarPainelPerdasAuxDialog } from '@/components/importacao/ImportarPainelPerdasAuxDialog'
+import { ImportarDisponibilidadeRotaDialog } from '@/components/importacao/ImportarDisponibilidadeRotaDialog'
+import { ImportarDisponibilidadeArmazemDialog } from '@/components/importacao/ImportarDisponibilidadeArmazemDialog'
+import { ImportarScorecardDialog } from '@/components/importacao/ImportarScorecardDialog'
 import { ImportacaoGentePanel } from '@/components/importacao/ImportacaoGentePanel'
 import { ImportarResultadosDtoT2 } from '@/components/importacao/ImportarResultadosDtoT2'
 import { ImportarResultadosDtoT1 } from '@/components/importacao/ImportarResultadosDtoT1'
@@ -403,6 +406,9 @@ export function ImportacaoDrePage() {
               <p className="text-sm text-muted-foreground">Importações independentes do DRE.</p>
               <div className="flex flex-wrap gap-3">
                 <ImportarPainelPerdasAuxDialog unidades={unidadesState} onImportado={() => {}} />
+                <ImportarDisponibilidadeRotaDialog unidades={unidadesState} onImportado={() => {}} />
+                <ImportarDisponibilidadeArmazemDialog unidades={unidadesState} onImportado={() => {}} />
+                <ImportarScorecardDialog unidades={unidadesState} onImportado={() => {}} />
               </div>
             </div>
           </div>

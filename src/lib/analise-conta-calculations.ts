@@ -1,5 +1,9 @@
-import type { DreCalculoRow, DreLongoRow } from '@/types'
-import { normalizarParaCalculo } from '@/lib/farol-calculations'
+import type { DreCalculoRow, DreLongoRow, Natureza, OrcamentoLinha } from '@/types'
+import { CODIGOS_PERFORMANCE } from '@/lib/constants'
+import {
+  calcularImpactoFinanceiro, calcularReceita, calcularSemaforo, normalizarParaCalculo,
+} from '@/lib/farol-calculations'
+import { buscarMetaOrcamento } from '@/lib/orcamento-farol'
 
 export interface SeriePontoConta {
   mes: number
@@ -28,6 +32,96 @@ export function calcularSerieMensalConta(rowsMensal: DreLongoRow[]): SeriePontoC
     porMes.set(row.mes, atual)
   })
   return Array.from(porMes.values()).sort((a, b) => a.mes - b.mes)
+}
+
+export interface LinhaContaUnidade {
+  unidade: string
+  remunerado: number
+  realizado: number
+  gap: number
+  /** gap / remunerado × 100 (0 quando não há remunerado no período). */
+  gapPercent: number
+  /**
+   * Meta (%) do orçamento importado (tabela `orcamentos`, via
+   * `buscarMetaOrcamento`) — null quando a conta não tem mapeamento de
+   * orçamento ou não há linha importada pra unidade/período.
+   */
+  meta: number | null
+  /** AVR — % da receita realizado pela conta. */
+  avr: number
+  /** meta − AVR (custo) ou AVR − meta (performance): positivo é sempre bom. null sem meta. */
+  deltaPp: number | null
+  /** Impacto do Δ em R$ sobre a receita da própria unidade no período (0 sem meta ou sem receita). */
+  impacto: number
+}
+
+/** Média do AVR ponderada pelo realizado — mesma régua do `avrPorPrefixo` de prefixo único. */
+function avrPonderado(linhas: DreCalculoRow[]): number {
+  const totalReal = linhas.reduce((acc, r) => acc + r.real, 0)
+  if (totalReal === 0) return 0
+  return linhas.reduce((acc, r) => acc + r.avr * r.real, 0) / totalReal
+}
+
+/**
+ * Mesma conta vista por unidade (espera `rowsPeriodo` já filtrado por
+ * negócio/ano/tipo_periodo=MENSAL e pelo período escolhido, com TODAS as
+ * unidades e TODAS as contas dentro — as outras contas são necessárias pra
+ * receita de cada unidade, base do impacto em R$). Soma
+ * Remunerado/Realizado/Gap da conta e compara a meta × AVR, com o impacto
+ * em R$ do desvio.
+ *
+ * A meta vem SÓ do orçamento importado (`buscarMetaOrcamento`, mesma régua
+ * do Farol de Metas e do Ranking), nunca do AVO do DRE — `mesOrcamento` é 0
+ * pro bloco anual, 1-12 pro mês. Como o orçamento só tem as contas mapeadas
+ * em `PACOTE_CONTA_ORCAMENTO`, conta fora desse mapa fica com `meta` null
+ * (Δ e impacto zerados), e a comparação em R$ segue funcionando normal.
+ *
+ * A natureza da conta segue a mesma regra do resto do app
+ * (`CODIGOS_PERFORMANCE`): EBITDA/Geração de Caixa são performance (quanto
+ * maior melhor), qualquer outra é custo (quanto menor melhor) — é isso que
+ * dá o sinal do `deltaPp` e do `impacto`.
+ *
+ * Devolve também a linha da AMBEV quando ela estiver nos dados, já que na
+ * view ela é uma "unidade" igual às outras (o consolidado); quem chama
+ * decide se mostra como total ou junto das demais. Ordena pelo pior gap
+ * primeiro, que é a leitura que interessa numa comparação entre unidades.
+ */
+export function calcularPorUnidadeConta(
+  rowsPeriodo: DreLongoRow[],
+  conta: string,
+  orcamentos: OrcamentoLinha[],
+  params: { negocio: string; ano: number; mesOrcamento: number },
+): LinhaContaUnidade[] {
+  const natureza: Natureza = CODIGOS_PERFORMANCE.includes(conta) ? 'performance' : 'custo'
+  const unidades = Array.from(new Set(rowsPeriodo.filter(r => r.conta_codigo === conta).map(r => r.unidade)))
+
+  return unidades.map(unidade => {
+    const rowsUnidade = rowsPeriodo.filter(r => r.unidade === unidade)
+    const calcUnidade = normalizarParaCalculo(rowsUnidade)
+    const calcConta = calcUnidade.filter(r => r.conta_codigo === conta)
+
+    const remunerado = calcConta.reduce((acc, r) => acc + r.remun, 0)
+    const realizado = calcConta.reduce((acc, r) => acc + r.real, 0)
+    const gap = calcConta.reduce((acc, r) => acc + r.dif, 0)
+
+    const avr = avrPonderado(calcConta)
+    const meta = buscarMetaOrcamento(orcamentos, {
+      unidade, negocio: params.negocio, ano: params.ano, codigo: conta, mes: params.mesOrcamento,
+    })
+    const receita = calcularReceita(calcUnidade)
+
+    return {
+      unidade,
+      remunerado,
+      realizado,
+      gap,
+      gapPercent: remunerado !== 0 ? (gap / remunerado) * 100 : 0,
+      meta,
+      avr,
+      deltaPp: calcularSemaforo(avr, meta, natureza).delta,
+      impacto: calcularImpactoFinanceiro(avr, meta, receita, natureza),
+    }
+  }).sort((a, b) => a.gap - b.gap)
 }
 
 export interface ResumoConta {

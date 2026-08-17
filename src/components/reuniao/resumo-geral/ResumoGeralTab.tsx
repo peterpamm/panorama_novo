@@ -56,7 +56,6 @@ export function ResumoGeralTab({ ano, setAno, mes, setMes, linhas, resumoPorLinh
     const base = linhasComResumo.map(l => ({
       unidade: chaveLinha(l.linha),
       pontos: l.resumo.pontuacaoFinal,
-      ebitdaAvr: null as number | null,
       ebitdaDelta: deltaFarolPacoteUnidadeMes(rowsDre, orcamentos, '232', l.linha.unidade, Number(ano), mesNum, l.linha.negocio),
       rank: null as number | null,
     }))
@@ -194,7 +193,7 @@ export function ResumoGeralTab({ ano, setAno, mes, setMes, linhas, resumoPorLinh
               linhas={ranking as RankingLinhaPontos[]}
               nomesUnidade={nomesLinha}
               titulo="Ranking Geral"
-              subtitulo={`${MESES_NOMES[mesNum - 1]}/${ano} — pontuação final (setores + bonificações)`}
+              subtitulo={`${MESES_NOMES[mesNum - 1]}/${ano} · critério de desempate: Δ EBITDA`}
             />
           </div>
         </>

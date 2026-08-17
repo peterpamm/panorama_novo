@@ -98,3 +98,25 @@
     color-scheme: dark;
   }
 }
+
+@layer components {
+  /* Scrollbar discreta pra navegação da sidebar (fundo navy nos dois temas —
+     a barra padrão do sistema fica pesada/clara demais ali). */
+  .sidebar-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(147, 197, 253, 0.25) transparent;
+  }
+  .sidebar-scroll::-webkit-scrollbar {
+    width: 6px;
+  }
+  .sidebar-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .sidebar-scroll::-webkit-scrollbar-thumb {
+    background-color: rgba(147, 197, 253, 0.25);
+    border-radius: 9999px;
+  }
+  .sidebar-scroll:hover::-webkit-scrollbar-thumb {
+    background-color: rgba(147, 197, 253, 0.4);
+  }
+}

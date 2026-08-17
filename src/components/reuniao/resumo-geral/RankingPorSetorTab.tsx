@@ -6,7 +6,7 @@ import { PillToggle } from '@/components/ui/pill-toggle'
 import { atribuirRankComDesempate } from '@/lib/reuniao-resultados'
 import { somarAcumuladoAnual } from '@/lib/resumo-geral-calculations'
 import { RankingTabelaPontos, type RankingLinhaPontos } from '@/components/ranking/RankingTabelas'
-import { valorFarolPacoteUnidadeMes, deltaFarolPacoteUnidadeMes } from '@/hooks/useReuniaoDados'
+import { deltaFarolPacoteUnidadeMes } from '@/hooks/useReuniaoDados'
 import { useDreLongoTodasUnidades } from '@/hooks/useDreLongoTodasUnidades'
 import { useOrcamentoTodasUnidades } from '@/hooks/useOrcamentoTodasUnidades'
 import { MESES_NOMES, ANOS_RESUMO_GERAL, type SetorConsolidado } from '@/pages/reuniao/ReuniaoResumoGeralPage'
@@ -46,15 +46,14 @@ export function RankingPorSetorTab({ ano, setAno, mes, setMes, unidades, setores
             mes => s.totalPorUnidadeMes[`${unidade}|${negocio}|${mes}`] ?? null,
             historico ? { mesFinal: historico.mes_final, pontuacaoAcumulada: historico[s.setor] } : null,
           )
-          return { unidade: `${unidade}|${negocio}`, pontos, ebitdaAvr: null as number | null, rank: null as number | null }
+          return { unidade: `${unidade}|${negocio}`, pontos, ebitdaDelta: null as number | null, rank: null as number | null }
         })
         return { label: s.label, ranking: atribuirRankComDesempate(base, l => l.pontos, () => null) }
       }
       const base = s.unidadesDoTotal.map(({ unidade, negocio }) => ({
         unidade: `${unidade}|${negocio}`,
         pontos: s.totalPorUnidadeMes[`${unidade}|${negocio}|${mesNum}`] ?? null,
-        // ebitdaAvr só pra exibir; o desempate usa o delta vs meta (mesma régua do Ranking de EBITDA).
-        ebitdaAvr: valorFarolPacoteUnidadeMes(rowsDre, '232', unidade, Number(ano), mesNum, negocio),
+        // Delta do EBITDA vs meta — critério de desempate e o que aparece na coluna/pódio.
         ebitdaDelta: deltaFarolPacoteUnidadeMes(rowsDre, orcamentos, '232', unidade, Number(ano), mesNum, negocio),
         rank: null as number | null,
       }))
@@ -117,7 +116,7 @@ export function RankingPorSetorTab({ ano, setAno, mes, setMes, unidades, setores
               titulo={label}
               subtitulo={visao === 'ytd'
                 ? `${ano} — acumulado do ano (YTD)`
-                : `${MESES_NOMES[mesNum - 1]}/${ano} — total de pontos · desempate: melhor delta de EBITDA vs meta`}
+                : `${MESES_NOMES[mesNum - 1]}/${ano} · critério de desempate: Δ EBITDA`}
             />
           ))}
         </div>

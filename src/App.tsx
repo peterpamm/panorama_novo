@@ -5,6 +5,7 @@ import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/pages/LoginPage'
 import { FarolDeMetasPage } from '@/pages/FarolDeMetasPage'
+import { FarolGerentesPage } from '@/pages/FarolGerentesPage'
 import { AnalisePorContaPage } from '@/pages/AnalisePorContaPage'
 import { RankingPage } from '@/pages/RankingPage'
 import { MetasPage } from '@/pages/MetasPage'
@@ -86,6 +87,7 @@ export default function App() {
             }
           >
             <Route index element={<FarolDeMetasPage />} />
+            <Route path="farol-gerentes" element={<FarolGerentesPage />} />
             <Route path="analise-conta" element={<AnalisePorContaPage />} />
             <Route path="ranking" element={<RankingPage />} />
             <Route path="painel-perdas" element={<PainelPerdasPage />} />

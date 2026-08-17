@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { useUnidades } from '@/hooks/useUnidades'
 import { useDreLongo } from '@/hooks/useDreLongo'
+import { useDreLongoTodasUnidades } from '@/hooks/useDreLongoTodasUnidades'
+import { useOrcamentoTodasUnidades } from '@/hooks/useOrcamentoTodasUnidades'
 import { useContas } from '@/hooks/useContas'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -14,6 +16,7 @@ import { EvolucaoChart } from '@/components/analise-conta/EvolucaoChart'
 import { DetalhesTable } from '@/components/analise-conta/DetalhesTable'
 import { AberturaContas } from '@/components/analise-conta/AberturaContas'
 import { AnoVsAnoPanel } from '@/components/analise-conta/AnoVsAnoPanel'
+import { PorUnidadePanel } from '@/components/analise-conta/PorUnidadePanel'
 import { CONTA_RECEITA } from '@/lib/constants'
 import { normalizarParaCalculo } from '@/lib/farol-calculations'
 import { calcularResumoConta, calcularSerieMensalConta } from '@/lib/analise-conta-calculations'
@@ -62,6 +65,25 @@ export function AnalisePorContaPage() {
 
   const [selConta, setSelConta] = useState(CONTA_RECEITA)
   const [selContaAnoVsAno, setSelContaAnoVsAno] = useState(CONTA_RECEITA)
+  const [selContaPorUnidade, setSelContaPorUnidade] = useState(CONTA_RECEITA)
+
+  // Aba "Por Unidade" — a mesma conta em todas as unidades, do cache global
+  // (`DataContext`), não do `useDreLongo` da unidade selecionada. Só faz
+  // sentido pra quem enxerga várias unidades (admin/corporativo); usuário de
+  // unidade nem vê a aba, e a RLS já limitaria o dado de qualquer jeito.
+  const { rows: rowsTodasUnidades } = useDreLongoTodasUnidades()
+  // Meta do modo AVR sai só daqui — o orçamento importado, mesma fonte do
+  // Farol de Metas e do Ranking (nunca o AVO do DRE).
+  const { orcamentos: orcamentosTodasUnidades } = useOrcamentoTodasUnidades()
+  const mostrarPorUnidade = role === 'admin'
+  // Todas as contas (não só a selecionada): o impacto em R$ do AVR precisa da
+  // receita de cada unidade, que vem da conta 002 dessas mesmas linhas.
+  const rowsTodasNegocioAno = useMemo(
+    () => rowsTodasUnidades.filter(r => r.negocio === selNegocio && r.ano === selAno && r.tipo_periodo === 'MENSAL'),
+    [rowsTodasUnidades, selNegocio, selAno],
+  )
+  const nomesUnidade = useMemo(() => new Map(todasUnidades.map(u => [u.codigo, u.nome])), [todasUnidades])
+  const nomeContaPorUnidade = contas.find(c => c.codigo === selContaPorUnidade)?.descricao ?? selContaPorUnidade
 
   const rowsContaAtual = useMemo(
     () => rowsNegocio.filter(r => r.ano === selAno && r.conta_codigo === selConta && r.tipo_periodo === 'MENSAL'),
@@ -182,6 +204,14 @@ export function AnalisePorContaPage() {
                 >
                   Abertura de Contas
                 </TabsTrigger>
+                {mostrarPorUnidade && (
+                  <TabsTrigger
+                    value="porunidade"
+                    className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
+                  >
+                    Por Unidade
+                  </TabsTrigger>
+                )}
               </TabsList>
 
               <TabsContent value="conta" className="space-y-6 pt-6">
@@ -226,6 +256,28 @@ export function AnalisePorContaPage() {
               <TabsContent value="abertura" className="pt-6">
                 <AberturaContas rowsNegocioAno={rowsNegocioAno} nomesPorCodigo={nomesPorCodigo} />
               </TabsContent>
+
+              {mostrarPorUnidade && (
+                <TabsContent value="porunidade" className="space-y-6 pt-6">
+                  <div className="max-w-md space-y-1.5">
+                    <Label className="text-gray-700 dark:text-gray-300">Conta</Label>
+                    <ContaCombobox
+                      contas={contas}
+                      value={selContaPorUnidade}
+                      onChange={setSelContaPorUnidade}
+                    />
+                  </div>
+                  <PorUnidadePanel
+                    rowsNegocioAno={rowsTodasNegocioAno}
+                    orcamentos={orcamentosTodasUnidades}
+                    conta={selContaPorUnidade}
+                    negocio={selNegocio}
+                    nomesUnidade={nomesUnidade}
+                    nomeConta={nomeContaPorUnidade}
+                    ano={selAno ?? 0}
+                  />
+                </TabsContent>
+              )}
             </Tabs>
           </div>
         </div>

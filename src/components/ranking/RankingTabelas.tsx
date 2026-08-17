@@ -530,8 +530,12 @@ export interface RankingLinhaPontos {
   unidade: string
   /** Soma de pontos do mês (todos os indicadores do setor); null = nenhum indicador com resultado lançado ainda. */
   pontos: number | null
-  /** % de EBITDA (AVR) do mês — só exibido/usado como critério de desempate, sem meta. */
-  ebitdaAvr: number | null
+  /**
+   * Δ do EBITDA vs meta orçada do mês, em p.p. (positivo = bateu) — é o
+   * próprio critério de desempate, exibido pra deixar claro por que uma
+   * unidade ficou na frente da outra num empate de pontos.
+   */
+  ebitdaDelta: number | null
   rank: number | null
 }
 
@@ -546,8 +550,10 @@ interface RankingTabelaPontosProps {
  * Ranking de pontuação da Reunião Resultados — mesmo modelo de pódio/tabela
  * dos demais rankings. Sem meta cadastrada (pontuação é sempre relativa entre
  * unidades), então o corte verde/vermelho do pódio usa a média do período,
- * igual ao fallback de `RankingTabelaAderencia`. O EBITDA aparece como coluna
- * e como detalhe no pódio pra deixar visível o critério de desempate.
+ * igual ao fallback de `RankingTabelaAderencia`. O Δ de EBITDA vs meta
+ * aparece como coluna e como detalhe no pódio — é o próprio critério de
+ * desempate, então mostrar o delta (e não o % de EBITDA puro) deixa a
+ * ordem do ranking auto-explicativa.
  */
 export function RankingTabelaPontos({ linhas, nomesUnidade, titulo, subtitulo }: RankingTabelaPontosProps) {
   const [modoPodio, setModoPodio] = useState(false)
@@ -562,8 +568,8 @@ export function RankingTabelaPontos({ linhas, nomesUnidade, titulo, subtitulo }:
     rank: l.rank,
     valorFmt: l.pontos === null ? '—' : `${l.pontos} pts`,
     positivo: l.pontos !== null && media !== null && l.pontos >= media,
-    detalhe: l.ebitdaAvr === null ? undefined : (
-      <span className="text-muted-foreground">EBITDA {formatPercent(l.ebitdaAvr, 1)}</span>
+    detalhe: l.ebitdaDelta === null ? undefined : (
+      <span className={TEXTO[corClasseDelta(l.ebitdaDelta)]}>Δ EBITDA {formatPercentSigned(l.ebitdaDelta, 1)}</span>
     ),
   }))
 
@@ -585,7 +591,7 @@ export function RankingTabelaPontos({ linhas, nomesUnidade, titulo, subtitulo }:
               <TableHead className="w-14">#</TableHead>
               <TableHead>Unidade</TableHead>
               <TableHead className="text-center">Pontos</TableHead>
-              <TableHead className="text-center">EBITDA</TableHead>
+              <TableHead className="text-center">Δ EBITDA</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -602,8 +608,8 @@ export function RankingTabelaPontos({ linhas, nomesUnidade, titulo, subtitulo }:
                   <TableCell className={cn('text-center text-sm font-semibold tabular-nums', TEXTO[cor])}>
                     {l.pontos === null ? '—' : l.pontos}
                   </TableCell>
-                  <TableCell className="text-center text-sm tabular-nums text-muted-foreground">
-                    {l.ebitdaAvr === null ? '—' : formatPercent(l.ebitdaAvr, 1)}
+                  <TableCell className={cn('text-center text-sm tabular-nums', TEXTO[corClasseDelta(l.ebitdaDelta)])}>
+                    {l.ebitdaDelta === null ? '—' : formatPercentSigned(l.ebitdaDelta, 1)}
                   </TableCell>
                 </TableRow>
               )

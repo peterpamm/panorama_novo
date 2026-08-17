@@ -1,4 +1,5 @@
-import { LogOut, Moon, Sun } from 'lucide-react'
+import { Building2, LogOut, MonitorPlay, Moon, Sun } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/button'
 import {
@@ -13,7 +14,8 @@ interface HeaderProps {
 }
 
 export function Header({ title, isDark, onToggleTheme }: HeaderProps) {
-  const { user, role, unidade, signOut } = useAuth()
+  const { user, role, unidade, souDono, signOut } = useAuth()
+  const navigate = useNavigate()
   const inicial = user?.email?.[0]?.toUpperCase() ?? '?'
 
   return (
@@ -55,6 +57,24 @@ export function Header({ title, isDark, onToggleTheme }: HeaderProps) {
                 {unidade && ` · ${unidade}`}
               </div>
             </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {/* Atalho pros modos apresentação (telas cheias, fora do AppShell) —
+                antes só dava pra entrar neles pela tela de login, o que obrigava
+                a deslogar só pra trocar de modo. Sair da apresentação (Esc ou o
+                X do header dela) volta pro painel. */}
+            <DropdownMenuLabel className="pb-1 text-xs font-medium text-muted-foreground">
+              Modo apresentação
+            </DropdownMenuLabel>
+            <DropdownMenuItem onClick={() => navigate('/sdg-financeiro')} className="cursor-pointer">
+              <MonitorPlay className="mr-2 h-4 w-4" />
+              SDG Financeiro
+            </DropdownMenuItem>
+            {souDono && (
+              <DropdownMenuItem onClick={() => navigate('/sdg-corporativo')} className="cursor-pointer">
+                <Building2 className="mr-2 h-4 w-4" />
+                SDG Corporativo
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={signOut} className="text-destructive cursor-pointer">
               <LogOut className="mr-2 h-4 w-4" />

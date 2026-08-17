@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { DreCalculoRow, DreLongoRow } from '@/types'
+import type { DreCalculoRow, DreLongoRow, OrcamentoLinha } from '@/types'
 import {
   calcularAberturaDetalheMensal,
   calcularAberturaResumo,
   calcularComparativoAnual,
+  calcularPorUnidadeConta,
   calcularResumoConta,
   calcularSerieMensalConta,
   corClasseGap,
@@ -48,6 +49,99 @@ describe('calcularSerieMensalConta', () => {
       linha('021', 2, -100, -100),
     ])
     expect(serie.map(p => p.mes)).toEqual([1, 2, 3])
+  })
+})
+
+describe('calcularPorUnidadeConta', () => {
+  function linhaUnidade(unidade: string, mes: number, remunerado: number, realizado: number, extra?: Partial<DreLongoRow>): DreLongoRow {
+    return { ...linha('021', mes, remunerado, realizado), unidade, ...extra }
+  }
+
+  /** Receita (conta 002) da unidade no mês — base do impacto em R$. */
+  function receita(unidade: string, mes: number, valor: number): DreLongoRow {
+    return { ...linha('002', mes, valor, valor), unidade }
+  }
+
+  /** Linha do orçamento importado — `conta_codigo` é a numeração própria da planilha de orçamento. */
+  function orcamento(unidade: string, conta_codigo: string, mes: number, av: number): OrcamentoLinha {
+    return { unidade, negocio: 'ROTA', ano: 2025, mes, conta_codigo, av, orcado: 0 } as OrcamentoLinha
+  }
+
+  const SEM_ORCAMENTO = { negocio: 'ROTA', ano: 2025, mesOrcamento: 0 }
+
+  it('soma os meses de cada unidade e calcula o gap % sobre o remunerado dela', () => {
+    const linhas = calcularPorUnidadeConta([
+      linhaUnidade('FOZ', 1, -1000, -900),
+      linhaUnidade('FOZ', 2, -1000, -900),
+      linhaUnidade('DIADEMA', 1, -2000, -2200),
+    ], '021', [], SEM_ORCAMENTO)
+    expect(linhas.map(l => ({ unidade: l.unidade, remunerado: l.remunerado, realizado: l.realizado, gap: l.gap, gapPercent: l.gapPercent }))).toEqual([
+      { unidade: 'DIADEMA', remunerado: 2000, realizado: 2200, gap: -200, gapPercent: -10 },
+      { unidade: 'FOZ', remunerado: 2000, realizado: 1800, gap: 200, gapPercent: 10 },
+    ])
+  })
+
+  it('ordena pelo pior gap primeiro', () => {
+    const linhas = calcularPorUnidadeConta([
+      linhaUnidade('A', 1, -100, -100),
+      linhaUnidade('B', 1, -100, -180),
+      linhaUnidade('C', 1, -100, -50),
+    ], '021', [], SEM_ORCAMENTO)
+    expect(linhas.map(l => l.unidade)).toEqual(['B', 'A', 'C'])
+  })
+
+  it('unidade sem remunerado no período fica com gap % zero em vez de dividir por zero', () => {
+    const linhas = calcularPorUnidadeConta([linhaUnidade('A', 1, 0, -500)], '021', [], SEM_ORCAMENTO)
+    expect(linhas[0]).toMatchObject({ remunerado: 0, gapPercent: 0 })
+    expect(Number.isFinite(linhas[0].gapPercent)).toBe(true)
+  })
+
+  it('meta vem do orçamento importado, não do AVO do DRE', () => {
+    const linhas = calcularPorUnidadeConta([
+      // AVO do GInfo diz 5% — deve ser ignorado; o orçamento importado diz 10%.
+      linhaUnidade('A', 1, -100, -120, { avo: -5, avr: -12 }),
+      receita('A', 1, 1000),
+    ], '021', [orcamento('A', '012', 0, -10)], SEM_ORCAMENTO)
+    expect(linhas[0]).toMatchObject({ remunerado: 100, realizado: 120, meta: 10, avr: 12 })
+    // Custo: gastou 12% da receita contra 10% orçado — Δ = -2 p.p. e impacto = -2% de 1000.
+    expect(linhas[0].deltaPp).toBeCloseTo(-2)
+    expect(linhas[0].impacto).toBeCloseTo(-20)
+  })
+
+  it('conta de performance (EBITDA) inverte o sinal: superar a meta é bom', () => {
+    const linhas = calcularPorUnidadeConta([
+      { ...linha('232', 1, 100, 150), unidade: 'A', avr: 15 },
+      receita('A', 1, 1000),
+    ], '232', [orcamento('A', '133', 0, 10)], SEM_ORCAMENTO)
+    expect(linhas[0].deltaPp).toBeCloseTo(5)
+    expect(linhas[0].impacto).toBeCloseTo(50)
+  })
+
+  it('conta sem orçamento importado fica sem meta: Δ null e impacto zero, mas o R$ continua', () => {
+    const linhas = calcularPorUnidadeConta([
+      linhaUnidade('A', 1, -100, -120, { avr: -12 }),
+      receita('A', 1, 1000),
+    ], '021', [], SEM_ORCAMENTO)
+    expect(linhas[0].meta).toBeNull()
+    expect(linhas[0].deltaPp).toBeNull()
+    expect(linhas[0].impacto).toBe(0)
+    expect(linhas[0].gap).toBe(-20)
+  })
+
+  it('usa o bloco do mês do orçamento quando o período é um mês específico', () => {
+    const orcamentos = [orcamento('A', '012', 0, -10), orcamento('A', '012', 3, -8)]
+    const rows = [linhaUnidade('A', 3, -100, -120, { avr: -12 }), receita('A', 3, 1000)]
+    expect(calcularPorUnidadeConta(rows, '021', orcamentos, { ...SEM_ORCAMENTO, mesOrcamento: 3 })[0].meta).toBe(8)
+    expect(calcularPorUnidadeConta(rows, '021', orcamentos, SEM_ORCAMENTO)[0].meta).toBe(10)
+  })
+
+  it('AVR de vários meses entra como média ponderada pelo realizado', () => {
+    const linhas = calcularPorUnidadeConta([
+      linhaUnidade('A', 1, -100, -100, { avr: -10 }),
+      linhaUnidade('A', 2, -100, -300, { avr: -20 }),
+    ], '021', [], SEM_ORCAMENTO)
+    // (10×100 + 20×300) / 400 = 17,5 — não a média simples (15).
+    expect(linhas[0].avr).toBeCloseTo(17.5)
   })
 })
 

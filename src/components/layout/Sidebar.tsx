@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
-  Gauge, LineChart, Trophy, Upload,
+  Gauge, LineChart, TrafficCone, Trophy, Upload,
   Settings, AlertTriangle, HandCoins, Banknote, Award, ChevronDown, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -27,6 +27,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { to: '/',              icon: Gauge,         label: 'Farol de Metas' },
+  { to: '/farol-gerentes', icon: TrafficCone,   label: 'Farol Gerentes' },
   { to: '/analise-conta', icon: LineChart,      label: 'Análise por Conta' },
   { to: '/ranking',       icon: Trophy,         label: 'Ranking' },
   { to: '/painel-perdas', icon: AlertTriangle,  label: 'Painel de Perdas' },
@@ -147,8 +148,14 @@ export function Sidebar({ open, onToggle }: SidebarProps) {
         </button>
       </div>
 
-      {/* ── Navegação ── */}
-      <nav className="flex-1 space-y-0.5 px-2 py-3">
+      {/* ── Navegação ──
+          Rola sozinha quando não cabe (ex: Reunião Resultados e Remuneração
+          Variável abertas ao mesmo tempo, em tela baixa): `min-h-0` é o que
+          deixa o flex-1 encolher de verdade dentro da coluna, senão o
+          overflow-hidden do <aside> corta o final da lista sem dar scroll.
+          `overscroll-contain` evita que o scroll vaze pro conteúdo da página
+          quando chega no fim. */}
+      <nav className="flex-1 min-h-0 space-y-0.5 overflow-y-auto overscroll-contain px-2 py-3 sidebar-scroll">
         {itemsVisiveis
           .map(item => {
             const { to, icon: Icon, label, children } = item

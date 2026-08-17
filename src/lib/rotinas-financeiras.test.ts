@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calcularAderenciaPorUnidade, mesAnterior } from './rotinas-financeiras'
+import { calcularAderenciaPorUnidade, chaveStatus, mapaStatusExibicao, mesAnterior } from './rotinas-financeiras'
 import type { RotinaFinanceiraStatus } from '@/types'
 
 function status(rotina_id: string, unidade: string, mes: number, s: RotinaFinanceiraStatus['status']): RotinaFinanceiraStatus {
@@ -13,6 +13,34 @@ describe('mesAnterior', () => {
 
   it('vira o ano em janeiro', () => {
     expect(mesAnterior(2026, 1)).toEqual({ ano: 2025, mes: 12 })
+  })
+})
+
+describe('mapaStatusExibicao', () => {
+  it('usa a resposta do próprio mês', () => {
+    const mapa = mapaStatusExibicao([status('r1', 'FOZ', 5, 'OK')], [])
+    expect(mapa.get(chaveStatus('r1', 'FOZ'))).toEqual({ status: 'OK', observacao: '', herdado: false })
+  })
+
+  it('herda N/A do mês anterior quando o mês atual ainda não foi respondido', () => {
+    const mapa = mapaStatusExibicao([], [status('r1', 'FOZ', 4, 'N/A')])
+    expect(mapa.get(chaveStatus('r1', 'FOZ'))).toEqual({ status: 'N/A', observacao: '', herdado: true })
+  })
+
+  it('resposta do mês sempre vence a herança', () => {
+    const mapa = mapaStatusExibicao([status('r1', 'FOZ', 5, 'OK')], [status('r1', 'FOZ', 4, 'N/A')])
+    expect(mapa.get(chaveStatus('r1', 'FOZ'))).toMatchObject({ status: 'OK', herdado: false })
+  })
+
+  it('OK/NOK do mês anterior não herdam', () => {
+    const mapa = mapaStatusExibicao([], [status('r1', 'FOZ', 4, 'OK'), status('r2', 'FOZ', 4, 'NOK')])
+    expect(mapa.size).toBe(0)
+  })
+
+  it('não mistura unidades diferentes', () => {
+    const mapa = mapaStatusExibicao([status('r1', 'FOZ', 5, 'OK')], [status('r1', 'CASCAVEL', 4, 'N/A')])
+    expect(mapa.get(chaveStatus('r1', 'CASCAVEL'))).toMatchObject({ status: 'N/A', herdado: true })
+    expect(mapa.get(chaveStatus('r1', 'FOZ'))).toMatchObject({ status: 'OK' })
   })
 })
 

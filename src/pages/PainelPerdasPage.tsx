@@ -376,6 +376,14 @@ export function PainelPerdasPage() {
     })
   }
 
+  // Atalhos do filtro de meses — evita ter que marcar/desmarcar um por um.
+  // "Mês atual" pega o mês com dado mais recente (não o mês do calendário —
+  // se ainda não fechou agosto, por exemplo, o último mês com resultado
+  // importado pode ser julho).
+  const mesMaisRecente = mesesDisponiveis[mesesDisponiveis.length - 1] ?? null
+  const soMesAtualAtivo = mesMaisRecente !== null && mesesAtivos.size === 1 && mesesAtivos.has(mesMaisRecente)
+  const todosAtivos = mesesAtivos.size === mesesDisponiveis.length
+
   // Metas de Perdas (Metas > Metas de Perdas, por indicador) pro ano do
   // Consolidado — todas as unidades (a tabela mostra todas como coluna).
   const [metasPerdasIndicadoresConsolidado, setMetasPerdasIndicadoresConsolidado] = useState<MetaPerdaIndicador[]>([])
@@ -648,7 +656,31 @@ export function PainelPerdasPage() {
               </div>
 
               <div className="space-y-1.5">
-                <FilterLabel>Meses</FilterLabel>
+                <div className="flex items-center gap-2.5">
+                  <FilterLabel>Meses</FilterLabel>
+                  <div className="flex items-center gap-0.5 rounded-lg bg-white/10 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setSelMeses(mesMaisRecente !== null ? new Set([mesMaisRecente]) : new Set())}
+                      className={cn(
+                        'rounded-md px-2 py-0.5 text-xs font-medium transition whitespace-nowrap',
+                        soMesAtualAtivo ? 'bg-white text-gray-900' : 'text-white/60 hover:text-white',
+                      )}
+                    >
+                      Mês atual
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelMeses(new Set())}
+                      className={cn(
+                        'rounded-md px-2 py-0.5 text-xs font-medium transition whitespace-nowrap',
+                        todosAtivos ? 'bg-white text-gray-900' : 'text-white/60 hover:text-white',
+                      )}
+                    >
+                      Todos
+                    </button>
+                  </div>
+                </div>
                 <div className="flex min-h-10 flex-wrap items-center gap-3">
                   {mesesDisponiveis.map(m => (
                     <div key={m} className="flex items-center gap-1.5">
