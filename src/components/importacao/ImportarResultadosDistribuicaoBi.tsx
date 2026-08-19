@@ -2,7 +2,9 @@ import { useMemo, useState } from 'react'
 import { Loader2, Upload } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useUnidades } from '@/hooks/useUnidades'
-import { parseDistribuicaoBiFile, type ParsedDistribuicaoBiRow } from '@/lib/distribuicao-bi-parser'
+import {
+  DISTRIBUICAO_BI_INDICADORES, parseDistribuicaoBiFile, type ParsedDistribuicaoBiRow,
+} from '@/lib/distribuicao-bi-parser'
 import { resolverUnidade } from '@/lib/unidade-resolver'
 import { FilePickerButton } from '@/components/importacao/FilePickerButton'
 import { Button } from '@/components/ui/button'
@@ -24,8 +26,12 @@ const ANOS_IMPORT = (() => {
 /**
  * Importa o resultado mensal dos indicadores de RV da Distribuição que vêm
  * do BI numa planilha compartilhada — LogOn DU, Devolução e Presenteísmo DU
- * empilhados no mesmo arquivo, uma coluna INDICADOR diz qual é qual. Cada
- * arquivo é o resultado de um único mês/ano pra todas as unidades.
+ * empilhados no mesmo arquivo, uma coluna INDICADOR diz qual é qual.
+ *
+ * Lê TODAS as abas: a planilha real tem uma aba por função ("RV DU SUPERV" e
+ * "RV DU COORD") e o LogOn DU só existe na do coordenador. Aceita a coluna
+ * RESULTADO (mês escolhido na tela) e as colunas de mês (histórico) — a
+ * planilha real usa os dois formatos, um em cada aba.
  */
 export function ImportarResultadosDistribuicaoBi() {
   const { toast } = useToast()
@@ -37,6 +43,8 @@ export function ImportarResultadosDistribuicaoBi() {
   const [linhas, setLinhas] = useState<ParsedDistribuicaoBiRow[]>([])
   const [errosParse, setErrosParse] = useState<string[]>([])
   const [importando, setImportando] = useState(false)
+
+  const formatoHistorico = useMemo(() => linhas.some(l => l.mes !== undefined), [linhas])
 
   async function handleFile(f: File) {
     setFile(f)
@@ -61,12 +69,22 @@ export function ImportarResultadosDistribuicaoBi() {
     return { resolvidas, naoReconhecidas: Array.from(naoReconhecidas).sort() }
   }, [linhas, unidades])
 
+  /** Quantas unidades vieram por indicador — é o que denuncia na hora um indicador que ficou de fora do arquivo. */
+  const resumoPorIndicador = useMemo(() => DISTRIBUICAO_BI_INDICADORES.map(ind => ({
+    nome: ind.nome,
+    unidades: new Set(resolucao.resolvidas.filter(r => r.linha.indicador === ind.key).map(r => r.unidade.codigo)).size,
+  })), [resolucao])
+
   async function handleImportar() {
     const ano = Number(anoImport)
-    const mes = Number(mesImport)
+    const mesSelecionado = Number(mesImport)
     const porChave = new Map<string, Omit<ResultadoDistribuicaoBi, 'id'>>()
     for (const { linha, unidade } of resolucao.resolvidas) {
-      porChave.set(`${linha.indicador}|${unidade.codigo}|${linha.negocio}`, {
+      // Linha do formato histórico já sabe seu mês; a do formato RESULTADO usa
+      // o mês escolhido na tela. Mesma unidade/indicador/mês nas duas abas: a
+      // última lida vence (as abas repetem o mesmo número).
+      const mes = linha.mes ?? mesSelecionado
+      porChave.set(`${linha.indicador}|${unidade.codigo}|${linha.negocio}|${mes}`, {
         indicador: linha.indicador, unidade: unidade.codigo, negocio: linha.negocio, ano, mes, valor: linha.valor,
       })
     }
@@ -82,7 +100,10 @@ export function ImportarResultadosDistribuicaoBi() {
           .upsert(batch, { onConflict: 'indicador,unidade,negocio,ano,mes' })
         if (error) throw new Error(error.message)
       }
-      toast({ title: `${registros.length} resultado(s) importado(s) pra ${MESES_NOMES[mes - 1]}/${ano}` })
+      toast({
+        title: `${registros.length} resultado(s) importado(s)`,
+        description: formatoHistorico ? `Histórico — vários meses de ${ano}.` : `${MESES_NOMES[mesSelecionado - 1]}/${ano}.`,
+      })
       setFile(null)
       setLinhas([])
       setErrosParse([])
@@ -97,11 +118,11 @@ export function ImportarResultadosDistribuicaoBi() {
     <div className="max-w-xl space-y-3">
       <h2 className="text-base font-semibold">LogOn DU / Devolução / Presenteísmo DU — resultado mensal</h2>
       <p className="text-sm text-muted-foreground">
-        Suba a planilha (Excel ou CSV) com as colunas{' '}
-        <span className="font-mono text-xs">INDICADOR · UNIDADE · RESULTADO</span> — os três indicadores podem vir
-        empilhados no mesmo arquivo, a coluna INDICADOR diz qual é qual (ADERÊNCIA LOGON, DEVOLUÇÃO PDV, PRESENTEISMO
-        DU). Cada arquivo é o resultado de um único mês/ano. Unidades com CDL e CDR (ex: CDL CAMAÇARI e CDR BAHIA) são
-        gravadas separadas por negócio — ROTA e ARM.
+        Suba a planilha do supervisor e do coordenador juntas (as abas são lidas todas), com as colunas{' '}
+        <span className="font-mono text-xs">INDICADOR · UNIDADE · RESULTADO</span> ou{' '}
+        <span className="font-mono text-xs">INDICADOR · UNIDADE · JAN · FEV · ...</span> (histórico). A coluna
+        INDICADOR diz qual é qual: ADERÊNCIA LOGON, DEVOLUÇÃO PDV e PRESENTEISMO DU. Unidades com CDL e CDR (ex: CDL
+        CAMAÇARI e CDR BAHIA) são gravadas separadas por negócio — ROTA e ARM.
       </p>
 
       <div className="flex items-end gap-3">
@@ -114,17 +135,38 @@ export function ImportarResultadosDistribuicaoBi() {
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1.5">
-          <Label>Mês</Label>
-          <Select value={mesImport} onValueChange={setMesImport}>
-            <SelectTrigger className={cn('w-40', selectGlamour)}><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {MESES_NOMES.map((m, i) => <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
+        {!formatoHistorico && (
+          <div className="space-y-1.5">
+            <Label>Mês</Label>
+            <Select value={mesImport} onValueChange={setMesImport}>
+              <SelectTrigger className={cn('w-40', selectGlamour)}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {MESES_NOMES.map((m, i) => <SelectItem key={m} value={String(i + 1)}>{m}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
         <FilePickerButton label="Planilha (.xlsx ou .csv)" accept=".xlsx,.xls,.csv,.txt" file={file} onFile={handleFile} />
       </div>
+
+      {linhas.length > 0 && (
+        <div className="space-y-0.5 rounded-lg border border-gray-200/60 p-3 text-xs dark:border-gray-700/60">
+          {resumoPorIndicador.map(r => (
+            <p key={r.nome}>
+              <span className="font-semibold">{r.nome}:</span>{' '}
+              <span className={r.unidades === 0 ? 'text-amber-600 dark:text-amber-500' : 'text-muted-foreground'}>
+                {r.unidades === 0 ? 'nenhuma unidade nessa planilha' : `${r.unidades} unidade(s)`}
+              </span>
+            </p>
+          ))}
+        </div>
+      )}
+
+      {formatoHistorico && (
+        <div className="rounded-lg border border-blue-300/50 bg-blue-50 p-3 text-xs text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400">
+          Formato histórico detectado (colunas de mês) — cada mês da planilha vai ser gravado no seu próprio mês, dentro do ano selecionado acima.
+        </div>
+      )}
 
       {errosParse.length > 0 && (
         <div className="rounded-lg border border-amber-300/50 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400">

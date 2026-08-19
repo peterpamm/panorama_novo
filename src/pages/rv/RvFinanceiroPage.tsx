@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
+import { useAuth } from '@/context/AuthContext'
+import { useFinanceiroDreAjustes } from '@/hooks/useFinanceiroDreAjustes'
 import { Toaster } from '@/components/ui/toaster'
 import { PillToggle } from '@/components/ui/pill-toggle'
 import { RV_FINANCEIRO_DRE } from '@/lib/constants'
@@ -23,7 +25,10 @@ const ABAS = [
  * Vales, não mais dispersão ≥ 0).
  */
 export function RvFinanceiroPage() {
+  const { souDono } = useAuth()
   const [aba, setAba] = useState<AbaRvFinanceiro>('acompanhamento')
+  // Ajuste manual TEMPORÁRIO de Multas/Vales (bug do DRE) — só busca pro dono, RLS bloqueia o resto de qualquer forma.
+  const { ajustes: ajustesFinanceiro, salvar: salvarAjusteFinanceiro, remover: removerAjusteFinanceiro } = useFinanceiroDreAjustes(souDono)
 
   return (
     <div className="space-y-6">
@@ -54,6 +59,9 @@ export function RvFinanceiroPage() {
           indicadoresDre={RV_FINANCEIRO_DRE}
           tabelaPesos="rv_financeiro_pesos_dre"
           valesPerdasTabela="rv_vales_financeiro_meta"
+          ajustesFinanceiro={ajustesFinanceiro}
+          onSalvarAjusteFinanceiro={salvarAjusteFinanceiro}
+          onRemoverAjusteFinanceiro={removerAjusteFinanceiro}
         />
       )}
       <Toaster />

@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { PAGINAS } from './permissoes'
 
 describe('PAGINAS', () => {
-  it('tem 26 páginas registradas', () => {
-    expect(PAGINAS).toHaveLength(26)
+  it('tem 27 páginas registradas', () => {
+    expect(PAGINAS).toHaveLength(27)
   })
 
   it('não tem chave duplicada', () => {

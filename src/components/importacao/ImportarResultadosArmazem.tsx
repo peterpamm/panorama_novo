@@ -2,8 +2,12 @@ import { useMemo, useState } from 'react'
 import { Loader2, Upload } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useUnidades } from '@/hooks/useUnidades'
-import { parseArmazemT1MetaFile, type ArmazemT1MetaIndicador, type ParsedArmazemT1MetaRow } from '@/lib/armazem-t1-meta-parser'
+import {
+  parseArmazemResultadosFile, TABELA_RESULTADO_POR_TIER, type ParsedArmazemResultadoRow,
+} from '@/lib/armazem-resultado-parser'
+import { MODELO_RESULTADOS_ARMAZEM } from '@/lib/modelos-importacao'
 import { resolverUnidade } from '@/lib/unidade-resolver'
+import { BotaoModeloPlanilha } from '@/components/importacao/BotaoModeloPlanilha'
 import { FilePickerButton } from '@/components/importacao/FilePickerButton'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -21,30 +25,23 @@ const ANOS_IMPORT = (() => {
   return [atual + 1, atual, atual - 1, atual - 2]
 })()
 
-/** Cada indicador tem sua própria tabela de meta (unidade, ano, mes, valor) — ver migration_060. */
-const TABELAS: Record<ArmazemT1MetaIndicador, string> = {
-  tma: 'metas_armazem_t1_tma',
-  disponibilidade_gente: 'metas_armazem_t1_disponibilidade_gente',
-  presenteismo_al: 'metas_armazem_t1_presenteismo_al',
-}
-
 /**
- * Importa a meta mensal do Armazém T1 (Estância/CDR Bahia) — TMA,
- * Disponibilidade de Gente e Presenteísmo AL empilhados numa planilha só,
- * coluna INDICADOR diz qual é qual (mesmo padrão do resultado do BI).
- * Aceita INDICADOR · UNIDADE · META (um mês, escolhido na tela) ou
- * INDICADOR · UNIDADE · JAN · FEV · ... (histórico, só a primeira
- * importação). TMA em duração (HH:MM → minutos); os outros dois em %.
+ * Importa o resultado mensal do Armazém vindo do BI — T1 e T2 do mesmo
+ * arquivo, cada tier na sua aba. Antes eram duas telas quase idênticas (uma
+ * por sub-aba da Importação) pedindo a mesma planilha; o que muda entre elas
+ * é só o conjunto de indicadores e a tabela de destino, então virou uma só —
+ * mesma simplificação já feita nas metas.
  */
-export function ImportarMetasArmazemT1() {
+export function ImportarResultadosArmazem() {
   const { toast } = useToast()
   const { unidades } = useUnidades()
 
   const [file, setFile] = useState<File | null>(null)
   const [anoImport, setAnoImport] = useState(String(new Date().getFullYear()))
   const [mesImport, setMesImport] = useState(String(new Date().getMonth() + 1))
-  const [linhas, setLinhas] = useState<ParsedArmazemT1MetaRow[]>([])
+  const [linhas, setLinhas] = useState<ParsedArmazemResultadoRow[]>([])
   const [errosParse, setErrosParse] = useState<string[]>([])
+  const [ignorados, setIgnorados] = useState<string[]>([])
   const [importando, setImportando] = useState(false)
 
   const formatoHistorico = useMemo(() => linhas.some(l => l.mes !== undefined), [linhas])
@@ -52,17 +49,26 @@ export function ImportarMetasArmazemT1() {
   async function handleFile(f: File) {
     setFile(f)
     try {
-      const resultado = await parseArmazemT1MetaFile(f)
+      const resultado = await parseArmazemResultadosFile(f)
       setLinhas(resultado.linhas)
       setErrosParse(resultado.erros)
+      setIgnorados(resultado.ignorados)
     } catch (err) {
       setLinhas([])
+      setIgnorados([])
       setErrosParse([`Erro ao ler o arquivo: ${String(err)}`])
     }
   }
 
+  function limpar() {
+    setFile(null)
+    setLinhas([])
+    setErrosParse([])
+    setIgnorados([])
+  }
+
   const resolucao = useMemo(() => {
-    const resolvidas: { linha: ParsedArmazemT1MetaRow; unidade: Unidade }[] = []
+    const resolvidas: { linha: ParsedArmazemResultadoRow; unidade: Unidade }[] = []
     const naoReconhecidas = new Set<string>()
     for (const linha of linhas) {
       const unidade = resolverUnidade(linha.unidade, unidades)
@@ -72,19 +78,28 @@ export function ImportarMetasArmazemT1() {
     return { resolvidas, naoReconhecidas: Array.from(naoReconhecidas).sort() }
   }, [linhas, unidades])
 
+  /** Resumo por tier — substitui ter duas telas pra saber o que entrou em cada um. */
+  const resumo = useMemo(() => {
+    const porTier = { T1: new Set<string>(), T2: new Set<string>() }
+    for (const { linha, unidade } of resolucao.resolvidas) porTier[linha.tier].add(unidade.nome)
+    return porTier
+  }, [resolucao])
+
   async function handleImportar() {
     const ano = Number(anoImport)
     const mesSelecionado = Number(mesImport)
-    const porTabela = new Map<string, Map<string, { unidade: string; ano: number; mes: number; valor: number }>>()
+    const porTabela = new Map<string, Map<string, Record<string, unknown>>>()
     for (const { linha, unidade } of resolucao.resolvidas) {
       const mes = linha.mes ?? mesSelecionado
-      const tabela = TABELAS[linha.indicador]
+      const tabela = TABELA_RESULTADO_POR_TIER[linha.tier]
       if (!porTabela.has(tabela)) porTabela.set(tabela, new Map())
-      porTabela.get(tabela)!.set(`${unidade.codigo}|${mes}`, { unidade: unidade.codigo, ano, mes, valor: linha.valor })
+      porTabela.get(tabela)!.set(`${linha.indicador}|${unidade.codigo}|${linha.negocio}|${mes}`, {
+        indicador: linha.indicador, unidade: unidade.codigo, negocio: linha.negocio, ano, mes, valor: linha.valor,
+      })
     }
 
-    const totalRegistros = Array.from(porTabela.values()).reduce((acc, m) => acc + m.size, 0)
-    if (totalRegistros === 0) return
+    const total = Array.from(porTabela.values()).reduce((acc, m) => acc + m.size, 0)
+    if (total === 0) return
 
     setImportando(true)
     try {
@@ -92,19 +107,17 @@ export function ImportarMetasArmazemT1() {
         const registros = Array.from(mapa.values())
         for (let i = 0; i < registros.length; i += BATCH_SIZE) {
           const batch = registros.slice(i, i + BATCH_SIZE)
-          const { error } = await supabase.from(tabela).upsert(batch, { onConflict: 'unidade,ano,mes' })
+          const { error } = await supabase.from(tabela).upsert(batch, { onConflict: 'indicador,unidade,negocio,ano,mes' })
           if (error) throw new Error(error.message)
         }
       }
       toast({
-        title: `${totalRegistros} meta(s) do Armazém T1 importada(s)`,
-        description: formatoHistorico ? `Histórico — vários meses de ${ano}.` : `${MESES_NOMES[mesSelecionado - 1]}/${ano}.`,
+        title: `${total} resultado(s) do Armazém importado(s)`,
+        description: formatoHistorico ? `T1 e T2 · histórico, vários meses de ${ano}.` : `T1 e T2 · ${MESES_NOMES[mesSelecionado - 1]}/${ano}.`,
       })
-      setFile(null)
-      setLinhas([])
-      setErrosParse([])
+      limpar()
     } catch (err) {
-      toast({ title: 'Erro ao importar metas do Armazém T1', description: String(err), variant: 'destructive' })
+      toast({ title: 'Erro ao importar resultados do Armazém', description: String(err), variant: 'destructive' })
     } finally {
       setImportando(false)
     }
@@ -112,16 +125,17 @@ export function ImportarMetasArmazemT1() {
 
   return (
     <div className="max-w-xl space-y-3">
-      <h2 className="text-base font-semibold">Armazém T1 (Estância / CDR Bahia) — meta mensal</h2>
+      <h2 className="text-base font-semibold">Resultados do Armazém (T1 e T2)</h2>
       <p className="text-sm text-muted-foreground">
-        Suba a planilha (Excel ou CSV) com as colunas{' '}
-        <span className="font-mono text-xs">INDICADOR · UNIDADE · META</span> — os 3 indicadores podem vir
-        empilhados no mesmo arquivo, a coluna INDICADOR diz qual é qual (TMA, DISPONIBILIDADE DE GENTE, PRESENTEÍSMO
-        AL). Também aceita <span className="font-mono text-xs">INDICADOR · UNIDADE · JAN · FEV · ...</span> no lugar
-        de META — formato histórico, só a primeira importação. TMA em duração (ex: "01:40"), os outros dois em %.
+        Suba a planilha do T1 e do T2 juntas, separadas por abas:{' '}
+        <span className="font-mono text-xs">RV ARM _T1</span> pro T1 (TMA, Disponibilidade de Gente, Presenteísmo AL) e{' '}
+        <span className="font-mono text-xs">RV ARM _T2</span> pro T2 (Presenteísmo AL, EFC, TMA, Refugo). Aceita o
+        modelo histórico (colunas de mês) ou{' '}
+        <span className="font-mono text-xs">INDICADOR · UNIDADE · RESULTADO</span>. Em caso de dúvida, baixe a
+        planilha padrão.
       </p>
 
-      <div className="flex items-end gap-3">
+      <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
           <Label>Ano</Label>
           <Select value={anoImport} onValueChange={setAnoImport}>
@@ -143,11 +157,25 @@ export function ImportarMetasArmazemT1() {
           </div>
         )}
         <FilePickerButton label="Planilha (.xlsx ou .csv)" accept=".xlsx,.xls,.csv,.txt" file={file} onFile={handleFile} />
+        <BotaoModeloPlanilha nomeArquivo="modelo_resultados_armazem" abas={MODELO_RESULTADOS_ARMAZEM} />
       </div>
 
       {formatoHistorico && (
         <div className="rounded-lg border border-blue-300/50 bg-blue-50 p-3 text-xs text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400">
           Formato histórico detectado (colunas de mês) — cada mês da planilha vai ser gravado no seu próprio mês, dentro do ano selecionado acima.
+        </div>
+      )}
+
+      {linhas.length > 0 && (
+        <div className="space-y-1.5 rounded-lg border border-gray-200/60 p-3 text-xs dark:border-gray-700/60">
+          {(['T1', 'T2'] as const).map(tier => (
+            <p key={tier}>
+              <span className="font-semibold">{tier}:</span>{' '}
+              {resumo[tier].size === 0
+                ? <span className="text-muted-foreground">nenhuma unidade nessa planilha</span>
+                : <span className="text-muted-foreground">{Array.from(resumo[tier]).sort().join(' · ')}</span>}
+            </p>
+          ))}
         </div>
       )}
 
@@ -157,6 +185,12 @@ export function ImportarMetasArmazemT1() {
           <ul className="max-h-32 space-y-0.5 overflow-y-auto">
             {errosParse.map((e, i) => <li key={i}>{e}</li>)}
           </ul>
+        </div>
+      )}
+
+      {ignorados.length > 0 && (
+        <div className="rounded-lg border border-amber-300/50 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400">
+          Indicador(es) ignorado(s) por não existirem nesse tier: {ignorados.join(', ')}
         </div>
       )}
 
@@ -175,11 +209,9 @@ export function ImportarMetasArmazemT1() {
         <div className="flex items-center gap-3">
           <Button onClick={handleImportar} disabled={resolucao.resolvidas.length === 0 || importando} className="gap-2">
             {importando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-            Importar {resolucao.resolvidas.length} meta(s)
+            Importar {resolucao.resolvidas.length} resultado(s)
           </Button>
-          <Button variant="outline" onClick={() => { setFile(null); setLinhas([]); setErrosParse([]) }} disabled={importando}>
-            Cancelar
-          </Button>
+          <Button variant="outline" onClick={limpar} disabled={importando}>Cancelar</Button>
         </div>
       )}
     </div>

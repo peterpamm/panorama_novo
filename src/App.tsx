@@ -47,6 +47,7 @@ import { ReuniaoSegurancaPage } from '@/pages/reuniao/ReuniaoSegurancaPage'
 import { ReuniaoDistribuicaoPage } from '@/pages/reuniao/ReuniaoDistribuicaoPage'
 import { ReuniaoArmazemPage } from '@/pages/reuniao/ReuniaoArmazemPage'
 import { ReuniaoResumoGeralPage } from '@/pages/reuniao/ReuniaoResumoGeralPage'
+import { ReuniaoPagamentoPage } from '@/pages/reuniao/ReuniaoPagamentoPage'
 
 export default function App() {
   return (
@@ -146,6 +147,8 @@ export default function App() {
               <Route path="distribuicao" element={<ProtectedRoute adminOnly pagina="reuniao_distribuicao"><ReuniaoDistribuicaoPage /></ProtectedRoute>} />
               <Route path="armazem" element={<ProtectedRoute adminOnly pagina="reuniao_armazem"><ReuniaoArmazemPage /></ProtectedRoute>} />
               <Route path="resumo-geral" element={<ProtectedRoute pagina="reuniao_resumo_geral"><ReuniaoResumoGeralPage /></ProtectedRoute>} />
+              {/* Pagamento lida com cartão/conta — sempre adminOnly, diferente do Resumo Geral (que pode ser concedido pra unidade). */}
+              <Route path="pagamento" element={<ProtectedRoute adminOnly pagina="reuniao_pagamento"><ReuniaoPagamentoPage /></ProtectedRoute>} />
             </Route>
             <Route
               path="importacao"

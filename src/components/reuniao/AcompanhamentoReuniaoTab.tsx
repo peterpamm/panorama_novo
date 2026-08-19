@@ -1,14 +1,19 @@
 import { useState } from 'react'
-import { Loader2, Trophy } from 'lucide-react'
+import { Loader2, Pencil, Trophy } from 'lucide-react'
+import { useAuth } from '@/context/AuthContext'
 import { useReuniaoDados } from '@/hooks/useReuniaoDados'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { TableCard } from '@/components/ui/table-card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { AjusteManualDreDialog, formatarValorAutomatico } from '@/components/financeiro/AjusteManualDreDialog'
 import { cn } from '@/lib/utils'
 import { formatarResultado, resolverNaturezaFormato, TERMOMETRO_LIMIAR_BOM } from '@/lib/reuniao-resultados'
-import type { ReuniaoSetor } from '@/types'
+import type { FinanceiroDreAjusteIndicador, ReuniaoIndicador, ReuniaoSetor } from '@/types'
+
+const INDICADOR_LABEL: Record<FinanceiroDreAjusteIndicador, string> = { multas: 'Multas', vales: 'Vales' }
+const MES_LABEL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
 const MESES_NOMES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
 
@@ -22,12 +27,35 @@ interface AcompanhamentoReuniaoTabProps {
 }
 
 export function AcompanhamentoReuniaoTab({ setor }: AcompanhamentoReuniaoTabProps) {
+  const { souDono } = useAuth()
   const [ano, setAno] = useState(String(new Date().getFullYear()))
   const {
     carregando, indicadores, participantesPorIndicador,
     valoresInput, setValoresInput, salvando, handleSalvar,
     resultadoEMeta, pontosGanhos, unidadesDoTotal, totalPorUnidadeMes, maiorPorMes, nomesParticipaveis,
+    ajusteFinanceiroDoIndicador, salvarAjusteFinanceiro, removerAjusteFinanceiro,
   } = useReuniaoDados(setor, ano)
+
+  // ── Ajuste manual de Multas/Vales (só dono, só Financeiro) ──────────────
+  const [alvoAjuste, setAlvoAjuste] = useState<{ ind: ReuniaoIndicador; unidade: string; negocio: string; unidadeNome: string; mes: number; indicador: FinanceiroDreAjusteIndicador } | null>(null)
+  const [salvandoAjuste, setSalvandoAjuste] = useState(false)
+  const infoAlvo = alvoAjuste ? ajusteFinanceiroDoIndicador(alvoAjuste.ind, alvoAjuste.unidade, alvoAjuste.negocio, alvoAjuste.mes) : null
+
+  async function handleSalvarAjuste(valor: number, observacao: string) {
+    if (!alvoAjuste) return
+    setSalvandoAjuste(true)
+    const ok = await salvarAjusteFinanceiro(alvoAjuste.unidade, Number(ano), alvoAjuste.mes, alvoAjuste.indicador, valor, observacao)
+    setSalvandoAjuste(false)
+    if (ok) setAlvoAjuste(null)
+  }
+
+  async function handleRemoverAjuste() {
+    if (!alvoAjuste || !infoAlvo?.ajuste?.id) return
+    setSalvandoAjuste(true)
+    const ok = await removerAjusteFinanceiro(infoAlvo.ajuste.id)
+    setSalvandoAjuste(false)
+    if (ok) setAlvoAjuste(null)
+  }
 
   return (
     <div className="space-y-6">
@@ -86,6 +114,7 @@ export function AcompanhamentoReuniaoTab({ setor }: AcompanhamentoReuniaoTabProp
                             const chave = `${ind.id}|${p.unidade}|${p.negocio}|${mes}`
                             const { resultado } = resultadoEMeta(ind, p.unidade, p.negocio, mes)
                             const pontos = pontosGanhos(ind, p.unidade, p.negocio, mes)
+                            const infoAjuste = souDono ? ajusteFinanceiroDoIndicador(ind, p.unidade, p.negocio, mes) : null
                             return (
                               <TableCell key={mes} className="p-1.5 text-center">
                                 {ind.fonte === 'termometro' ? (
@@ -102,7 +131,28 @@ export function AcompanhamentoReuniaoTab({ setor }: AcompanhamentoReuniaoTabProp
                                 ) : (
                                   <>
                                     {automatico ? (
-                                      <p className="text-xs tabular-nums text-foreground">{formatarResultado(resultado, formato)}</p>
+                                      <div className="flex items-center justify-center gap-1">
+                                        <p className={cn('text-xs tabular-nums', infoAjuste?.ajuste ? 'font-semibold text-amber-600 dark:text-amber-400' : 'text-foreground')}>
+                                          {formatarResultado(resultado, formato)}
+                                        </p>
+                                        {infoAjuste && (
+                                          <button
+                                            type="button"
+                                            title={infoAjuste.ajuste ? 'Ajuste manual ativo — clique pra editar/remover' : 'Ajustar manualmente (bug do DRE)'}
+                                            onClick={() => setAlvoAjuste({
+                                              ind, unidade: p.unidade, negocio: p.negocio, mes,
+                                              unidadeNome: nomesParticipaveis[`${p.unidade}|${p.negocio}`] ?? p.unidade,
+                                              indicador: infoAjuste.indicador,
+                                            })}
+                                            className={cn(
+                                              'rounded p-0.5 text-muted-foreground/50 hover:text-foreground',
+                                              infoAjuste.ajuste && 'text-amber-600 hover:text-amber-700 dark:text-amber-400',
+                                            )}
+                                          >
+                                            <Pencil className="h-3 w-3" />
+                                          </button>
+                                        )}
+                                      </div>
                                     ) : (
                                       <Input
                                         value={valoresInput[chave] ?? ''}
@@ -166,6 +216,20 @@ export function AcompanhamentoReuniaoTab({ setor }: AcompanhamentoReuniaoTabProp
           </TableCard>
         </>
       )}
+
+      <AjusteManualDreDialog
+        alvo={alvoAjuste && infoAlvo ? {
+          unidadeNome: alvoAjuste.unidadeNome,
+          mesLabel: `${MES_LABEL[alvoAjuste.mes - 1]}/${ano}`,
+          indicadorLabel: INDICADOR_LABEL[alvoAjuste.indicador],
+          ajusteAtual: infoAlvo.ajuste,
+          valorAutomaticoFmt: formatarValorAutomatico(infoAlvo.valorAutomatico),
+        } : null}
+        onFechar={() => setAlvoAjuste(null)}
+        salvando={salvandoAjuste}
+        onSalvar={handleSalvarAjuste}
+        onRemover={handleRemoverAjuste}
+      />
     </div>
   )
 }

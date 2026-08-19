@@ -5,9 +5,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/use-toast'
+import { UnidadesMultiSelect } from '@/components/ranking/UnidadesMultiSelect'
 import { cn } from '@/lib/utils'
 import { AJUSTE_TODAS_UNIDADES, type CalendarioEvento, type EventoCor, type EventoRecorrencia, type Unidade } from '@/types'
 
@@ -70,11 +72,15 @@ export function EventoCalendarioDialog({ evento, unidades, onFechar, onSalvo }: 
       toast({ title: 'Dê um título pro evento', variant: 'destructive' })
       return
     }
+    if (form.unidades.length === 0) {
+      toast({ title: 'Selecione ao menos uma unidade', variant: 'destructive' })
+      return
+    }
     setSalvando(true)
     const payload = {
       titulo: form.titulo.trim(),
       descricao: form.descricao.trim(),
-      unidade: form.unidade,
+      unidades: form.unidades,
       tipo: form.tipo,
       // Cada tipo carrega só o campo que lhe interessa — o resto vai null pra
       // não deixar lixo de uma escolha anterior gravado.
@@ -127,26 +133,39 @@ export function EventoCalendarioDialog({ evento, unidades, onFechar, onSalvo }: 
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Unidade</Label>
-              <Select value={form.unidade} onValueChange={v => atualizar({ unidade: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={AJUSTE_TODAS_UNIDADES}>Todas as unidades</SelectItem>
-                  {unidades.map(u => <SelectItem key={u.codigo} value={u.codigo}>{u.nome}</SelectItem>)}
-                </SelectContent>
-              </Select>
+          <div className="space-y-1.5">
+            <Label>Unidade(s)</Label>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="evento-todas-unidades"
+                checked={form.unidades.includes(AJUSTE_TODAS_UNIDADES)}
+                onCheckedChange={v => atualizar({ unidades: v === true ? [AJUSTE_TODAS_UNIDADES] : [] })}
+              />
+              <Label htmlFor="evento-todas-unidades" className="cursor-pointer text-sm font-normal">
+                Vale pra todas as unidades (inclusive novas que forem cadastradas depois)
+              </Label>
             </div>
-            <div className="space-y-1.5">
-              <Label>Repetição</Label>
-              <Select value={form.tipo} onValueChange={v => atualizar({ tipo: v as EventoRecorrencia })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {TIPOS.map(t => <SelectItem key={t.valor} value={t.valor}>{t.label}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            {!form.unidades.includes(AJUSTE_TODAS_UNIDADES) && (
+              <UnidadesMultiSelect
+                opcoes={unidades.map(u => ({ codigo: u.codigo, nome: u.nome }))}
+                selecionadas={new Set(form.unidades)}
+                onToggle={codigo => atualizar({
+                  unidades: form.unidades.includes(codigo) ? form.unidades.filter(c => c !== codigo) : [...form.unidades, codigo],
+                })}
+                onSelecionarTodas={() => atualizar({ unidades: unidades.map(u => u.codigo) })}
+                onLimpar={() => atualizar({ unidades: [] })}
+              />
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Repetição</Label>
+            <Select value={form.tipo} onValueChange={v => atualizar({ tipo: v as EventoRecorrencia })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {TIPOS.map(t => <SelectItem key={t.valor} value={t.valor}>{t.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
 
           {form.tipo === 'semanal' && (
@@ -254,7 +273,7 @@ export function EventoCalendarioDialog({ evento, unidades, onFechar, onSalvo }: 
 /** Evento em branco pro "Novo evento", já apontando pra unidade que está na tela. */
 export function eventoNovo(unidade: string): CalendarioEvento {
   return {
-    titulo: '', descricao: '', unidade,
+    titulo: '', descricao: '', unidades: [unidade],
     tipo: 'semanal', dia_semana: 5, dia_mes: null,
     data_inicio: hojeIso(), data_fim: null, cor: 'roxo',
   }

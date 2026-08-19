@@ -4,7 +4,7 @@ import { parseExcessoVelocidadeCsv } from './excesso-velocidade-parser'
 const HEADER = 'PLACA;PREFIXO;UO;TIPO;NIVEL;LIMIAR;EXCESSO;DURACAO'
 
 describe('parseExcessoVelocidadeCsv', () => {
-  it('conta como excesso quando TIPO contém EXCESSO_VELOCIDADE, agregando por UO', () => {
+  it('conta como excesso quando TIPO é exatamente EXCESSO_VELOCIDADE, agregando por UO', () => {
     const texto = [
       HEADER,
       'QTL1640;QTL1640;CD FRANCISCO BELTRÃO - LOG20;EXCESSO_VELOCIDADE;-;40 Km/h;43 Km/h;00:00:05',
@@ -42,6 +42,37 @@ describe('parseExcessoVelocidadeCsv', () => {
     expect(agregados).toEqual([
       { uo: 'CD FOZ - LOG20', totalExcessos: 1 },
     ])
+  })
+
+  it('NÃO conta tipos que só começam com EXCESSO_VELOCIDADE (ex: EXCESSO_VELOCIDADE_VIA)', () => {
+    const texto = [
+      HEADER,
+      'AAA1111;AAA1111;CD FOZ - LOG20;EXCESSO_VELOCIDADE_VIA;-;40 Km/h;43 Km/h;00:00:05',
+      'BBB2222;BBB2222;CD FOZ - LOG20;EXCESSO_VELOCIDADE_TRECHO;-;40 Km/h;43 Km/h;00:00:05',
+      'CCC3333;CCC3333;CD FOZ - LOG20;EXCESSO_VELOCIDADE;-;64 Km/h;95 Km/h;00:01:12',
+    ].join('\n')
+    const { agregados } = parseExcessoVelocidadeCsv(texto)
+    expect(agregados).toEqual([
+      { uo: 'CD FOZ - LOG20', totalExcessos: 1 },
+    ])
+  })
+
+  it('aguenta espaço em volta e caixa diferente no TIPO', () => {
+    const texto = [
+      HEADER,
+      'AAA1111;AAA1111;CD FOZ - LOG20; excesso_velocidade ;-;40 Km/h;43 Km/h;00:00:05',
+    ].join('\n')
+    expect(parseExcessoVelocidadeCsv(texto).agregados).toEqual([
+      { uo: 'CD FOZ - LOG20', totalExcessos: 1 },
+    ])
+  })
+
+  it('UO que só tem tipos descartados não entra no resultado', () => {
+    const texto = [
+      HEADER,
+      'AAA1111;AAA1111;CD FOZ - LOG20;EXCESSO_VELOCIDADE_VIA;-;40 Km/h;43 Km/h;00:00:05',
+    ].join('\n')
+    expect(parseExcessoVelocidadeCsv(texto).agregados).toEqual([])
   })
 
   it('retorna erro de cabeçalho inválido quando falta UO ou TIPO', () => {

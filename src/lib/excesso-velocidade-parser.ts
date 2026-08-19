@@ -4,7 +4,7 @@ import * as XLSX from 'xlsx'
 export interface ExcessoVelocidadeUnidadeAgregado {
   /** Texto de "UO" como veio na planilha (ex: "CD FRANCISCO BELTRÃO - LOG20"). */
   uo: string
-  /** Quantidade de linhas onde TIPO contém "EXCESSO_VELOCIDADE". */
+  /** Quantidade de linhas cujo TIPO é exatamente "EXCESSO_VELOCIDADE". */
   totalExcessos: number
 }
 
@@ -21,13 +21,19 @@ function toStr(v: unknown): string {
   return String(v ?? '').trim()
 }
 
+/** TIPO que conta como excesso — comparação EXATA, ver `parseMatriz`. */
+const TIPO_EXCESSO = 'EXCESSO_VELOCIDADE'
+
 /**
  * Planilha de excessos de velocidade (várias colunas — placa, prefixo,
  * motorista, CPF etc — usamos só UO e TIPO). Cada linha é um evento; conta
- * como excesso quando TIPO contém "EXCESSO_VELOCIDADE". Agregamos a
- * contagem por unidade (UO) — a exclusão de ESTÂNCIA/Camaçari ARM é feita
- * depois, na importação (que resolve a UO pra unidade de verdade e sabe o
- * negócio).
+ * como excesso quando TIPO é EXATAMENTE "EXCESSO_VELOCIDADE".
+ *
+ * A comparação é exata de propósito: a planilha tem outros tipos que começam
+ * igual (ex: "EXCESSO_VELOCIDADE_VIA"), e esses NÃO entram na contagem —
+ * antes, com `includes`, entravam. Agregamos a contagem por unidade (UO) —
+ * a exclusão de ESTÂNCIA/Camaçari ARM é feita depois, na importação (que
+ * resolve a UO pra unidade de verdade e sabe o negócio).
  */
 function parseMatriz(matriz: unknown[][]): ParseExcessoVelocidadeResultado {
   if (matriz.length === 0) return { agregados: [], erros: [] }
@@ -49,7 +55,7 @@ function parseMatriz(matriz: unknown[][]): ParseExcessoVelocidadeResultado {
     const uo = toStr(cols[iUo]).toUpperCase()
     if (!uo) continue
 
-    if (normalizar(toStr(cols[iTipo])).includes('EXCESSO_VELOCIDADE')) porUo.set(uo, (porUo.get(uo) ?? 0) + 1)
+    if (normalizar(toStr(cols[iTipo])) === TIPO_EXCESSO) porUo.set(uo, (porUo.get(uo) ?? 0) + 1)
   }
 
   const agregados: ExcessoVelocidadeUnidadeAgregado[] = Array.from(porUo.entries())

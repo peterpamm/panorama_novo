@@ -433,16 +433,16 @@ export type EventoRecorrencia = 'unico' | 'semanal' | 'mensal'
 export type EventoCor = 'roxo' | 'azul' | 'ambar' | 'verde'
 
 /**
- * Evento do Calendário (migration 101) — RPS, visita, o que a unidade
- * precisar ver na agenda. NÃO é rotina: não tem OK/NOK e não entra na
- * aderência nem em pontuação nenhuma.
+ * Evento do Calendário (migration 101, `unidades` migration 105) — RPS,
+ * visita, o que a unidade precisar ver na agenda. NÃO é rotina: não tem
+ * OK/NOK e não entra na aderência nem em pontuação nenhuma.
  */
 export interface CalendarioEvento {
   id?: string
   titulo: string
   descricao: string
-  /** Código da unidade, ou `AJUSTE_TODAS_UNIDADES` ('*') quando vale pra todas. */
-  unidade: string
+  /** Códigos das unidades que o evento vale — pode ter mais de uma; `[AJUSTE_TODAS_UNIDADES]` ('*') quando vale pra todas. */
+  unidades: string[]
   tipo: EventoRecorrencia
   /** 0=domingo … 6=sábado — só em `tipo` 'semanal'. */
   dia_semana: number | null
@@ -453,6 +453,25 @@ export interface CalendarioEvento {
   /** Quando deixa de valer (YYYY-MM-DD); null = sem fim. */
   data_fim: string | null
   cor: EventoCor
+}
+
+/**
+ * Exceção de dia de UMA ocorrência de um evento do Calendário (migration
+ * 106) — o resultado de arrastar o chip do evento. `dia_original` identifica
+ * qual ocorrência está sendo movida (um evento semanal pode cair várias
+ * vezes no mesmo mês); sempre pontual, sem versão "permanente" como
+ * `RotinaAjusteDia` — mover um evento é sempre sobre essa ocorrência
+ * específica (ver `agruparEventosPorDia`, calendario-eventos.ts).
+ */
+export interface CalendarioEventoAjusteDia {
+  id?: string
+  evento_id: string
+  /** Código da unidade, ou `AJUSTE_TODAS_UNIDADES` ('*') quando vale pra todas as unidades do evento. */
+  unidade: string
+  ano: number
+  mes: number
+  dia_original: number
+  dia_novo: number
 }
 
 /** Status (OK/NOK/N-A) de uma rotina financeira, por unidade e mês — null = ainda não preenchido. */
@@ -666,8 +685,65 @@ export interface ReuniaoResultadoMensal {
   pontos: number | null
 }
 
+/**
+ * Setor do cadastro de pagamento — os 6 reais da Reunião Resultados, mais
+ * 'empurrada': rótulo próprio de Ponta Grossa/Estância (única operação
+ * dessas duas unidades, sem "Distribuição" tradicional), mas cujo VENCEDOR
+ * do mês continua saindo do ranking do setor 'distribuicao' — 'empurrada' é
+ * um alias de exibição/cadastro pra ele, nunca um setor com ranking próprio
+ * (ver `setorCompativel`, reuniao-pagamento.ts).
+ */
+export type SetorPagamento = ReuniaoSetor | 'empurrada'
+
+/**
+ * Liderança cadastrada pra receber o prêmio da Reunião Resultados
+ * (Reunião Resultados > Pagamento > Cadastro) — nome + cartão Extratta de
+ * quem responde por um setor numa unidade×negócio. `negocio` só varia
+ * (ROTA/ARM) pra Camaçari fora do Financeiro, mesma régua de
+ * `unidadesParticipaveis` (reuniao-resultados.ts). Mais de uma pessoa na
+ * mesma unidade×negócio×setor = o prêmio do mês é dividido entre elas (ver
+ * `calcularPagamentos`, reuniao-pagamento.ts).
+ */
+export interface ReuniaoPagamentoLideranca {
+  id?: string
+  unidade: string
+  negocio: string
+  setor: SetorPagamento
+  nome: string
+  numero_extratta: string
+}
+
+/** Valor único do prêmio por setor vencido (migration 103) — singleton, dividido entre as lideranças cadastradas quando houver mais de uma. */
+export interface ReuniaoPagamentoPremio {
+  valor: number
+}
+
 /** Setores que têm um Ranking Ambev próprio — cada um com colocação independente (ex: 1º no de Gente, 3º no de Frota). */
 export type ResumoGeralAmbevSetor = 'gente' | 'frota' | 'seguranca'
+
+/** Indicador do Financeiro afetado pelo bug atual do DRE (não sobe a receita de multas/vales) — ver `FinanceiroDreAjuste`. */
+export type FinanceiroDreAjusteIndicador = 'multas' | 'vales'
+
+/**
+ * Ajuste manual TEMPORÁRIO do valor de Multas ou Vales do Financeiro, por
+ * unidade×ano×mês — solução pro bug do DRE que não soma a receita que a
+ * unidade recebe da Ambev nessas contas (137/222 e 051/052), sem mexer na
+ * base oficial do DRE. Só o dono cadastra (RLS `auth_dono()`, migration 104)
+ * e só entra no cálculo da Reunião Resultados e da Remuneração Variável do
+ * Financeiro — nunca no Painel de Perdas nem no DRE bruto (ver
+ * `resultadoEMeta` em useReuniaoDados.ts e `ajustesFinanceiro` em
+ * useRvApuracao.ts). Quando o DRE for corrigido retroativamente, essas
+ * linhas ficam redundantes — é só apagar, sem mudar código.
+ */
+export interface FinanceiroDreAjuste {
+  id?: string
+  unidade: string
+  ano: number
+  mes: number
+  indicador: FinanceiroDreAjusteIndicador
+  valor: number
+  observacao: string | null
+}
 
 /**
  * Posição da unidade em UM dos 3 Rankings Ambev, lançada manualmente pelo

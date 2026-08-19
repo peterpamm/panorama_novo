@@ -3,6 +3,9 @@ import { Loader2, Upload } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useUnidades } from '@/hooks/useUnidades'
 import { parsePresenteismoDuMetaFile, type ParsedPresenteismoDuMetaRow } from '@/lib/presenteismo-du-meta-parser'
+import { listarAbasXlsx } from '@/lib/xlsx-abas'
+import { MODELO_META_PRESENTEISMO_DU } from '@/lib/modelos-importacao'
+import { BotaoModeloPlanilha } from '@/components/importacao/BotaoModeloPlanilha'
 import { resolverUnidade } from '@/lib/unidade-resolver'
 import { FilePickerButton } from '@/components/importacao/FilePickerButton'
 import { Button } from '@/components/ui/button'
@@ -38,19 +41,36 @@ export function ImportarMetaPresenteismoDu() {
   const [linhas, setLinhas] = useState<ParsedPresenteismoDuMetaRow[]>([])
   const [errosParse, setErrosParse] = useState<string[]>([])
   const [importando, setImportando] = useState(false)
+  const [abas, setAbas] = useState<string[]>([])
+  const [abaSel, setAbaSel] = useState('')
 
   const formatoHistorico = useMemo(() => linhas.some(l => l.mes !== undefined), [linhas])
 
-  async function handleFile(f: File) {
-    setFile(f)
+  async function lerArquivo(f: File, aba?: string) {
     try {
-      const resultado = await parsePresenteismoDuMetaFile(f)
+      const resultado = await parsePresenteismoDuMetaFile(f, aba)
       setLinhas(resultado.linhas)
       setErrosParse(resultado.erros)
     } catch (err) {
       setLinhas([])
       setErrosParse([`Erro ao ler o arquivo: ${String(err)}`])
     }
+  }
+
+  async function handleFile(f: File) {
+    setFile(f)
+    // A planilha do DU costuma ter uma aba só — o seletor só aparece quando
+    // vier com mais de uma, pra não ler a errada em silêncio.
+    const nomesAbas = await listarAbasXlsx(f)
+    setAbas(nomesAbas)
+    const aba = nomesAbas[0]
+    setAbaSel(aba ?? '')
+    await lerArquivo(f, aba)
+  }
+
+  async function handleTrocarAba(aba: string) {
+    setAbaSel(aba)
+    if (file) await lerArquivo(file, aba)
   }
 
   const resolucao = useMemo(() => {
@@ -129,6 +149,18 @@ export function ImportarMetaPresenteismoDu() {
           </div>
         )}
         <FilePickerButton label="Planilha (.xlsx ou .csv)" accept=".xlsx,.xls,.csv,.txt" file={file} onFile={handleFile} />
+        <BotaoModeloPlanilha nomeArquivo="modelo_meta_presenteismo_du" abas={MODELO_META_PRESENTEISMO_DU} />
+        {abas.length > 1 && (
+          <div className="space-y-1.5">
+            <Label>Aba</Label>
+            <Select value={abaSel} onValueChange={handleTrocarAba}>
+              <SelectTrigger className={cn('w-44', selectGlamour)}><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {abas.map(a => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {formatoHistorico && (
@@ -163,7 +195,7 @@ export function ImportarMetaPresenteismoDu() {
             {importando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             Importar {resolucao.resolvidas.length} meta(s)
           </Button>
-          <Button variant="outline" onClick={() => { setFile(null); setLinhas([]); setErrosParse([]) }} disabled={importando}>
+          <Button variant="outline" onClick={() => { setFile(null); setLinhas([]); setErrosParse([]); setAbas([]); setAbaSel('') }} disabled={importando}>
             Cancelar
           </Button>
         </div>

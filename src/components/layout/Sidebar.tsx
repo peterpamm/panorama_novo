@@ -59,13 +59,14 @@ const navItems: NavItem[] = [
   {
     to: '/reuniao-resultados', icon: Award, label: 'Reunião Resultados',
     children: [
+      { to: '/reuniao-resultados/resumo-geral', label: 'Resumo Geral', pagina: 'reuniao_resumo_geral' },
       { to: '/reuniao-resultados/financeiro', label: 'Financeiro', pagina: 'reuniao_financeiro' },
       { to: '/reuniao-resultados/gente', label: 'Gente', pagina: 'reuniao_gente' },
       { to: '/reuniao-resultados/frota', label: 'Frota', pagina: 'reuniao_frota' },
       { to: '/reuniao-resultados/seguranca', label: 'Segurança', pagina: 'reuniao_seguranca' },
       { to: '/reuniao-resultados/distribuicao', label: 'Distribuição', pagina: 'reuniao_distribuicao' },
       { to: '/reuniao-resultados/armazem', label: 'Armazém', pagina: 'reuniao_armazem' },
-      { to: '/reuniao-resultados/resumo-geral', label: 'Resumo Geral', pagina: 'reuniao_resumo_geral' },
+      { to: '/reuniao-resultados/pagamento', label: 'Pagamento', pagina: 'reuniao_pagamento', adminOnly: true },
     ],
   },
   { to: '/importacao',    icon: Upload,         label: 'Importação',     adminOnly: true, pagina: 'importacao' },
@@ -119,7 +120,7 @@ export function Sidebar({ open, onToggle }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'relative flex h-screen shrink-0 flex-col overflow-hidden border-r transition-[width] duration-200 ease-in-out',
+        'relative flex h-screen shrink-0 flex-col overflow-hidden border-r transition-[width] duration-200 ease-in-out print:hidden',
         'border-[rgba(99,130,200,0.15)] bg-gradient-to-b from-slate-800 via-blue-950 to-slate-900',
         open ? 'w-60' : 'w-[60px]',
       )}

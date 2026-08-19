@@ -1,53 +1,26 @@
-import { useState } from 'react'
-import { PillToggle } from '@/components/ui/pill-toggle'
-import { ImportarResultadosArmazemBi } from '@/components/importacao/ImportarResultadosArmazemBi'
-import { ImportarMetaPresenteismoAl } from '@/components/importacao/ImportarMetaPresenteismoAl'
-import { ImportarResultadosArmazemT1Bi } from '@/components/importacao/ImportarResultadosArmazemT1Bi'
-import { ImportarMetasArmazemT1 } from '@/components/importacao/ImportarMetasArmazemT1'
+import { ImportarResultadosArmazem } from '@/components/importacao/ImportarResultadosArmazem'
+import { ImportarMetasArmazem } from '@/components/importacao/ImportarMetasArmazem'
 import { RegistrarResultadosArmazemQuebras } from '@/components/importacao/RegistrarResultadosArmazemQuebras'
 
-type AbaImportacaoArmazem = 't2' | 't1' | 'quebras'
-
-const ABAS = [
-  { value: 't2', label: 'T2' },
-  { value: 't1', label: 'T1' },
-  { value: 'quebras', label: 'Quebras' },
-] as const
-
 /**
- * Importação > Armazém — sub-abas T2, T1 e Quebras. T2/T1 têm planilhas e
- * cadastros totalmente separados (mesmo indicador pode existir nos dois,
- * ex: TMA e Presenteísmo AL, mas com fonte e tabela próprias) — evita
- * misturar os dois numa tela só e confundir qual bloco é de qual. Quebras é
- * cadastro manual (sem planilha), compartilhado entre as unidades do T2 e
- * do T1.
+ * Importação > Armazém. Resultados e metas do T1 e do T2 vêm cada um numa
+ * planilha só, com os dois tiers em abas separadas ("RV ARM _T1" /
+ * "RV ARM _T2") — então são dois blocos, não quatro. Antes existiam sub-abas
+ * T2/T1 com um par de campos cada, todos pedindo o mesmo arquivo: além de
+ * redundante, escolher a aba errada gravava no tier errado sem avisar.
+ *
+ * Quebras é cadastro manual (sem planilha), compartilhado entre T2 e T1.
  */
 export function ImportacaoArmazemPanel() {
-  const [aba, setAba] = useState<AbaImportacaoArmazem>('t2')
-
   return (
-    <div className="space-y-6">
-      <PillToggle opcoes={ABAS} value={aba} onChange={setAba} />
-
-      {aba === 't2' && (
-        <div className="space-y-8">
-          <ImportarResultadosArmazemBi />
-          <div className="border-t pt-8">
-            <ImportarMetaPresenteismoAl />
-          </div>
-        </div>
-      )}
-
-      {aba === 't1' && (
-        <div className="space-y-8">
-          <ImportarResultadosArmazemT1Bi />
-          <div className="border-t pt-8">
-            <ImportarMetasArmazemT1 />
-          </div>
-        </div>
-      )}
-
-      {aba === 'quebras' && <RegistrarResultadosArmazemQuebras />}
+    <div className="space-y-8">
+      <ImportarResultadosArmazem />
+      <div className="border-t pt-8">
+        <ImportarMetasArmazem />
+      </div>
+      <div className="border-t pt-8">
+        <RegistrarResultadosArmazemQuebras />
+      </div>
     </div>
   )
 }

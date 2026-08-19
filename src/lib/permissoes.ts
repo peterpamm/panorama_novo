@@ -32,6 +32,7 @@ export type PaginaChave =
   | 'reuniao_distribuicao'
   | 'reuniao_armazem'
   | 'reuniao_resumo_geral'
+  | 'reuniao_pagamento'
 
 export interface PaginaInfo {
   chave: PaginaChave
@@ -71,4 +72,8 @@ export const PAGINAS: PaginaInfo[] = [
   { chave: 'reuniao_distribuicao', grupo: 'Reunião Resultados', label: 'Reunião Resultados — Distribuição' },
   { chave: 'reuniao_armazem', grupo: 'Reunião Resultados', label: 'Reunião Resultados — Armazém' },
   { chave: 'reuniao_resumo_geral', grupo: 'Reunião Resultados', label: 'Reunião Resultados — Resumo Geral (Corporativo)' },
+  // Dado sensível (cartão/conta de pagamento) — diferente das outras páginas
+  // de Reunião Resultados, esta é SEMPRE adminOnly na rota (App.tsx), nunca
+  // aberta pra usuário de unidade mesmo que concedida aqui.
+  { chave: 'reuniao_pagamento', grupo: 'Reunião Resultados', label: 'Reunião Resultados — Pagamento' },
 ]

@@ -25,7 +25,8 @@ const ANOS_IMPORT = (() => {
 /**
  * Importa o resultado mensal do indicador Excesso de Velocidade — planilha
  * de eventos (Placa, UO, Tipo etc). O parser já conta quantos eventos têm
- * TIPO contendo "EXCESSO_VELOCIDADE" por UO; aqui resolvemos a UO pra
+ * TIPO exatamente igual a "EXCESSO_VELOCIDADE" por UO (tipos como
+ * "EXCESSO_VELOCIDADE_VIA" ficam de fora); aqui resolvemos a UO pra
  * unidade e aplicamos a exclusão: não vale pra ESTÂNCIA nem pra Camaçari ARM
  * (empurrada) — só a ROTA de Camaçari conta.
  */
@@ -110,8 +111,10 @@ export function ImportarResultadosExcessoVelocidade() {
       <h2 className="text-base font-semibold">Excesso de Velocidade — resultado mensal</h2>
       <p className="text-sm text-muted-foreground">
         Suba a planilha de eventos (Excel ou CSV), com as colunas{' '}
-        <span className="font-mono text-xs">UO · TIPO</span>. Conta quantas linhas têm TIPO contendo
-        "EXCESSO_VELOCIDADE" — soma por unidade. Não vale pra ESTÂNCIA nem pra Camaçari ARM.
+        <span className="font-mono text-xs">UO · TIPO</span>. Conta quantas linhas têm TIPO exatamente igual a{' '}
+        <span className="font-mono text-xs">EXCESSO_VELOCIDADE</span> — variações como{' '}
+        <span className="font-mono text-xs">EXCESSO_VELOCIDADE_VIA</span> não entram. Soma por unidade;
+        não vale pra ESTÂNCIA nem pra Camaçari ARM.
       </p>
 
       <div className="flex items-end gap-3">

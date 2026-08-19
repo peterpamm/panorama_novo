@@ -12,9 +12,10 @@ import { menorMelhor, negocioCompativel, negocioDreDaPessoa, unidadeSplitNegocio
 import { negocioPorPrefixo, normalizarNomeUnidade, resolverUnidade } from '@/lib/unidade-resolver'
 import { formatarMinutosComoDuracao } from '@/lib/duracao'
 import { formatarResultado } from '@/lib/reuniao-resultados'
-import { OPERACOES_ARMAZEM_T1 } from '@/lib/armazem-t1-bi-parser'
+import { OPERACOES_ARMAZEM_T1 } from '@/lib/armazem-tiers'
+import { buscarAjusteFinanceiro, mapaAjustesFinanceiro } from '@/lib/financeiro-dre-ajustes'
 import { useToast } from '@/components/ui/use-toast'
-import type { DtoT1Meta, DtoT2Meta, ExcessoVelocidadeMeta, FaiMeta, GsdMeta, LogonMeta, MetaArmazemEfc, MetaArmazemPresenteismoAl, MetaArmazemQuebras, MetaArmazemRefugo, MetaArmazemT1DisponibilidadeGente, MetaArmazemT1PresenteismoAl, MetaArmazemT1Quebras, MetaArmazemT1Tma, MetaArmazemTma, MetaDevolucao, MetaGente, MetaPerdaIndicador, MetaPresenteismoDu, PainelPerdasAux, PesoDistribuicaoFuncao, ResultadoArmazemBi, ResultadoArmazemQuebras, ResultadoArmazemT1Bi, ResultadoDescontoCivf, ResultadoDescontoStressTest, ResultadoDistribuicaoBi, ResultadoDtoT1, ResultadoDtoT2, ResultadoExcessoVelocidade, ResultadoFai, ResultadoGente, ResultadoGsd, ResultadoLogon, ResultadoTri, ReuniaoIndicador, ReuniaoResultadoMensal, RvLideranca, TriMeta } from '@/types'
+import type { DtoT1Meta, DtoT2Meta, ExcessoVelocidadeMeta, FaiMeta, FinanceiroDreAjuste, FinanceiroDreAjusteIndicador, GsdMeta, LogonMeta, MetaArmazemEfc, MetaArmazemPresenteismoAl, MetaArmazemQuebras, MetaArmazemRefugo, MetaArmazemT1DisponibilidadeGente, MetaArmazemT1PresenteismoAl, MetaArmazemT1Quebras, MetaArmazemT1Tma, MetaArmazemTma, MetaDevolucao, MetaGente, MetaPerdaIndicador, MetaPresenteismoDu, PainelPerdasAux, PesoDistribuicaoFuncao, ResultadoArmazemBi, ResultadoArmazemQuebras, ResultadoArmazemT1Bi, ResultadoDescontoCivf, ResultadoDescontoStressTest, ResultadoDistribuicaoBi, ResultadoDtoT1, ResultadoDtoT2, ResultadoExcessoVelocidade, ResultadoFai, ResultadoGente, ResultadoGsd, ResultadoLogon, ResultadoTri, ReuniaoIndicador, ReuniaoResultadoMensal, RvLideranca, TriMeta } from '@/types'
 
 export const MESES_NOMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
@@ -46,6 +47,8 @@ export interface ItemApuracao {
   metaFmt: string | null
   /** Resultado já formatado, mesma ideia do metaFmt — null quando não tem resultado importado/cadastrado pro mês. */
   resultadoFmt: string | null
+  /** Presente só nos itens Multas/Vales do Financeiro — contexto pra UI renderizar o popup de ajuste manual (ver `AjusteManualDreDialog`). undefined = item não é ajustável. */
+  ajusteFinanceiro?: { indicador: FinanceiroDreAjusteIndicador; unidade: string; mes: number; ajusteAtual: FinanceiroDreAjuste | undefined; valorAutomatico: number | null }
 }
 
 export interface LinhaApuracao {
@@ -99,6 +102,16 @@ export interface RvApuracaoProps {
    * SUPERVISOR DU — não conta pra COORD. DU.
    */
   valesPerdasTabela?: 'rv_vales_distribuicao_meta' | 'rv_vales_financeiro_meta'
+  /**
+   * Ajustes manuais TEMPORÁRIOS de Multas/Vales do Financeiro (bug do DRE
+   * que não soma a receita de multas/vales que a unidade recebeu da Ambev —
+   * ver `FinanceiroDreAjuste`, types/index.ts) — só o setor Financeiro usa
+   * (indicador DRE id 'MULTAS' e `valesPerdasTabela ===
+   * 'rv_vales_financeiro_meta'`); nos demais setores esse prop não faz nada.
+   * Quem busca a lista é a página (RvFinanceiroPage/PainelGeralRvPage via
+   * `useFinanceiroDreAjustes`), não o hook.
+   */
+  ajustesFinanceiro?: FinanceiroDreAjuste[]
   /** Inclui o indicador GTY (nome/nome_t1 'GTY' da Reunião Resultados, setor Distribuição, fonte='importado') × rv_empurrada_gty_meta (peso único) — só a RV de Empurrada usa. Resultado/meta já vêm importados na Reunião Resultados, sem reimportar aqui. */
   incluirGty?: boolean
   /** Inclui o indicador TMV (nome/nome_t1 'TMV' da Reunião Resultados) × rv_empurrada_tmv_meta (peso único) — só a RV de Empurrada usa. */
@@ -189,12 +202,13 @@ export interface UseRvApuracaoResultado {
  * (visão por unidade, agregando vários setores de uma vez).
  */
 export function useRvApuracao({
-  ehDoSetor, indicadoresDre = [], tabelaPesos, incluirIndicadoresBi = false, incluirDtoT2 = false, incluirDtoT1 = false, incluirGsd = false, incluirLogon = false, incluirExcessoVelocidade = false, incluirFai = false, incluirTri = false, indisponibilidadeTabela, valesPerdasTabela, incluirGty = false, incluirTmv = false, incluirTempoRendicao = false, incluirAvariaTransporte = false, incluirPacoteGenteDu = false, incluirLogonDu = false, incluirDevolucao = false, incluirPresenteismoDu = false, incluirDescontoCivf = false, incluirDescontoStressTest = false, incluirArmazemEfc = false, incluirArmazemTmaT2 = false, incluirArmazemPresenteismoAlT2 = false, incluirArmazemRefugo = false, incluirArmazemTmaT1 = false, incluirArmazemDisponibilidadeGenteT1 = false, incluirArmazemPresenteismoAlT1 = false, incluirArmazemQuebras = false, filtrarUnidade, filtrarNegocio, anoForcado, mesForcado,
+  ehDoSetor, indicadoresDre = [], tabelaPesos, incluirIndicadoresBi = false, incluirDtoT2 = false, incluirDtoT1 = false, incluirGsd = false, incluirLogon = false, incluirExcessoVelocidade = false, incluirFai = false, incluirTri = false, indisponibilidadeTabela, valesPerdasTabela, ajustesFinanceiro = [], incluirGty = false, incluirTmv = false, incluirTempoRendicao = false, incluirAvariaTransporte = false, incluirPacoteGenteDu = false, incluirLogonDu = false, incluirDevolucao = false, incluirPresenteismoDu = false, incluirDescontoCivf = false, incluirDescontoStressTest = false, incluirArmazemEfc = false, incluirArmazemTmaT2 = false, incluirArmazemPresenteismoAlT2 = false, incluirArmazemRefugo = false, incluirArmazemTmaT1 = false, incluirArmazemDisponibilidadeGenteT1 = false, incluirArmazemPresenteismoAlT1 = false, incluirArmazemQuebras = false, filtrarUnidade, filtrarNegocio, anoForcado, mesForcado,
 }: RvApuracaoProps): UseRvApuracaoResultado {
   const { toast } = useToast()
   const { unidades } = useUnidades()
   const { rows: rowsDre, loading: loadingDre } = useDreLongoTodasUnidades()
   const { orcamentos, loading: loadingOrcamento } = useOrcamentoTodasUnidades()
+  const mapaAjustesFin = useMemo(() => mapaAjustesFinanceiro(ajustesFinanceiro), [ajustesFinanceiro])
   const estanciaCodigo = useMemo(() => resolverUnidade('ESTÂNCIA', unidades)?.codigo, [unidades])
   const armazemT1Codigos = useMemo(
     () => new Set(OPERACOES_ARMAZEM_T1.map(nome => resolverUnidade(nome, unidades)?.codigo).filter((c): c is string => !!c)),
@@ -599,7 +613,16 @@ export function useRvApuracao({
           let detalhe: string
           let metaFmt: string | null = null
           let resultadoFmt: string | null = null
-          if (rowsMesInd.length === 0) {
+
+          // Multas do Financeiro (id 'MULTAS', único indicador de DRE que
+          // usa esse id em qualquer setor — ver RV_FINANCEIRO_DRE em
+          // constants.ts) é o único afetado pelo ajuste manual TEMPORÁRIO do
+          // bug do DRE (ver `FinanceiroDreAjuste`).
+          const indAjustavel = ind.id === 'MULTAS' ? 'multas' as const : null
+          const ajusteAtivo = indAjustavel ? buscarAjusteFinanceiro(mapaAjustesFin, unidade.codigo, ano, mes, indAjustavel) : undefined
+          let valorDispersaoDre: number | null = null
+
+          if (rowsMesInd.length === 0 && !ajusteAtivo) {
             status = 'pendente'
             detalhe = 'Sem DRE importado pro mês'
           } else if (ind.tipo === 'avr') {
@@ -618,11 +641,14 @@ export function useRvApuracao({
               metaFmt = `${fmtPct(meta)}%`
             }
           } else {
-            const valor = rowsMesInd
+            valorDispersaoDre = rowsMesInd
               .filter(r => ind.prefixos.some(p => r.conta_codigo.startsWith(p)))
               .reduce((acc, r) => acc + (r.diferenca ?? 0), 0)
+            const valor = ajusteAtivo ? ajusteAtivo.valor : valorDispersaoDre
             status = valor >= 0 ? 'bateu' : 'perdeu'
-            detalhe = `Dispersão ${Math.round(valor).toLocaleString('pt-BR')} · meta ≥ 0 (sem estouro)`
+            detalhe = ajusteAtivo
+              ? `Dispersão ${Math.round(valor).toLocaleString('pt-BR')} (ajuste manual) · meta ≥ 0 (sem estouro)`
+              : `Dispersão ${Math.round(valor).toLocaleString('pt-BR')} · meta ≥ 0 (sem estouro)`
             resultadoFmt = Math.round(valor).toLocaleString('pt-BR')
             metaFmt = '≥ 0'
           }
@@ -634,6 +660,9 @@ export function useRvApuracao({
             detalhe: `${negocioInd} · Peso ${fmtPeso(peso)}% · ${detalhe}`,
             metaFmt,
             resultadoFmt,
+            ajusteFinanceiro: indAjustavel
+              ? { indicador: indAjustavel, unidade: unidade.codigo, mes, ajusteAtual: ajusteAtivo, valorAutomatico: valorDispersaoDre }
+              : undefined,
           })
         }
 
@@ -1208,23 +1237,32 @@ export function useRvApuracao({
           const peso = valesPerdasTabela === 'rv_vales_distribuicao_meta' ? pesoDistribuicao('vales') : valesMeta.peso
           if (peso && peso > 0) {
             const metaPerdasVales = metasPerdasVales.find(mp => mp.unidade === unidade.codigo && mp.ano === ano)
+            // Ajuste manual só existe pro Vales do Financeiro (bug do DRE) —
+            // nunca pro Vales da Distribuição, que usa a tabela de meta
+            // diferente (ver `FinanceiroDreAjuste`).
+            const indAjustavelVales = valesPerdasTabela === 'rv_vales_financeiro_meta' ? 'vales' as const : null
+            const ajusteVales = indAjustavelVales ? buscarAjusteFinanceiro(mapaAjustesFin, unidade.codigo, ano, mes, indAjustavelVales) : undefined
             let status: StatusItem
             let detalhe: string
             let metaFmt: string | null = null
             let resultadoFmt: string | null = null
-            if (rowsMes.length === 0) {
+            let valorDreVales: number | null = null
+            if (rowsMes.length === 0 && !ajusteVales) {
               status = 'pendente'
               detalhe = 'Sem DRE importado pro mês'
             } else if (!metaPerdasVales) {
               status = 'pendente'
               detalhe = 'Sem Meta de Perdas de Vales cadastrada pro ano'
             } else {
-              const resultado = rowsMes
+              valorDreVales = rowsMes
                 .filter(r => r.conta_codigo.startsWith('051') || r.conta_codigo.startsWith('052'))
                 .reduce((acc, r) => acc + (r.diferenca ?? 0), 0)
+              const resultado = ajusteVales ? ajusteVales.valor : valorDreVales
               const metaMensal = (metaPerdasVales.meta_anual / 12) * (valesMeta.pct_meta / 100)
               status = resultado >= metaMensal ? 'bateu' : 'perdeu'
-              detalhe = `Resultado R$ ${fmtValor(resultado)} · Meta R$ ${fmtValor(metaMensal)} (${fmtPeso(valesMeta.pct_meta)}% da Meta de Perdas)`
+              detalhe = ajusteVales
+                ? `Resultado R$ ${fmtValor(resultado)} (ajuste manual) · Meta R$ ${fmtValor(metaMensal)} (${fmtPeso(valesMeta.pct_meta)}% da Meta de Perdas)`
+                : `Resultado R$ ${fmtValor(resultado)} · Meta R$ ${fmtValor(metaMensal)} (${fmtPeso(valesMeta.pct_meta)}% da Meta de Perdas)`
               metaFmt = `R$ ${fmtValor(metaMensal)}`
               resultadoFmt = `R$ ${fmtValor(resultado)}`
             }
@@ -1236,6 +1274,9 @@ export function useRvApuracao({
               detalhe: `Peso ${fmtPeso(peso)}% · ${detalhe}`,
               metaFmt,
               resultadoFmt,
+              ajusteFinanceiro: indAjustavelVales
+                ? { indicador: indAjustavelVales, unidade: unidade.codigo, mes, ajusteAtual: ajusteVales, valorAutomatico: valorDreVales }
+                : undefined,
             })
           }
         }
@@ -1429,7 +1470,7 @@ export function useRvApuracao({
     }).sort((a, b) =>
       a.pessoa.operacao.localeCompare(b.pessoa.operacao) || a.pessoa.nome.localeCompare(b.pessoa.nome),
     )
-  }, [liderancasSetor, metas, resultados, pesosDre, rowsDre, orcamentos, unidades, estanciaCodigo, armazemT1Codigos, verAno, verMes, filtroOperacao, indicadoresDre, incluirDtoT2, resultadosDtoT2, dtoT2Meta, incluirDtoT1, resultadosDtoT1, dtoT1Metas, incluirGsd, resultadosGsd, gsdMeta, incluirLogon, resultadosLogon, logonMeta, incluirExcessoVelocidade, resultadosExcessoVelocidade, excessoVelocidadeMetas, incluirFai, resultadosFai, faiMetas, incluirTri, resultadosTri, triMeta, indisponibilidadeTabela, resultadosIndisponibilidade, indisponibilidadeMeta, valesPerdasTabela, metasPerdasVales, valesMeta, incluirGty, incluirTmv, incluirTempoRendicao, gtyPeso, tmvPeso, rendicaoPeso, indicadoresImportadosDistribuicao, resultadosImportadosDistribuicao, incluirAvariaTransporte, avariaTransporteMeta, incluirPacoteGenteDu, incluirLogonDu, incluirDevolucao, incluirPresenteismoDu, resultadosDistribuicaoBi, logonDuMeta, devolucaoMetas, presenteismoDuMetas, pesosPorFuncaoDistribuicao, incluirDescontoCivf, resultadosDescontoCivf, descontoCivfMeta, incluirDescontoStressTest, resultadosDescontoStressTest, descontoStressTestMeta, incluirArmazemEfc, armazemEfcMetas, armazemEfcPeso, incluirArmazemTmaT2, armazemTmaT2Metas, armazemTmaT2Peso, incluirArmazemPresenteismoAlT2, armazemPresenteismoAlT2Metas, armazemPresenteismoAlT2Peso, incluirArmazemRefugo, armazemRefugoMeta, resultadosArmazemBi, incluirArmazemTmaT1, armazemTmaT1Metas, armazemTmaT1Peso, incluirArmazemDisponibilidadeGenteT1, armazemDisponibilidadeGenteT1Metas, armazemDisponibilidadeGenteT1Peso, incluirArmazemPresenteismoAlT1, armazemPresenteismoAlT1Metas, armazemPresenteismoAlT1Peso, resultadosArmazemT1Bi, incluirArmazemQuebras, armazemQuebrasMeta, armazemT1QuebrasMeta, resultadosArmazemQuebras])
+  }, [liderancasSetor, metas, resultados, pesosDre, rowsDre, orcamentos, unidades, estanciaCodigo, armazemT1Codigos, verAno, verMes, filtroOperacao, indicadoresDre, incluirDtoT2, resultadosDtoT2, dtoT2Meta, incluirDtoT1, resultadosDtoT1, dtoT1Metas, incluirGsd, resultadosGsd, gsdMeta, incluirLogon, resultadosLogon, logonMeta, incluirExcessoVelocidade, resultadosExcessoVelocidade, excessoVelocidadeMetas, incluirFai, resultadosFai, faiMetas, incluirTri, resultadosTri, triMeta, indisponibilidadeTabela, resultadosIndisponibilidade, indisponibilidadeMeta, valesPerdasTabela, metasPerdasVales, valesMeta, incluirGty, incluirTmv, incluirTempoRendicao, gtyPeso, tmvPeso, rendicaoPeso, indicadoresImportadosDistribuicao, resultadosImportadosDistribuicao, incluirAvariaTransporte, avariaTransporteMeta, incluirPacoteGenteDu, incluirLogonDu, incluirDevolucao, incluirPresenteismoDu, resultadosDistribuicaoBi, logonDuMeta, devolucaoMetas, presenteismoDuMetas, pesosPorFuncaoDistribuicao, incluirDescontoCivf, resultadosDescontoCivf, descontoCivfMeta, incluirDescontoStressTest, resultadosDescontoStressTest, descontoStressTestMeta, incluirArmazemEfc, armazemEfcMetas, armazemEfcPeso, incluirArmazemTmaT2, armazemTmaT2Metas, armazemTmaT2Peso, incluirArmazemPresenteismoAlT2, armazemPresenteismoAlT2Metas, armazemPresenteismoAlT2Peso, incluirArmazemRefugo, armazemRefugoMeta, resultadosArmazemBi, incluirArmazemTmaT1, armazemTmaT1Metas, armazemTmaT1Peso, incluirArmazemDisponibilidadeGenteT1, armazemDisponibilidadeGenteT1Metas, armazemDisponibilidadeGenteT1Peso, incluirArmazemPresenteismoAlT1, armazemPresenteismoAlT1Metas, armazemPresenteismoAlT1Peso, resultadosArmazemT1Bi, incluirArmazemQuebras, armazemQuebrasMeta, armazemT1QuebrasMeta, resultadosArmazemQuebras, mapaAjustesFin])
 
   const totalBase = linhas.reduce((acc, l) => acc + l.pessoa.valor, 0)
   const totalReceber = linhas.reduce((acc, l) => acc + l.aReceber, 0)

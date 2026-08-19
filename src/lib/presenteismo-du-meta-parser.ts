@@ -99,18 +99,25 @@ export function parsePresenteismoDuMetaCsv(texto: string): ParsePresenteismoDuMe
   return parseMatriz(linhasTexto.map(l => l.split(separador)))
 }
 
-/** Lê a planilha Excel (.xlsx/.xls) — usa a primeira aba. */
-export async function parsePresenteismoDuMetaXlsx(file: File): Promise<ParsePresenteismoDuMetaResultado> {
+/**
+ * Lê a planilha Excel (.xlsx/.xls). `aba` é obrigatória na prática quando o
+ * arquivo tem mais de uma: a planilha de metas do Armazém traz T1 e T2 lado a
+ * lado ("RV ARM _T1" / "RV ARM _T2"), e cair sempre na primeira importava as
+ * metas do T1 achando que eram do T2 — as unidades do T2 ficavam sem meta
+ * nenhuma. Sem `aba`, mantém o comportamento antigo (primeira aba).
+ */
+export async function parsePresenteismoDuMetaXlsx(file: File, aba?: string): Promise<ParsePresenteismoDuMetaResultado> {
   const buffer = await file.arrayBuffer()
   const wb = XLSX.read(buffer, { type: 'array' })
-  const sheet = wb.Sheets[wb.SheetNames[0]]
+  const nome = aba && wb.SheetNames.includes(aba) ? aba : wb.SheetNames[0]
+  const sheet = wb.Sheets[nome]
   if (!sheet) return { linhas: [], erros: ['Arquivo Excel sem abas'] }
   const matriz = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' })
   return parseMatriz(matriz)
 }
 
 /** Detecta o formato pela extensão e faz o parse do arquivo. */
-export async function parsePresenteismoDuMetaFile(file: File): Promise<ParsePresenteismoDuMetaResultado> {
-  if (/\.xlsx?$/i.test(file.name)) return parsePresenteismoDuMetaXlsx(file)
+export async function parsePresenteismoDuMetaFile(file: File, aba?: string): Promise<ParsePresenteismoDuMetaResultado> {
+  if (/\.xlsx?$/i.test(file.name)) return parsePresenteismoDuMetaXlsx(file, aba)
   return parsePresenteismoDuMetaCsv(await file.text())
 }

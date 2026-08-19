@@ -1,4 +1,4 @@
-import { AJUSTE_TODAS_UNIDADES, type CalendarioEvento } from '@/types'
+import { AJUSTE_TODAS_UNIDADES, type CalendarioEvento, type CalendarioEventoAjusteDia } from '@/types'
 
 const DIAS_SEMANA_NOMES = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado']
 
@@ -25,9 +25,9 @@ function dentroDaVigencia(evento: CalendarioEvento, ano: number, mes: number, di
   return true
 }
 
-/** O evento vale pra essa unidade? ('*' vale pra todas.) */
+/** O evento vale pra essa unidade? (`unidades` inclui a unidade, ou `[AJUSTE_TODAS_UNIDADES]` = '*' vale pra todas.) */
 export function eventoDaUnidade(evento: CalendarioEvento, unidade: string): boolean {
-  return evento.unidade === unidade || evento.unidade === AJUSTE_TODAS_UNIDADES
+  return evento.unidades.includes(unidade) || evento.unidades.includes(AJUSTE_TODAS_UNIDADES)
 }
 
 /**
@@ -62,21 +62,62 @@ export function ocorrenciasNoMes(evento: CalendarioEvento, ano: number, mes: num
 }
 
 /**
- * Agrupa os eventos de uma unidade pelos dias do mês em que caem — mesmo
- * formato do `agruparRotinasComAjustes`, pra tela desenhar rotina e evento
- * lado a lado na mesma célula.
+ * Ajustes de dia do evento aplicáveis nesse ano/mês/unidade — pontual,
+ * própria unidade ou 'todas' (mesma sentinela de sempre). Quando os dois
+ * existem pro mesmo `dia_original`, a própria unidade ganha da 'todas'
+ * (mesma régua de precedência de `rotina-ajuste-dia.ts`, só sem a parte
+ * "permanente" que não existe aqui).
  */
-export function agruparEventosPorDia(
-  eventos: CalendarioEvento[],
+function ajusteVigentePorDiaOriginal(
+  ajustes: CalendarioEventoAjusteDia[],
+  eventoId: string,
   unidade: string,
   ano: number,
   mes: number,
-): Map<number, CalendarioEvento[]> {
-  const porDia = new Map<number, CalendarioEvento[]>()
+): Map<number, number> {
+  const porDiaOriginal = new Map<number, CalendarioEventoAjusteDia>()
+  for (const a of ajustes) {
+    if (a.evento_id !== eventoId || a.ano !== ano || a.mes !== mes) continue
+    if (a.unidade !== unidade && a.unidade !== AJUSTE_TODAS_UNIDADES) continue
+    const atual = porDiaOriginal.get(a.dia_original)
+    if (!atual || (a.unidade === unidade && atual.unidade !== unidade)) porDiaOriginal.set(a.dia_original, a)
+  }
+  const mapa = new Map<number, number>()
+  for (const [diaOriginal, a] of porDiaOriginal) mapa.set(diaOriginal, a.dia_novo)
+  return mapa
+}
+
+/** Uma ocorrência de evento já posicionada no dia final (depois do ajuste, se houver) — o que a célula do calendário desenha e o que se arrasta. */
+export interface OcorrenciaEvento {
+  evento: CalendarioEvento
+  /** Dia em que a ocorrência cairia sem nenhum ajuste — é essa chave que um novo arrastar sobrescreve (upsert por evento_id+unidade+ano+mes+dia_original). */
+  diaOriginal: number
+}
+
+/**
+ * Agrupa as ocorrências de eventos de uma unidade pelos dias do mês em que
+ * caem, já aplicando os ajustes de dia (arrastar) — mesmo formato do
+ * `agruparRotinasComAjustes`, pra tela desenhar rotina e evento lado a lado
+ * na mesma célula. Um evento semanal pode ter várias ocorrências no mês
+ * (várias sextas) — cada uma é ajustável independente, por isso o retorno
+ * carrega `diaOriginal` junto (a UI precisa dele pra saber qual ocorrência
+ * está sendo movida quando o usuário arrasta de novo uma que já tem ajuste).
+ */
+export function agruparEventosPorDia(
+  eventos: CalendarioEvento[],
+  ajustes: CalendarioEventoAjusteDia[],
+  unidade: string,
+  ano: number,
+  mes: number,
+): Map<number, OcorrenciaEvento[]> {
+  const porDia = new Map<number, OcorrenciaEvento[]>()
+  const ultimoDia = new Date(ano, mes, 0).getDate()
   for (const evento of eventos) {
     if (!eventoDaUnidade(evento, unidade)) continue
-    for (const dia of ocorrenciasNoMes(evento, ano, mes)) {
-      porDia.set(dia, [...(porDia.get(dia) ?? []), evento])
+    const remapDia = ajusteVigentePorDiaOriginal(ajustes, evento.id ?? '', unidade, ano, mes)
+    for (const diaOriginal of ocorrenciasNoMes(evento, ano, mes)) {
+      const diaFinal = remapDia.has(diaOriginal) ? Math.min(remapDia.get(diaOriginal)!, ultimoDia) : diaOriginal
+      porDia.set(diaFinal, [...(porDia.get(diaFinal) ?? []), { evento, diaOriginal }])
     }
   }
   return porDia

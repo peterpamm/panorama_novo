@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ChevronRight, Landmark, ShieldCheck, Truck, Users, Warehouse, Boxes, Crown } from 'lucide-react'
+import { ChevronRight, Landmark, ShieldCheck, Truck, Users, Warehouse, Boxes, Crown, Wallet } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { useAuth } from '@/context/AuthContext'
 import type { PaginaChave } from '@/lib/permissoes'
@@ -7,7 +7,7 @@ import type { PaginaChave } from '@/lib/permissoes'
 interface SetorCard {
   to: string
   pagina: PaginaChave
-  /** Restringe o card a admin, igual à rota — só o Resumo Geral usa isso hoje. */
+  /** Restringe o card a admin, igual à rota — Resumo Geral (visão corporativa) e Pagamento (dado sensível) usam isso. */
   adminOnly?: boolean
   titulo: string
   descricao: string
@@ -16,6 +16,15 @@ interface SetorCard {
 }
 
 const SETORES: SetorCard[] = [
+  {
+    to: '/reuniao-resultados/resumo-geral',
+    pagina: 'reuniao_resumo_geral',
+    adminOnly: true,
+    titulo: 'Resumo Geral',
+    descricao: 'Consolida a pontuação dos 6 setores por unidade, soma bonificações (EBITDA + Ranking Ambev) e define o vencedor do mês/ano — só Corporativo.',
+    icone: <Crown className="h-6 w-6 text-amber-600" />,
+    corIcone: 'bg-amber-600/10',
+  },
   {
     to: '/reuniao-resultados/financeiro',
     pagina: 'reuniao_financeiro',
@@ -65,13 +74,13 @@ const SETORES: SetorCard[] = [
     corIcone: 'bg-teal-500/10',
   },
   {
-    to: '/reuniao-resultados/resumo-geral',
-    pagina: 'reuniao_resumo_geral',
+    to: '/reuniao-resultados/pagamento',
+    pagina: 'reuniao_pagamento',
     adminOnly: true,
-    titulo: 'Resumo Geral',
-    descricao: 'Consolida a pontuação dos 6 setores por unidade, soma bonificações (EBITDA + Ranking Ambev) e define o vencedor do mês/ano — só Corporativo.',
-    icone: <Crown className="h-6 w-6 text-amber-600" />,
-    corIcone: 'bg-amber-600/10',
+    titulo: 'Pagamento',
+    descricao: 'Cadastro das lideranças (cartão Extratta) e relatório em PDF de quem venceu cada setor no mês, pra enviar à matriz depositar o prêmio.',
+    icone: <Wallet className="h-6 w-6 text-violet-600" />,
+    corIcone: 'bg-violet-600/10',
   },
 ]
 

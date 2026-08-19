@@ -15,6 +15,14 @@ describe('parseDuracaoParaMinutos', () => {
     expect(parseDuracaoParaMinutos(0.5)).toBe(720) // meio-dia = 12h = 720min
   })
 
+  it('número >= 1 já é minutos puros, sem multiplicar por 1440 (célula sem formatação de hora na planilha)', () => {
+    // Bug real: unidade com a célula RESULT sem formatação de hora — 141
+    // (= 02:21) virava 3384:00 por ser tratado como fração de dia.
+    expect(parseDuracaoParaMinutos(141)).toBe(141)
+    expect(parseDuracaoParaMinutos(130)).toBe(130)
+    expect(parseDuracaoParaMinutos(1)).toBe(1)
+  })
+
   it('retorna null pra texto vazio ou inválido', () => {
     expect(parseDuracaoParaMinutos('')).toBeNull()
     expect(parseDuracaoParaMinutos('abc')).toBeNull()

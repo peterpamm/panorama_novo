@@ -14,11 +14,11 @@ import { cn } from '@/lib/utils'
 import { chaveStatus, mapaStatusExibicao, mesAnterior, type StatusExibicaoRotina } from '@/lib/rotinas-financeiras'
 import { gradeDoMes, prazoDaRotina, rotuloPrazoEstruturado } from '@/lib/rotina-prazo'
 import { agruparRotinasComAjustes } from '@/lib/rotina-ajuste-dia'
-import { agruparEventosPorDia, rotuloRecorrencia } from '@/lib/calendario-eventos'
+import { agruparEventosPorDia, rotuloRecorrencia, type OcorrenciaEvento } from '@/lib/calendario-eventos'
 import { CORES_EVENTO, EventoCalendarioDialog, eventoNovo } from '@/components/financeira/EventoCalendarioDialog'
 import {
   AJUSTE_TODAS_UNIDADES,
-  type CalendarioEvento, type RotinaAjusteDia, type RotinaFinanceira, type RotinaFinanceiraStatus,
+  type CalendarioEvento, type CalendarioEventoAjusteDia, type RotinaAjusteDia, type RotinaFinanceira, type RotinaFinanceiraStatus,
 } from '@/types'
 
 const MESES_NOMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -86,12 +86,13 @@ export function CalendarioRotinasTab({ podeEditar }: CalendarioRotinasTabProps) 
   const [statusListaAnterior, setStatusListaAnterior] = useState<RotinaFinanceiraStatus[]>([])
   const [ajustes, setAjustes] = useState<RotinaAjusteDia[]>([])
   const [eventos, setEventos] = useState<CalendarioEvento[]>([])
+  const [eventoAjustes, setEventoAjustes] = useState<CalendarioEventoAjusteDia[]>([])
   const [carregando, setCarregando] = useState(true)
 
   async function carregar() {
     setCarregando(true)
     const anterior = mesAnterior(Number(ano), Number(mes))
-    const [r, s, sAnt, aj, ev] = await Promise.all([
+    const [r, s, sAnt, aj, ev, evAj] = await Promise.all([
       supabase.from('rotinas_financeiras').select('*').eq('ativo', true).order('setor').order('ordem'),
       supabase.from('rotinas_financeiras_status').select('*').eq('ano', Number(ano)).eq('mes', Number(mes)),
       supabase.from('rotinas_financeiras_status').select('*').eq('ano', anterior.ano).eq('mes', anterior.mes),
@@ -100,16 +101,24 @@ export function CalendarioRotinasTab({ podeEditar }: CalendarioRotinasTabProps) 
       supabase.from('rotinas_financeiras_ajuste_dia').select('*'),
       // Mesmo motivo nos eventos: um RPS criado em janeiro segue valendo hoje.
       supabase.from('calendario_eventos').select('*').order('titulo'),
+      // Ajustes de dia dos eventos são sempre pontuais (sem "permanente"), já
+      // filtra por ano/mês — um ajuste de outro mês não tem por que existir aqui.
+      supabase.from('calendario_eventos_ajuste_dia').select('*').eq('ano', Number(ano)).eq('mes', Number(mes)),
     ])
     if (r.error) toast({ title: 'Erro ao carregar rotinas', description: r.error.message, variant: 'destructive' })
     if (s.error) toast({ title: 'Erro ao carregar acompanhamento', description: s.error.message, variant: 'destructive' })
     if (aj.error) toast({ title: 'Erro ao carregar ajustes de dia', description: aj.error.message, variant: 'destructive' })
     if (ev.error) toast({ title: 'Erro ao carregar eventos', description: ev.error.message, variant: 'destructive' })
+    if (evAj.error) toast({ title: 'Erro ao carregar ajustes de evento', description: evAj.error.message, variant: 'destructive' })
     setRotinas((r.data as RotinaFinanceira[]) ?? [])
     setStatusLista((s.data as RotinaFinanceiraStatus[]) ?? [])
     setStatusListaAnterior((sAnt.data as RotinaFinanceiraStatus[]) ?? [])
     setAjustes((aj.data as RotinaAjusteDia[]) ?? [])
-    setEventos((ev.data as CalendarioEvento[]) ?? [])
+    // `unidades ?? []` blinda contra o schema antigo (coluna `unidade` única,
+    // pré-migration 105) — sem isso, uma migration atrasada derrubava a tela
+    // inteira (evento.unidades undefined quebrando o .includes() em cascata).
+    setEventos(((ev.data as CalendarioEvento[]) ?? []).map(e => ({ ...e, unidades: e.unidades ?? [] })))
+    setEventoAjustes((evAj.data as CalendarioEventoAjusteDia[]) ?? [])
     setCarregando(false)
   }
 
@@ -126,8 +135,8 @@ export function CalendarioRotinasTab({ podeEditar }: CalendarioRotinasTabProps) 
   )
 
   const eventosPorDia = useMemo(
-    () => agruparEventosPorDia(eventos, unidadeSel, Number(ano), Number(mes)),
-    [eventos, unidadeSel, ano, mes],
+    () => agruparEventosPorDia(eventos, eventoAjustes, unidadeSel, Number(ano), Number(mes)),
+    [eventos, eventoAjustes, unidadeSel, ano, mes],
   )
 
   const semanas = useMemo(() => gradeDoMes(Number(ano), Number(mes)), [ano, mes])
@@ -147,8 +156,27 @@ export function CalendarioRotinasTab({ podeEditar }: CalendarioRotinasTabProps) 
   const [mesesSeguintes, setMesesSeguintes] = useState(false)
   const [salvandoAjuste, setSalvandoAjuste] = useState(false)
 
+  // ── Arrastar um evento (exceção pontual dessa ocorrência) ────────────────
+  const [arrastandoEvento, setArrastandoEvento] = useState<OcorrenciaEvento | null>(null)
+  const [solturaEvento, setSolturaEvento] = useState<{ ocorrencia: OcorrenciaEvento; dia: number } | null>(null)
+  const [todasUnidadesEvento, setTodasUnidadesEvento] = useState(false)
+  const [salvandoAjusteEvento, setSalvandoAjusteEvento] = useState(false)
+
   function aoSoltar(dia: number) {
     setDiaAlvo(null)
+    if (arrastandoEvento) {
+      const ocorrencia = arrastandoEvento
+      setArrastandoEvento(null)
+      // O dia atualmente exibido é o diaOriginal reprocessado pelo ajuste
+      // vigente — precisa achar onde a ocorrência está DESENHADA agora (não
+      // o diaOriginal em si), senão soltar no mesmo lugar abriria o dialog à toa.
+      const diaAtual = Array.from(eventosPorDia.entries())
+        .find(([, lista]) => lista.some(o => o.evento.id === ocorrencia.evento.id && o.diaOriginal === ocorrencia.diaOriginal))?.[0] ?? null
+      if (diaAtual === dia) return
+      setTodasUnidadesEvento(false)
+      setSolturaEvento({ ocorrencia, dia })
+      return
+    }
     const rotina = arrastando
     setArrastando(null)
     if (!rotina) return
@@ -187,6 +215,33 @@ export function CalendarioRotinasTab({ podeEditar }: CalendarioRotinasTabProps) 
       ].join(' · '),
     })
     setSoltura(null)
+    await carregar()
+  }
+
+  async function confirmarAjusteEvento() {
+    if (!solturaEvento) return
+    setSalvandoAjusteEvento(true)
+    const { error } = await supabase.from('calendario_eventos_ajuste_dia').upsert(
+      {
+        evento_id: solturaEvento.ocorrencia.evento.id,
+        unidade: todasUnidadesEvento ? AJUSTE_TODAS_UNIDADES : unidadeSel,
+        ano: Number(ano),
+        mes: Number(mes),
+        dia_original: solturaEvento.ocorrencia.diaOriginal,
+        dia_novo: solturaEvento.dia,
+      },
+      { onConflict: 'evento_id,unidade,ano,mes,dia_original' },
+    )
+    setSalvandoAjusteEvento(false)
+    if (error) {
+      toast({ title: 'Erro ao mover o evento', description: error.message, variant: 'destructive' })
+      return
+    }
+    toast({
+      title: `${solturaEvento.ocorrencia.evento.titulo} movido pro dia ${solturaEvento.dia}`,
+      description: `${todasUnidadesEvento ? 'Todas as unidades' : nomeUnidadeSel} · só essa ocorrência (dia ${solturaEvento.ocorrencia.diaOriginal} de ${MESES_NOMES[Number(mes) - 1]}/${ano})`,
+    })
+    setSolturaEvento(null)
     await carregar()
   }
 
@@ -305,18 +360,23 @@ export function CalendarioRotinasTab({ podeEditar }: CalendarioRotinasTabProps) 
                           {celula.dia}
                         </div>
                         <div className="space-y-1">
-                          {(eventosPorDia.get(celula.dia) ?? []).map(evento => (
+                          {(eventosPorDia.get(celula.dia) ?? []).map(ocorrencia => (
                             <div
-                              key={`${evento.id}-${celula.dia}`}
-                              onClick={podeEditar ? () => setEventoEditando(evento) : undefined}
-                              title={`${evento.titulo}\n${rotuloRecorrencia(evento)}${evento.unidade === AJUSTE_TODAS_UNIDADES ? ' · todas as unidades' : ''}${evento.descricao ? `\n${evento.descricao}` : ''}`}
+                              key={`${ocorrencia.evento.id}-${ocorrencia.diaOriginal}`}
+                              draggable={podeEditar}
+                              onDragStart={podeEditar ? () => setArrastandoEvento(ocorrencia) : undefined}
+                              onDragEnd={podeEditar ? () => { setArrastandoEvento(null); setDiaAlvo(null) } : undefined}
+                              onClick={podeEditar ? () => setEventoEditando(ocorrencia.evento) : undefined}
+                              title={`${ocorrencia.evento.titulo}\n${rotuloRecorrencia(ocorrencia.evento)}${ocorrencia.evento.unidades.includes(AJUSTE_TODAS_UNIDADES) ? ' · todas as unidades' : ocorrencia.evento.unidades.length > 1 ? ` · ${ocorrencia.evento.unidades.length} unidades` : ''}${ocorrencia.evento.descricao ? `\n${ocorrencia.evento.descricao}` : ''}${podeEditar ? '\nArraste pra outro dia pra mover só essa ocorrência' : ''}`}
                               className={cn(
-                                'truncate rounded px-1.5 py-1 text-[11px] font-semibold leading-tight',
-                                CORES_EVENTO[evento.cor],
-                                podeEditar && 'cursor-pointer hover:brightness-95',
+                                'flex items-center gap-0.5 truncate rounded px-1.5 py-1 text-[11px] font-semibold leading-tight',
+                                CORES_EVENTO[ocorrencia.evento.cor],
+                                podeEditar && 'cursor-grab active:cursor-grabbing hover:brightness-95',
+                                arrastandoEvento?.evento.id === ocorrencia.evento.id && arrastandoEvento?.diaOriginal === ocorrencia.diaOriginal && 'opacity-40',
                               )}
                             >
-                              {evento.titulo}
+                              {podeEditar && <GripVertical className="h-3 w-3 shrink-0 opacity-50" />}
+                              <span className="truncate">{ocorrencia.evento.titulo}</span>
                             </div>
                           ))}
                           {doDia.map(rotina => {
@@ -429,6 +489,46 @@ export function CalendarioRotinasTab({ podeEditar }: CalendarioRotinasTabProps) 
             <Button variant="outline" onClick={() => setSoltura(null)} disabled={salvandoAjuste}>Cancelar</Button>
             <Button onClick={confirmarAjuste} disabled={salvandoAjuste} className="gap-2">
               {salvandoAjuste && <Loader2 className="h-4 w-4 animate-spin" />}
+              Mover
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmação do arrastar de evento — sempre pontual (só essa
+          ocorrência, mesmo dia_original sobrescreve se arrastar de novo), sem
+          "meses seguintes": se a recorrência mudou de vez, o jeito é editar o
+          evento, não empilhar exceção. */}
+      <Dialog open={solturaEvento !== null} onOpenChange={v => { if (!v) setSolturaEvento(null) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mover pro dia {solturaEvento?.dia}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{solturaEvento?.ocorrencia.evento.titulo}</span> do dia{' '}
+            <span className="font-medium text-foreground">{solturaEvento?.ocorrencia.diaOriginal}</span> passa pro dia{' '}
+            <span className="font-medium text-foreground">{solturaEvento?.dia}</span> de {MESES_NOMES[Number(mes) - 1]}/{ano} — só
+            essa ocorrência; nas próximas semanas/meses continua no dia normal.
+          </p>
+
+          {solturaEvento && (solturaEvento.ocorrencia.evento.unidades.length > 1 || solturaEvento.ocorrencia.evento.unidades.includes(AJUSTE_TODAS_UNIDADES)) && (
+            <div className="rounded-lg border border-gray-200/60 p-3 dark:border-gray-700/60">
+              <label className="flex items-start gap-2.5">
+                <Checkbox checked={todasUnidadesEvento} onCheckedChange={v => setTodasUnidadesEvento(v === true)} className="mt-0.5" />
+                <span className="text-sm">
+                  Aplicar a <span className="font-medium">todas as unidades do evento</span>
+                  <span className="block text-xs text-muted-foreground">
+                    Desmarcado, vale só pra {nomeUnidadeSel} — as outras unidades continuam vendo no dia normal.
+                  </span>
+                </span>
+              </label>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSolturaEvento(null)} disabled={salvandoAjusteEvento}>Cancelar</Button>
+            <Button onClick={confirmarAjusteEvento} disabled={salvandoAjusteEvento} className="gap-2">
+              {salvandoAjusteEvento && <Loader2 className="h-4 w-4 animate-spin" />}
               Mover
             </Button>
           </DialogFooter>

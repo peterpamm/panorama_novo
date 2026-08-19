@@ -19,7 +19,7 @@ export function Header({ title, isDark, onToggleTheme }: HeaderProps) {
   const inicial = user?.email?.[0]?.toUpperCase() ?? '?'
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200/30 bg-white/60 px-6 shadow-sm backdrop-blur-xl dark:border-white/5 dark:bg-gray-800/60">
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-gray-200/30 bg-white/60 px-6 shadow-sm backdrop-blur-xl print:hidden dark:border-white/5 dark:bg-gray-800/60">
       <h1 className="bg-gradient-to-br from-foreground to-muted-foreground bg-clip-text text-base font-semibold text-transparent">
         {title}
       </h1>

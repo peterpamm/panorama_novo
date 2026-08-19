@@ -4,18 +4,25 @@ import { useUnidades } from '@/hooks/useUnidades'
 import { useDreLongoTodasUnidades } from '@/hooks/useDreLongoTodasUnidades'
 import { useOrcamentoTodasUnidades } from '@/hooks/useOrcamentoTodasUnidades'
 import { usePainelPerdasAux } from '@/hooks/usePainelPerdasAux'
+import { useFinanceiroDreAjustes } from '@/hooks/useFinanceiroDreAjustes'
 import { useToast } from '@/components/ui/use-toast'
 import { calcularPontosGanhos, parseValorInput, resolverNaturezaFormato, unidadesParticipaveis, valorParaInputEditavel } from '@/lib/reuniao-resultados'
 import { INDICADORES_PERDAS } from '@/lib/painel-perdas-calculations'
+import { buscarAjusteFinanceiro, mapaAjustesFinanceiro } from '@/lib/financeiro-dre-ajustes'
 import { PACOTES } from '@/lib/constants'
 import { avrPorPrefixo, calcularSemaforo, normalizarParaCalculo } from '@/lib/farol-calculations'
 import { buscarMetaOrcamento } from '@/lib/orcamento-farol'
 import { calcularAderenciaPorUnidade } from '@/lib/rotinas-financeiras'
 import type {
-  DreLongoRow, MetaPerdaIndicador, OrcamentoLinha,
+  DreLongoRow, FinanceiroDreAjusteIndicador, MetaPerdaIndicador, OrcamentoLinha,
   PainelPerdasAux as PainelPerdasAuxRow, ReuniaoIndicador, ReuniaoResultadoMensal, ReuniaoSetor,
   RotinaFinanceira, RotinaFinanceiraStatus,
 } from '@/types'
+
+/** 'multas'/'vales' são os únicos `fonte_chave` de indicadores de fonte 'perdas' afetados pelo ajuste manual — e só faz sentido no setor Financeiro (ver `FinanceiroDreAjuste`, types/index.ts). */
+function comoIndicadorAjustavel(fonteChave: string | null): FinanceiroDreAjusteIndicador | null {
+  return fonteChave === 'multas' || fonteChave === 'vales' ? fonteChave : null
+}
 
 /** Chave composta unidade+negócio — mesma convenção em toda a Reunião Resultados (negocio 'CONS' pra unidade sem split). */
 function chaveUN(unidade: string, negocio: string): string {
@@ -107,6 +114,11 @@ export function useReuniaoDados(setor: ReuniaoSetor, ano: string) {
   const { rows: rowsDre } = useDreLongoTodasUnidades()
   const { orcamentos: orcamentoRows, loading: loadingOrcamento } = useOrcamentoTodasUnidades()
   const { rows: rowsAux } = usePainelPerdasAux()
+  // Ajuste manual TEMPORÁRIO de Multas/Vales (bug do DRE) — só busca no
+  // setor Financeiro, único que usa (ver `comoIndicadorAjustavel` acima).
+  const { ajustes: ajustesFinanceiro, carregando: carregandoAjustesFinanceiro, salvar: salvarAjusteFinanceiro, remover: removerAjusteFinanceiro } =
+    useFinanceiroDreAjustes(setor === 'financeiro')
+  const mapaAjustesFin = useMemo(() => mapaAjustesFinanceiro(ajustesFinanceiro), [ajustesFinanceiro])
   const nomesUnidades = useMemo(() => {
     const m: Record<string, string> = {}
     for (const u of unidades) m[u.codigo] = u.nome
@@ -278,6 +290,14 @@ export function useReuniaoDados(setor: ReuniaoSetor, ano: string) {
    * pronta da planilha (`metasImportadas`, só pra exibição — a pontuação
    * também já vem pronta, ver `pontosGanhos`). Os demais fontes automáticos
    * vêm do memo calculado a partir de DRE/Orçamento/Rotinas.
+   *
+   * Setor Financeiro, indicador de fonte 'perdas' com chave 'multas'/'vales':
+   * se o dono cadastrou um ajuste manual pro mês (bug atual do DRE, que não
+   * soma a receita de multas/vales que a unidade recebeu da Ambev — ver
+   * `FinanceiroDreAjuste`), o `resultado` sai do ajuste em vez do DRE; a
+   * `meta` continua vindo normal (metas_perdas_indicadores não tem esse bug).
+   * O resto da conta (pontos ganhos, ranking) roda igual, em cima do
+   * resultado corrigido.
    */
   function resultadoEMeta(ind: ReuniaoIndicador, unidade: string, negocio: string, mes: number): { resultado: number | null; meta: number | null } {
     const chave = `${ind.id}|${unidade}|${negocio}|${mes}`
@@ -290,7 +310,33 @@ export function useReuniaoDados(setor: ReuniaoSetor, ano: string) {
         meta: ind.fonte === 'termometro' ? null : ind.meta,
       }
     }
-    return automaticosPorIndicador[chave] ?? { resultado: null, meta: null }
+    const automatico = automaticosPorIndicador[chave] ?? { resultado: null, meta: null }
+    if (setor === 'financeiro' && ind.fonte === 'perdas') {
+      const indAjustavel = comoIndicadorAjustavel(ind.fonte_chave)
+      if (indAjustavel) {
+        const ajuste = buscarAjusteFinanceiro(mapaAjustesFin, unidade, Number(ano), mes, indAjustavel)
+        if (ajuste) return { resultado: ajuste.valor, meta: automatico.meta }
+      }
+    }
+    return automatico
+  }
+
+  /**
+   * Ajuste manual ativo (se houver) pro indicador/unidade/mês, + o valor que
+   * o DRE calcula hoje sem o ajuste (pra mostrar no popup como referência) —
+   * só relevante no setor Financeiro, indicador fonte 'perdas' chave
+   * 'multas'/'vales'; usado pra UI mostrar o popup de edição (ver
+   * `AjusteManualDreDialog`). null = essa célula não é ajustável.
+   */
+  function ajusteFinanceiroDoIndicador(ind: ReuniaoIndicador, unidade: string, negocio: string, mes: number) {
+    const indAjustavel = comoIndicadorAjustavel(ind.fonte_chave)
+    if (setor !== 'financeiro' || ind.fonte !== 'perdas' || !indAjustavel) return null
+    const chave = `${ind.id}|${unidade}|${negocio}|${mes}`
+    return {
+      indicador: indAjustavel,
+      ajuste: buscarAjusteFinanceiro(mapaAjustesFin, unidade, Number(ano), mes, indAjustavel),
+      valorAutomatico: automaticosPorIndicador[chave]?.resultado ?? null,
+    }
   }
 
   /** Pontos ganhos, já resolvendo a fonte 'importado' (pontos prontos da planilha) — centraliza o que antes era repetido em cada tela. */
@@ -344,7 +390,7 @@ export function useReuniaoDados(setor: ReuniaoSetor, ano: string) {
     }
     return totais
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [unidadesDoTotal, indicadores, participantesPorIndicador, resultados, metasImportadas, pontosImportados, rowsDre, rowsAux, metasPerdasIndicadores, orcamentoRows, rotinasIds, statusAnoRotinas, metaRotinas, ano])
+  }, [unidadesDoTotal, indicadores, participantesPorIndicador, resultados, metasImportadas, pontosImportados, rowsDre, rowsAux, metasPerdasIndicadores, orcamentoRows, rotinasIds, statusAnoRotinas, metaRotinas, ano, mapaAjustesFin])
 
   const maiorPorMes = useMemo(() => {
     const maiores: Record<number, number> = {}
@@ -362,5 +408,6 @@ export function useReuniaoDados(setor: ReuniaoSetor, ano: string) {
     resultados, metasImportadas, pontosImportados, valoresInput, setValoresInput, salvando, handleSalvar,
     resultadoEMeta, pontosGanhos, unidadesDoTotal, totalPorUnidadeMes, maiorPorMes,
     nomesUnidades, nomesParticipaveis, rowsDre, orcamentos: orcamentoRows,
+    ajusteFinanceiroDoIndicador, carregandoAjustesFinanceiro, salvarAjusteFinanceiro, removerAjusteFinanceiro,
   }
 }

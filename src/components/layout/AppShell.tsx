@@ -39,11 +39,15 @@ export function AppShell() {
 
   return (
     <TooltipProvider>
-      <div className="flex h-screen overflow-hidden bg-gradient-to-br from-slate-100 via-gray-100/80 to-slate-200/80 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
+      <div className="flex h-screen overflow-hidden bg-gradient-to-br from-slate-100 via-gray-100/80 to-slate-200/80 print:h-auto print:bg-white dark:from-gray-950 dark:via-gray-900 dark:to-gray-950">
         <Sidebar open={sidebarOpen} onToggle={handleToggleSidebar} />
-        <div className="flex flex-1 flex-col overflow-hidden min-w-0">
+        <div className="flex flex-1 flex-col overflow-hidden min-w-0 print:overflow-visible">
           <Header title={title} isDark={isDark} onToggleTheme={toggleTheme} />
-          <main className="flex-1 overflow-auto p-6">
+          {/* print:h-auto/overflow-visible — sem isso o navegador só imprime o
+              trecho que estava visível na hora do scroll (main tem altura
+              fixa + overflow-auto pra rolar na tela), cortando o resto do
+              relatório no PDF (ver ResultadoPagamentoTab, Gerar PDF). */}
+          <main className="flex-1 overflow-auto p-6 print:h-auto print:overflow-visible print:p-0">
             <Outlet />
           </main>
         </div>

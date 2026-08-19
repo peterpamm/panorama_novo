@@ -1,13 +1,25 @@
-import { AlertTriangle, Loader2 } from 'lucide-react'
-import { useRvApuracao, MESES_NOMES, fmtPeso, fmtValor, type RvApuracaoProps } from '@/hooks/useRvApuracao'
+import { useState } from 'react'
+import { AlertTriangle, Loader2, Pencil } from 'lucide-react'
+import { useAuth } from '@/context/AuthContext'
+import { useRvApuracao, MESES_NOMES, fmtPeso, fmtValor, type ItemApuracao, type RvApuracaoProps } from '@/hooks/useRvApuracao'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { TableCard } from '@/components/ui/table-card'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { selectGlamour } from '@/components/ui/field-styles'
+import { AjusteManualDreDialog, formatarValorAutomatico } from '@/components/financeiro/AjusteManualDreDialog'
 import { cn } from '@/lib/utils'
+import type { FinanceiroDreAjusteIndicador } from '@/types'
 
 export type { RvApuracaoProps }
+
+const INDICADOR_LABEL: Record<FinanceiroDreAjusteIndicador, string> = { multas: 'Multas', vales: 'Vales' }
+
+interface RvApuracaoUiProps extends RvApuracaoProps {
+  /** Ajusta manualmente Multas/Vales do Financeiro (bug temporário do DRE) — só passado pela RvFinanceiroPage, e só o dono vê o botão de edição mesmo quando presente. */
+  onSalvarAjusteFinanceiro?: (unidade: string, ano: number, mes: number, indicador: FinanceiroDreAjusteIndicador, valor: number, observacao: string) => Promise<boolean>
+  onRemoverAjusteFinanceiro?: (id: string) => Promise<boolean>
+}
 
 /**
  * Apuração da RV de um setor: pra cada liderança do setor, cruza os
@@ -17,12 +29,35 @@ export type { RvApuracaoProps }
  * filtrando por unidade) — aqui só a tela de um setor só, com os filtros de
  * Ano/Mês/Operação.
  */
-export function RvApuracao(props: RvApuracaoProps) {
-  const { setorLabel } = props
+export function RvApuracao(props: RvApuracaoUiProps) {
+  const { setorLabel, onSalvarAjusteFinanceiro, onRemoverAjusteFinanceiro } = props
+  const { souDono } = useAuth()
   const {
     liderancas, linhas, anosDisponiveis, verAno, setVerAno, verMes, setVerMes,
     filtroOperacao, setFiltroOperacao, operacoesDisponiveis, carregandoTudo, totalBase, totalReceber,
   } = useRvApuracao(props)
+
+  // ── Ajuste manual de Multas/Vales (só dono, só Financeiro) ──────────────
+  const [alvoAjuste, setAlvoAjuste] = useState<{ unidadeNome: string; item: ItemApuracao } | null>(null)
+  const [salvandoAjuste, setSalvandoAjuste] = useState(false)
+
+  async function handleSalvarAjuste(valor: number, observacao: string) {
+    if (!alvoAjuste?.item.ajusteFinanceiro || !onSalvarAjusteFinanceiro) return
+    const { indicador, unidade, mes } = alvoAjuste.item.ajusteFinanceiro
+    setSalvandoAjuste(true)
+    const ok = await onSalvarAjusteFinanceiro(unidade, Number(verAno), mes, indicador, valor, observacao)
+    setSalvandoAjuste(false)
+    if (ok) setAlvoAjuste(null)
+  }
+
+  async function handleRemoverAjuste() {
+    const id = alvoAjuste?.item.ajusteFinanceiro?.ajusteAtual?.id
+    if (!id || !onRemoverAjusteFinanceiro) return
+    setSalvandoAjuste(true)
+    const ok = await onRemoverAjusteFinanceiro(id)
+    setSalvandoAjuste(false)
+    if (ok) setAlvoAjuste(null)
+  }
 
   return (
     <div className="space-y-4">
@@ -123,13 +158,24 @@ export function RvApuracao(props: RvApuracaoProps) {
                             key={item.chave}
                             title={item.detalhe}
                             className={cn(
-                              'cursor-default rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap',
+                              'inline-flex cursor-default items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold whitespace-nowrap',
                               item.status === 'bateu' && 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
                               item.status === 'perdeu' && 'bg-red-500/15 text-red-700 dark:text-red-400',
                               item.status === 'pendente' && 'bg-muted text-muted-foreground',
+                              item.ajusteFinanceiro?.ajusteAtual && 'ring-1 ring-amber-500/50',
                             )}
                           >
                             {item.rotulo} · {fmtPeso(item.peso)}%
+                            {souDono && item.ajusteFinanceiro && onSalvarAjusteFinanceiro && (
+                              <button
+                                type="button"
+                                title={item.ajusteFinanceiro.ajusteAtual ? 'Ajuste manual ativo — clique pra editar/remover' : 'Ajustar manualmente (bug do DRE)'}
+                                onClick={() => setAlvoAjuste({ unidadeNome: l.pessoa.operacao, item })}
+                                className="cursor-pointer text-current/70 hover:text-current"
+                              >
+                                <Pencil className="h-2.5 w-2.5" />
+                              </button>
+                            )}
                           </span>
                         ))}
                       </div>
@@ -166,6 +212,22 @@ export function RvApuracao(props: RvApuracaoProps) {
           </Table>
         )}
       </TableCard>
+
+      {onSalvarAjusteFinanceiro && onRemoverAjusteFinanceiro && (
+        <AjusteManualDreDialog
+          alvo={alvoAjuste?.item.ajusteFinanceiro ? {
+            unidadeNome: alvoAjuste.unidadeNome,
+            mesLabel: `${MESES_NOMES[Number(verMes) - 1] ?? ''}/${verAno}`,
+            indicadorLabel: INDICADOR_LABEL[alvoAjuste.item.ajusteFinanceiro.indicador],
+            ajusteAtual: alvoAjuste.item.ajusteFinanceiro.ajusteAtual,
+            valorAutomaticoFmt: formatarValorAutomatico(alvoAjuste.item.ajusteFinanceiro.valorAutomatico),
+          } : null}
+          onFechar={() => setAlvoAjuste(null)}
+          salvando={salvandoAjuste}
+          onSalvar={handleSalvarAjuste}
+          onRemover={handleRemoverAjuste}
+        />
+      )}
     </div>
   )
 }

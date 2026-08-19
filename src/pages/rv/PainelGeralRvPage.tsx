@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/context/AuthContext'
 import { useUnidades } from '@/hooks/useUnidades'
 import { useCopiarComoImagem } from '@/hooks/useCopiarComoImagem'
+import { useFinanceiroDreAjustes } from '@/hooks/useFinanceiroDreAjustes'
 import { useRvApuracao, MESES_NOMES, fmtPeso, fmtValor, type LinhaApuracao } from '@/hooks/useRvApuracao'
 import { RV_GENTE_DRE, RV_FINANCEIRO_DRE, RV_FROTA_DRE, RV_SEGURANCA_DRE } from '@/lib/constants'
 import { ehSetorRh, ehSetorFinanceiro, ehSetorFrota, ehSetorSeguranca, ehSetorDistribuicao, ehSetorArmazem, ehSetorEmpurrada } from '@/lib/rv-gente'
@@ -160,9 +161,13 @@ const TabelaApuracao = forwardRef<HTMLDivElement, {
  * unidade; usuário de unidade fica travado na própria.
  */
 export function PainelGeralRvPage() {
-  const { role, unidade: minhaUnidade, rvNegocio } = useAuth()
+  const { role, unidade: minhaUnidade, rvNegocio, souDono } = useAuth()
   const { unidades } = useUnidades()
   const [aba, setAba] = useState<AbaPainelGeral>('setor')
+  // Ajuste manual TEMPORÁRIO de Multas/Vales do Financeiro (bug do DRE) —
+  // aqui só pra manter o total batendo com a Apuração da RvFinanceiroPage,
+  // sem UI de edição (edita lá, não aqui).
+  const { ajustes: ajustesFinanceiro } = useFinanceiroDreAjustes(souDono)
 
   const unidadesDisponiveis = useMemo(
     () => role === 'admin'
@@ -185,6 +190,7 @@ export function PainelGeralRvPage() {
   })
   const financeiro = useRvApuracao({
     setorLabel: 'FINANCEIRO', ehDoSetor: ehSetorFinanceiro, indicadoresDre: RV_FINANCEIRO_DRE, tabelaPesos: 'rv_financeiro_pesos_dre', valesPerdasTabela: 'rv_vales_financeiro_meta',
+    ajustesFinanceiro,
     filtrarUnidade: unidadeSel, filtrarNegocio: rvNegocio ?? undefined, anoForcado: verAno || undefined, mesForcado: verMes || undefined,
   })
   const frota = useRvApuracao({
