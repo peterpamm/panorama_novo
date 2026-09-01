@@ -58,6 +58,7 @@ export function DesmembrarDialog({ ec, unidades, onOpenChange, onDesmembrado }: 
       valor,
       unidade: unidadeDestino,
       status: 'pendente',
+      tem_evidencia: ec.tem_evidencia, // mantém o mesmo flag do EC original — é a mesma evidência, só dividida entre unidades
       criado_por_email: user?.email ?? null,
       criado_por_role: role,
     })

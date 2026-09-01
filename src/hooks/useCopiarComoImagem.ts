@@ -23,7 +23,11 @@ export function useCopiarComoImagem(nomeArquivo = 'card') {
     const scrollContainer = ref.current.closest('main')
     const scrollTopAnterior = scrollContainer?.scrollTop ?? 0
     scrollContainer?.scrollTo({ top: 0 })
-    await new Promise(resolve => requestAnimationFrame(resolve))
+    // Duplo rAF: um só às vezes dispara antes do layout terminar de acomodar
+    // uma mudança recente no conteúdo (ex: uma linha nova numa tabela) —
+    // o scrollHeight lido logo em seguida saía menor que o real e cortava a
+    // última linha da captura.
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
 
     const isDark = document.documentElement.classList.contains('dark')
     const opcoes = {
@@ -31,9 +35,11 @@ export function useCopiarComoImagem(nomeArquivo = 'card') {
       backgroundColor: isDark ? '#111827' : '#eef2f7',
       filter: (node: HTMLElement) => !('noPrint' in (node.dataset ?? {})),
       // Força a captura no tamanho total do conteúdo (scrollWidth/Height),
-      // não só na área visível — mesma razão do reset de scroll acima.
+      // não só na área visível — mesma razão do reset de scroll acima. +2px
+      // de folga na altura porque scrollHeight pode arredondar pra baixo por
+      // sub-pixel e cortar a última linha (ex: linha de Total de uma tabela).
       width: ref.current.scrollWidth,
-      height: ref.current.scrollHeight,
+      height: ref.current.scrollHeight + 2,
     }
     try {
       const blob = await toBlob(ref.current, opcoes)

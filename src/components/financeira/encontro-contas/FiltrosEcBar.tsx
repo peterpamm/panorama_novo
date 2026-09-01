@@ -31,6 +31,7 @@ export function FiltrosEcBar({ valores, onChange, unidades, motivos, anos, isAdm
               <SelectTrigger className={cn('w-44', filterTriggerClass)}><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todas">Todas</SelectItem>
+                <SelectItem value="sem_unidade">Sem unidade</SelectItem>
                 {unidades.map(u => <SelectItem key={u.codigo} value={u.codigo}>{u.nome}</SelectItem>)}
               </SelectContent>
             </Select>
@@ -105,10 +106,12 @@ export function FiltrosEcBar({ valores, onChange, unidades, motivos, anos, isAdm
             className={cn('w-44 placeholder:text-white/40', filterTriggerClass)}
           />
         </div>
-        <div className="flex items-center gap-1.5 pb-2">
-          <Checkbox id={idCheckbox} checked={valores.validadosPorMim} onCheckedChange={v => onChange({ validadosPorMim: v === true })} />
-          <Label htmlFor={idCheckbox} className="cursor-pointer text-sm font-normal text-white">Validados por mim</Label>
-        </div>
+        {isAdmin && (
+          <div className="flex items-center gap-1.5 pb-2">
+            <Checkbox id={idCheckbox} checked={valores.validadosPorMim} onCheckedChange={v => onChange({ validadosPorMim: v === true })} />
+            <Label htmlFor={idCheckbox} className="cursor-pointer text-sm font-normal text-white">Validados por mim</Label>
+          </div>
+        )}
       </div>
     </div>
   )

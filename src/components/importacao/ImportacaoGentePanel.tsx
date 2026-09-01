@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Pencil, Search, Trash2, Upload } from 'lucide-react'
+import { Loader2, Pencil, Plus, Search, Trash2, Upload } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { parseRvLiderancasFile, type ParsedRvLiderancaRow } from '@/lib/rv-liderancas-csv-parser'
 import { FilePickerButton } from '@/components/importacao/FilePickerButton'
-import { ImportarResultadosGente } from '@/components/importacao/ImportarResultadosGente'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { TableCard } from '@/components/ui/table-card'
 import { Button } from '@/components/ui/button'
@@ -18,7 +17,7 @@ import type { RvLideranca } from '@/types'
 
 const BATCH_SIZE = 500
 
-/** Aba "Gente" da Importação: sobe a RV das lideranças (upsert por nome) e lista o cadastro atual. */
+/** Aba "Cadastro de Lideranças" da Importação: sobe a RV das lideranças (upsert por nome) e lista o cadastro atual — os resultados mensais dos indicadores de gente saíram daqui, ver `ImportarResultadosGente` na aba Importação de RV de Gente. */
 export function ImportacaoGentePanel() {
   const { toast } = useToast()
 
@@ -121,10 +120,50 @@ export function ImportacaoGentePanel() {
   const totalRv = useMemo(() => registrosFiltrados.reduce((acc, r) => acc + r.valor, 0), [registrosFiltrados])
 
   // ── Edição / exclusão ──────────────────────────────────────────────────────
+  const FORM_VAZIO = { matricula: '', operacao: '', negocio: '', setor: '', funcao: '', nome: '', valor: '' }
   const [editando, setEditando] = useState<RvLideranca | null>(null)
-  const [form, setForm] = useState({ matricula: '', operacao: '', negocio: '', setor: '', funcao: '', nome: '', valor: '' })
+  const [form, setForm] = useState(FORM_VAZIO)
   const [excluindo, setExcluindo] = useState<RvLideranca | null>(null)
   const [salvando, setSalvando] = useState(false)
+
+  // ── Inclusão manual (ajuste pontual sem precisar reimportar a planilha) ─────
+  const [incluindoAberto, setIncluindoAberto] = useState(false)
+  const [formNovo, setFormNovo] = useState(FORM_VAZIO)
+
+  function abrirInclusao() {
+    setFormNovo(FORM_VAZIO)
+    setIncluindoAberto(true)
+  }
+
+  async function handleSalvarNova() {
+    const valor = parseNumeroPtBr(formNovo.valor.replace(/R\$\s*/gi, ''))
+    if (!formNovo.nome.trim() || !formNovo.operacao.trim() || valor <= 0) {
+      toast({ title: 'Preencha operação, nome e um valor válido', variant: 'destructive' })
+      return
+    }
+    setSalvando(true)
+    // upsert por nome — igual à importação em massa, pra não duplicar se já existir alguém com esse nome
+    const { error } = await supabase.from('rv_liderancas').upsert(
+      {
+        matricula: formNovo.matricula.trim() || null,
+        operacao: formNovo.operacao.trim().toUpperCase(),
+        negocio: formNovo.negocio.trim().toUpperCase(),
+        setor: formNovo.setor.trim().toUpperCase(),
+        funcao: formNovo.funcao.trim().toUpperCase(),
+        nome: formNovo.nome.trim().toUpperCase(),
+        valor,
+      },
+      { onConflict: 'nome' },
+    )
+    setSalvando(false)
+    if (error) {
+      toast({ title: 'Erro ao incluir', description: error.message, variant: 'destructive' })
+      return
+    }
+    toast({ title: `${formNovo.nome.trim().toUpperCase()} incluído(a) no cadastro` })
+    setIncluindoAberto(false)
+    await carregar()
+  }
 
   function abrirEdicao(r: RvLideranca) {
     setForm({
@@ -218,40 +257,36 @@ export function ImportacaoGentePanel() {
 
   return (
     <div className="space-y-6">
-      {/* ── Upload (duas colunas) ── */}
-      <div className="grid grid-cols-1 gap-8 border-b pb-6 md:grid-cols-2">
-        <div className="space-y-3">
-          <h2 className="text-base font-semibold">RV das Lideranças</h2>
-          <p className="text-sm text-muted-foreground">
-            Suba a planilha de RV (Excel ou CSV) com as colunas{' '}
-            <span className="font-mono text-xs">MATRICULA · OPERAÇÃO · NEGOCIO · SETOR · FUNÇÃO · NOME · VALOR</span>.
-            O cadastro é atualizado pelo <strong>nome</strong> da liderança — reimportar substitui os valores existentes.
-          </p>
-          <FilePickerButton label="Planilha de RV (.xlsx ou .csv)" accept=".xlsx,.xls,.csv,.txt" file={file} onFile={handleFile} />
+      {/* ── Upload ── */}
+      <div className="max-w-2xl space-y-3 border-b pb-6">
+        <h2 className="text-base font-semibold">RV das Lideranças</h2>
+        <p className="text-sm text-muted-foreground">
+          Suba a planilha de RV (Excel ou CSV) com as colunas{' '}
+          <span className="font-mono text-xs">MATRICULA · OPERAÇÃO · NEGOCIO · SETOR · FUNÇÃO · NOME · VALOR</span>.
+          O cadastro é atualizado pelo <strong>nome</strong> da liderança — reimportar substitui os valores existentes.
+        </p>
+        <FilePickerButton label="Planilha de RV (.xlsx ou .csv)" accept=".xlsx,.xls,.csv,.txt" file={file} onFile={handleFile} />
 
-          {errosParse.length > 0 && (
-            <div className="rounded-lg border border-amber-300/50 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400">
-              <p className="mb-1 font-semibold">{errosParse.length} linha(s) ignorada(s):</p>
-              <ul className="max-h-32 space-y-0.5 overflow-y-auto">
-                {errosParse.map((e, i) => <li key={i}>{e}</li>)}
-              </ul>
-            </div>
-          )}
+        {errosParse.length > 0 && (
+          <div className="rounded-lg border border-amber-300/50 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400">
+            <p className="mb-1 font-semibold">{errosParse.length} linha(s) ignorada(s):</p>
+            <ul className="max-h-32 space-y-0.5 overflow-y-auto">
+              {errosParse.map((e, i) => <li key={i}>{e}</li>)}
+            </ul>
+          </div>
+        )}
 
-          {file && (
-            <div className="flex items-center gap-3">
-              <Button onClick={handleImportar} disabled={linhas.length === 0 || importando} className="gap-2">
-                {importando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                Importar {linhas.length} liderança(s)
-              </Button>
-              <Button variant="outline" onClick={() => { setFile(null); setLinhas([]); setErrosParse([]) }} disabled={importando}>
-                Cancelar
-              </Button>
-            </div>
-          )}
-        </div>
-
-        <ImportarResultadosGente />
+        {file && (
+          <div className="flex items-center gap-3">
+            <Button onClick={handleImportar} disabled={linhas.length === 0 || importando} className="gap-2">
+              {importando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+              Importar {linhas.length} liderança(s)
+            </Button>
+            <Button variant="outline" onClick={() => { setFile(null); setLinhas([]); setErrosParse([]) }} disabled={importando}>
+              Cancelar
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* ── Filtros ── */}
@@ -332,9 +367,9 @@ export function ImportacaoGentePanel() {
           : filtroAtivo
             ? `${registrosFiltrados.length} de ${registros.length} liderança(s) · Total do filtro ${formatCurrencyInteiro(totalRv)}`
             : `${registros.length} liderança(s) · Total ${formatCurrencyInteiro(totalRv)}`}
-        acoes={registros.length > 0 && (
+        acoes={
           <>
-            {filtroAtivo && registrosFiltrados.length > 0 && (
+            {registros.length > 0 && filtroAtivo && registrosFiltrados.length > 0 && (
               <Button
                 variant="outline"
                 size="sm"
@@ -345,17 +380,23 @@ export function ImportacaoGentePanel() {
                 Excluir {registrosFiltrados.length} filtrado(s)
               </Button>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-2 border-white/20 bg-white/10 text-white hover:bg-red-500/30 hover:text-white"
-              onClick={() => setLimpandoTudo(true)}
-            >
-              <Trash2 className="h-4 w-4" />
-              Limpar cadastro
+            {registros.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2 border-white/20 bg-white/10 text-white hover:bg-red-500/30 hover:text-white"
+                onClick={() => setLimpandoTudo(true)}
+              >
+                <Trash2 className="h-4 w-4" />
+                Limpar cadastro
+              </Button>
+            )}
+            <Button variant="outline" size="sm" className="gap-2 border-white/20 bg-white/10 text-white hover:bg-white/20" onClick={abrirInclusao}>
+              <Plus className="h-4 w-4" />
+              Incluir liderança
             </Button>
           </>
-        )}
+        }
       >
         {carregando ? (
           <div className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground">
@@ -470,6 +511,56 @@ export function ImportacaoGentePanel() {
             <Button onClick={handleSalvarEdicao} disabled={salvando} className="gap-2">
               {salvando && <Loader2 className="h-4 w-4 animate-spin" />}
               Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Dialog de inclusão manual ── */}
+      <Dialog open={incluindoAberto} onOpenChange={v => { if (!v) setIncluindoAberto(false) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Incluir liderança</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="rv-novo-matricula">Matrícula</Label>
+                <Input id="rv-novo-matricula" value={formNovo.matricula} onChange={e => setFormNovo(f => ({ ...f, matricula: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="rv-novo-operacao">Operação</Label>
+                <Input id="rv-novo-operacao" value={formNovo.operacao} onChange={e => setFormNovo(f => ({ ...f, operacao: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="rv-novo-negocio">Negócio</Label>
+                <Input id="rv-novo-negocio" value={formNovo.negocio} onChange={e => setFormNovo(f => ({ ...f, negocio: e.target.value }))} placeholder="ROTA / ARMAZEM..." />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="rv-novo-setor">Setor</Label>
+                <Input id="rv-novo-setor" value={formNovo.setor} onChange={e => setFormNovo(f => ({ ...f, setor: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="rv-novo-funcao">Função</Label>
+              <Input id="rv-novo-funcao" value={formNovo.funcao} onChange={e => setFormNovo(f => ({ ...f, funcao: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="rv-novo-nome">Nome</Label>
+              <Input id="rv-novo-nome" value={formNovo.nome} onChange={e => setFormNovo(f => ({ ...f, nome: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="rv-novo-valor">Valor RV</Label>
+              <Input id="rv-novo-valor" value={formNovo.valor} onChange={e => setFormNovo(f => ({ ...f, valor: e.target.value }))} placeholder="400,00" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIncluindoAberto(false)} disabled={salvando}>Cancelar</Button>
+            <Button onClick={handleSalvarNova} disabled={salvando} className="gap-2">
+              {salvando && <Loader2 className="h-4 w-4 animate-spin" />}
+              Incluir
             </Button>
           </DialogFooter>
         </DialogContent>

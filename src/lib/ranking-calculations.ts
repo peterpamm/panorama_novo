@@ -16,6 +16,40 @@ function unicos<T>(valores: T[]): T[] {
   return Array.from(new Set(valores))
 }
 
+/**
+ * Camaçari é 1 unidade só, mas com 2 gerentes diferentes — CDL Camaçari
+ * (rota) e CDR Bahia (armazém), ver `negocioPorPrefixo` em unidade-resolver.ts
+ * (CDL → negócio ROTA, CDR → negócio ARM). No recorte CONS os dois ficam
+ * misturados numa linha só, o que não é justo pra competição do Ranking —
+ * seria "1 unidade" competindo com 2 gerentes contra unidades de 1 gerente
+ * só. `separarCamacariNoCons` troca essa linha CONS por duas pseudo-unidades
+ * (CDL/CDR, cada uma competindo normalmente com os dados só daquele negócio)
+ * mais 1 linha informativa com o CONS original (sem rank — ver
+ * `atribuirRank`/`CAMACARI_INFORMATIVOS`), só de referência pra diretoria.
+ * Só usado na página Ranking, por enquanto.
+ */
+export const CAMACARI_CODIGO = 'CAMACARI'
+export const CAMACARI_CDL_ID = 'CAMACARI_CDL'
+export const CAMACARI_CDR_ID = 'CAMACARI_CDR'
+export const CAMACARI_CONS_INFO_ID = 'CAMACARI_CONS_INFO'
+export const CAMACARI_INFORMATIVOS = [CAMACARI_CONS_INFO_ID]
+
+/** Genérico o bastante pra rodar tanto em `DreLongoRow` quanto em `OrcamentoLinha` (os dois têm unidade/negocio). */
+export function separarCamacariNoCons<T extends { unidade: string; negocio: string }>(
+  rowsConsAlvo: T[],
+  rowsRotaArmCamacari: T[],
+): T[] {
+  const consCamacari = rowsConsAlvo.filter(r => r.unidade === CAMACARI_CODIGO)
+  if (consCamacari.length === 0) return rowsConsAlvo // Camaçari sem linha CONS nesse recorte — nada a separar
+
+  const outras = rowsConsAlvo.filter(r => r.unidade !== CAMACARI_CODIGO)
+  const cdl = rowsRotaArmCamacari.filter(r => r.negocio === 'ROTA').map(r => ({ ...r, unidade: CAMACARI_CDL_ID, negocio: 'CONS' }))
+  const cdr = rowsRotaArmCamacari.filter(r => r.negocio === 'ARM').map(r => ({ ...r, unidade: CAMACARI_CDR_ID, negocio: 'CONS' }))
+  const info = consCamacari.map(r => ({ ...r, unidade: CAMACARI_CONS_INFO_ID }))
+
+  return [...outras, ...cdl, ...cdr, ...info]
+}
+
 /** Linhas ACUMULADO_ANO de uma unidade, só as do mês mais recente importado (mes_max) — mesmo padrão já usado no Farol/Abertura de Contas. */
 function rowsAcumuladoMesMax(rowsUnidade: DreLongoRow[]): DreLongoRow[] {
   const acumulado = rowsUnidade.filter(r => r.tipo_periodo === 'ACUMULADO_ANO')
@@ -44,9 +78,19 @@ function rowsParaPeriodo(rowsUnidade: DreLongoRow[], periodo: PeriodoRanking, me
   return rowsUnidade.filter(r => r.tipo_periodo === 'MENSAL' && r.mes >= 7 && r.mes <= 12)
 }
 
-/** Separa AMBEV (sempre no fim, sem rank) das demais unidades, ordena as demais por `chave` (decrescente, null por último) e atribui rank 1..N. */
-export function atribuirRank<T extends { unidade: string; rank: number | null }>(linhas: T[], chave: (l: T) => number | null): T[] {
-  const normais = linhas.filter(l => l.unidade !== 'AMBEV')
+/**
+ * Separa AMBEV (sempre no fim, sem rank) e qualquer código em `informativos`
+ * (ex: `CAMACARI_INFORMATIVOS` — linha de referência, também sem rank, mas
+ * antes do AMBEV) das demais unidades, ordena as demais por `chave`
+ * (decrescente, null por último) e atribui rank 1..N.
+ */
+export function atribuirRank<T extends { unidade: string; rank: number | null }>(
+  linhas: T[],
+  chave: (l: T) => number | null,
+  informativos: string[] = [],
+): T[] {
+  const normais = linhas.filter(l => l.unidade !== 'AMBEV' && !informativos.includes(l.unidade))
+  const infoLinhas = linhas.filter(l => informativos.includes(l.unidade))
   const ambev = linhas.filter(l => l.unidade === 'AMBEV')
 
   normais.sort((a, b) => {
@@ -58,9 +102,10 @@ export function atribuirRank<T extends { unidade: string; rank: number | null }>
     return vb - va
   })
   normais.forEach((l, i) => { l.rank = i + 1 })
+  infoLinhas.forEach(l => { l.rank = null })
   ambev.forEach(l => { l.rank = null })
 
-  return [...normais, ...ambev]
+  return [...normais, ...infoLinhas, ...ambev]
 }
 
 export interface RankingLinhaReceita {
@@ -91,6 +136,7 @@ export function calcularRankingReceita(
   rowsNegocioAno: DreLongoRow[],
   orcamentoRows: OrcamentoLinha[],
   params: { negocio: string; ano: number; periodo: PeriodoRanking; mes: number },
+  informativos: string[] = [],
 ): RankingLinhaReceita[] {
   const unidades = unicos(rowsNegocioAno.map(r => r.unidade))
 
@@ -119,7 +165,7 @@ export function calcularRankingReceita(
     return { unidade, realizado, orcado, impacto, percentualAtingimento, rank: null as number | null }
   })
 
-  return atribuirRank(linhas, l => l.percentualAtingimento)
+  return atribuirRank(linhas, l => l.percentualAtingimento, informativos)
 }
 
 /** Verde se atingiu (>=100%) a meta de receita, vermelho se não, sem cor se não há meta cadastrada. */
@@ -152,6 +198,7 @@ export function calcularRankingIndicador(
   pacote: { natureza: Natureza; prefixos: string[] },
   codigo: string,
   params: { negocio: string; ano: number; periodo: PeriodoRanking; mes: number },
+  informativos: string[] = [],
 ): RankingLinhaIndicador[] {
   const unidades = unicos(rowsNegocioAno.map(r => r.unidade))
 
@@ -173,5 +220,5 @@ export function calcularRankingIndicador(
     return { unidade, avr, meta, delta: semaforo.delta, impacto, rank: null as number | null }
   })
 
-  return atribuirRank(linhas, l => l.delta)
+  return atribuirRank(linhas, l => l.delta, informativos)
 }

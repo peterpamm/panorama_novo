@@ -16,10 +16,12 @@ function descreverCampo(campo: string): { mes: string; campoLabel: string } {
 
 interface RelatorioAlteracoesProps {
   alteracoes: Omit<AlteracaoRetroativa, 'id' | 'importacao_id'>[]
+  /** código → descrição, pra mostrar o nome da conta junto do código (ver `useContas`). */
+  nomesContas: Map<string, string>
 }
 
 /** Tabela das alterações retroativas detectadas (mês já encerrado com valor diferente do que já estava importado). */
-export function RelatorioAlteracoes({ alteracoes }: RelatorioAlteracoesProps) {
+export function RelatorioAlteracoes({ alteracoes, nomesContas }: RelatorioAlteracoesProps) {
   if (alteracoes.length === 0) return null
 
   return (
@@ -50,7 +52,10 @@ export function RelatorioAlteracoes({ alteracoes }: RelatorioAlteracoesProps) {
                 <TableRow key={i}>
                   <TableCell className="text-xs">{a.unidade}</TableCell>
                   <TableCell className="text-xs">{a.negocio}</TableCell>
-                  <TableCell className="text-xs">{a.conta_codigo}</TableCell>
+                  <TableCell className="text-xs">
+                    <span className="font-mono text-muted-foreground">{a.conta_codigo}</span>
+                    {nomesContas.get(a.conta_codigo) && <span className="ml-1">{nomesContas.get(a.conta_codigo)}</span>}
+                  </TableCell>
                   <TableCell className="text-xs">{mes}</TableCell>
                   <TableCell className="text-xs">{campoLabel}</TableCell>
                   <TableCell className="text-right text-xs">{formatNumeroPtBr(a.valor_antigo)}</TableCell>

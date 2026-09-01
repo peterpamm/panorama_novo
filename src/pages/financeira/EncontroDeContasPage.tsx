@@ -63,7 +63,7 @@ export function EncontroDeContasPage() {
         {isAdmin && (
           <TabsContent value="importacao" className="pt-4">
             <ImportacaoEcTab
-              ecsExistentes={ecs} motivos={motivos} isAdmin={isAdmin}
+              ecsExistentes={ecs} unidades={unidades} motivos={motivos} isAdmin={isAdmin}
               onImportado={recarregar} onMotivosAtualizados={recarregarMotivos}
             />
           </TabsContent>

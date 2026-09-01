@@ -174,6 +174,73 @@ export interface ResultadoDescontoStressTest {
 }
 
 /**
+ * Indicadores novos da RV de Frota (2026) — específicos das 3 lideranças T1
+ * (Estância, Ponta Grossa e CDR Bahia — ver `OPERACOES_FROTA_T1`,
+ * rv-frota-t1.ts). Resultado por unidade/mês (importado); meta e peso são
+ * ÚNICOS por indicador (migration 108) — não variam por unidade, mesmo
+ * padrão de `rv_desconto_civf_meta`. Todos em % (`meta_pct`), inclusive
+ * Disponibilidade Empilhadeira (migration 109 — quanto maior melhor).
+ * Custos Gerais (DRE 113) não entra aqui — resultado vem do DRE (AVR) e meta
+ * do Orçamento, igual Manutenção/Pneus/Diesel; o peso mora na mesma tabela
+ * deles (`rv_frota_pesos_dre`, id '113' — ver `CUSTOS_GERAIS_FROTA_DRE`,
+ * constants.ts).
+ */
+
+export interface RvFrotaAdChecklistMeta {
+  meta_pct: number
+  peso: number
+}
+
+export interface ResultadoAdChecklistFrota {
+  id?: string
+  unidade: string
+  ano: number
+  mes: number
+  valor: number
+}
+
+export interface RvFrotaAdMilimetragemMeta {
+  meta_pct: number
+  peso: number
+}
+
+export interface ResultadoAdMilimetragemFrota {
+  id?: string
+  unidade: string
+  ano: number
+  mes: number
+  valor: number
+}
+
+/** Indisponibilidade Manutenção — só Estância e Ponta Grossa (ver `OPERACOES_FROTA_MANUTENCAO`). */
+export interface RvFrotaIndispManutencaoMeta {
+  meta_pct: number
+  peso: number
+}
+
+export interface ResultadoIndispManutencaoFrota {
+  id?: string
+  unidade: string
+  ano: number
+  mes: number
+  valor: number
+}
+
+/** Disponibilidade Empilhadeira — só CDR Bahia (ver `OPERACOES_FROTA_EMPILHADEIRA`); meta em %, quanto maior melhor. */
+export interface RvFrotaDispEmpilhadeiraMeta {
+  meta_pct: number
+  peso: number
+}
+
+export interface ResultadoDispEmpilhadeiraFrota {
+  id?: string
+  unidade: string
+  ano: number
+  mes: number
+  valor: number
+}
+
+/**
  * Resultado mensal do indicador DTO T1 (segurança) — % calculado a partir da
  * planilha de inspeções por colaborador (só ESTÂNCIA e CDR BAHIA se enquadram):
  * (total de colaboradores da unidade − colaboradores com "Dias Para Realizar

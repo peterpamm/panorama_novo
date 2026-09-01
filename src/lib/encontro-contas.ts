@@ -10,7 +10,7 @@ export const STATUS_LABEL: Record<EncontroContasStatus, string> = {
 export const STATUS_PILL: Record<EncontroContasStatus, string> = {
   pendente: 'bg-red-500/15 text-red-700 dark:text-red-400',
   em_andamento: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
-  concluido: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
+  concluido: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
   validado: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400',
 }
 
@@ -82,7 +82,8 @@ export function anosComEc(ecs: EncontroContas[]): number[] {
 
 export function filtrarEcs(ecs: EncontroContas[], f: FiltrosEcValues, meuEmail?: string | null): EncontroContas[] {
   return ecs.filter(e => {
-    if (f.unidade !== 'todas' && e.unidade !== f.unidade) return false
+    if (f.unidade === 'sem_unidade' && e.unidade) return false
+    if (f.unidade !== 'todas' && f.unidade !== 'sem_unidade' && e.unidade !== f.unidade) return false
     if (f.status !== 'todos' && e.status !== f.status) return false
     if (f.motivo !== 'todos' && e.motivo !== f.motivo) return false
     if (f.buscaMotivo && !(e.motivo ?? '').toLowerCase().includes(f.buscaMotivo.toLowerCase())) return false

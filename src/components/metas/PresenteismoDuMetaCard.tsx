@@ -12,7 +12,7 @@ const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Se
 
 /**
  * Meta mensal (%) do Presenteísmo DU já cadastrada — importada em
- * Importação &gt; Distribuição (mesmo formato de arquivo do Presenteísmo
+ * RV de Distribuição &gt; Importação (mesmo formato de arquivo do Presenteísmo
  * geral de Metas de Gente), aqui só a visualização. O peso é por função
  * (COORD. DU / SUPERVISOR DU, ver PesosDistribuicaoFuncaoCard). Quanto menor
  * melhor.
@@ -63,7 +63,7 @@ export function PresenteismoDuMetaCard() {
       titulo="Presenteísmo DU"
       subtitulo={carregando
         ? 'Carregando...'
-        : `${verAno} · % por mês, quanto menor melhor · importada em Importação > Distribuição`}
+        : `${verAno} · % por mês, quanto menor melhor · importada em RV de Distribuição > Importação`}
       acoes={
         <Select value={verAno} onValueChange={setVerAno}>
           <SelectTrigger className={cn('h-8 w-20 text-xs', tableCardActionClass)}><SelectValue /></SelectTrigger>
@@ -80,7 +80,7 @@ export function PresenteismoDuMetaCard() {
         </div>
       ) : linhasVisualizacao.length === 0 ? (
         <p className="p-6 text-center text-sm text-muted-foreground">
-          Nenhuma meta importada ainda — importe em Importação &gt; Distribuição.
+          Nenhuma meta importada ainda — importe em RV de Distribuição &gt; Importação.
         </p>
       ) : (
         <Table>

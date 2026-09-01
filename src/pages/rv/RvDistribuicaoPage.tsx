@@ -4,15 +4,16 @@ import { ChevronLeft } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { PillToggle } from '@/components/ui/pill-toggle'
 import { ehSetorDistribuicao } from '@/lib/rv-gente'
-import { IndicadoresDistribuicaoCard } from '@/components/rv/IndicadoresDistribuicaoCard'
-import { ValesPerdasCard } from '@/components/rv/ValesPerdasCard'
+import { AcompanhamentoDistribuicaoTab } from '@/components/rv/AcompanhamentoDistribuicaoTab'
 import { RvApuracao } from '@/components/rv/RvApuracao'
+import { ImportacaoDistribuicaoPanel } from '@/components/importacao/ImportacaoDistribuicaoPanel'
 
-type AbaRvDistribuicao = 'acompanhamento' | 'apuracao'
+type AbaRvDistribuicao = 'acompanhamento' | 'apuracao' | 'importacao'
 
 const ABAS = [
   { value: 'acompanhamento', label: 'Acompanhamento' },
   { value: 'apuracao', label: 'Apuração' },
+  { value: 'importacao', label: 'Importação' },
 ] as const
 
 /**
@@ -30,27 +31,22 @@ export function RvDistribuicaoPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link
-            to="/remuneracao-variavel"
-            className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Remuneração Variável
-          </Link>
-          <span className="text-muted-foreground/40">/</span>
-          <h2 className="text-base font-semibold text-foreground">RV de Distribuição</h2>
-        </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Link
+          to="/remuneracao-variavel"
+          className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Remuneração Variável
+        </Link>
+        <span className="text-muted-foreground/40">/</span>
+        <h2 className="text-base font-semibold text-foreground">RV de Distribuição</h2>
         <PillToggle opcoes={ABAS} value={aba} onChange={setAba} />
       </div>
 
       {aba === 'acompanhamento' ? (
-        <div className="space-y-6">
-          <IndicadoresDistribuicaoCard />
-          <ValesPerdasCard tabelaMeta="rv_vales_distribuicao_meta" />
-        </div>
-      ) : (
+        <AcompanhamentoDistribuicaoTab />
+      ) : aba === 'apuracao' ? (
         <RvApuracao
           setorLabel="DISTRIBUIÇÃO"
           ehDoSetor={ehSetorDistribuicao}
@@ -61,6 +57,8 @@ export function RvDistribuicaoPage() {
           incluirDevolucao
           incluirPresenteismoDu
         />
+      ) : (
+        <ImportacaoDistribuicaoPanel />
       )}
       <Toaster />
     </div>

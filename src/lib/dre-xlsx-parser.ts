@@ -3,6 +3,8 @@ import { parseNumeroPtBr } from '@/lib/utils'
 
 export interface ParsedDreRow {
   conta_codigo: string
+  /** Descrição da conta como veio na coluna A do Excel (ex: "Multas") — só pra identificar uma conta que ainda não existe em `contas` (ver validação em ImportacaoDrePage.tsx); nunca é gravada no banco. */
+  descricao: string
   campos: Record<string, number>
 }
 
@@ -107,6 +109,7 @@ export async function parseDreXlsx(file: File): Promise<ParseDreResult> {
     const match = primeiraColuna.match(/^(\d{3})\s*\|\s*(.*)$/)
     if (!match || match[2].trim() === '') continue // ignora separadores sem descrição (ex: "273 | "), ausentes em `contas`
     const conta_codigo = match[1]
+    const descricao = match[2].trim()
 
     const campos: Record<string, number> = {}
     for (const { chave, colunasPorSufixo } of blocos) {
@@ -114,7 +117,7 @@ export async function parseDreXlsx(file: File): Promise<ParseDreResult> {
         campos[`${chave}_${sufixo}`] = parseNumeroPtBr(row[col])
       }
     }
-    linhas.push({ conta_codigo, campos })
+    linhas.push({ conta_codigo, descricao, campos })
   }
 
   return {

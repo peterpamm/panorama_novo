@@ -1,5 +1,5 @@
 import { Card } from '@/components/ui/card'
-import { cn, formatCurrencyCompact } from '@/lib/utils'
+import { cn, formatCurrencyInteiro } from '@/lib/utils'
 import type { EstouroZeroResultado } from '@/lib/farol-calculations'
 
 interface EstouroZeroCardProps {
@@ -20,13 +20,13 @@ export function EstouroZeroCard({ nome, periodoTexto, resultado }: EstouroZeroCa
         </span>
       </div>
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-2xl font-bold text-foreground">{formatCurrencyCompact(resultado.real)}</span>
+        <span className="text-2xl font-bold text-foreground">{formatCurrencyInteiro(resultado.real)}</span>
         <span className={cn('text-lg font-semibold', positivo ? 'text-farol-positivo' : 'text-farol-negativo')}>
-          {formatCurrencyCompact(resultado.impacto)}
+          {formatCurrencyInteiro(resultado.impacto)}
         </span>
       </div>
       <div className="mt-3 border-t pt-3 text-sm text-muted-foreground">
-        Remunerado: {formatCurrencyCompact(resultado.remun)}
+        Remunerado: {formatCurrencyInteiro(resultado.remun)}
       </div>
     </Card>
   )

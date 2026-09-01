@@ -31,7 +31,7 @@ const ANO_ATUAL = new Date().getFullYear()
  * Ligados a dado real (acumulado do ano — YTD): Gastos Totais e EBITDA
  * (DRE, pacotes '900'/'232', igual o resto do app — EBITDA Global é sempre
  * o resultado da AMBEV consolidada, mesmo valor em todo card), Acidentes
- * TRI (registro manual, Importação > Segurança > TRI — meta sempre 0),
+ * TRI (registro manual, RV de Segurança > Importação > TRI — meta sempre 0),
  * Pacote de Perdas (% de perdas sobre faturamento, mesmo cálculo do Painel
  * de Perdas — sempre CONS, não quebra por negócio), Disp. Rota e Disp.
  * Armazém (snapshots únicos importados em Importação > Financeiro >

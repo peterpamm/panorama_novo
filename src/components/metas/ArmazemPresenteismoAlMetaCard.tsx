@@ -61,7 +61,7 @@ export function ArmazemPresenteismoAlMetaCard() {
       titulo="Presenteísmo AL"
       subtitulo={carregando
         ? 'Carregando...'
-        : `${verAno} · % por mês, quanto menor melhor · importada em Importação > Armazém`}
+        : `${verAno} · % por mês, quanto menor melhor · importada em RV de Armazém > Importação`}
       acoes={
         <Select value={verAno} onValueChange={setVerAno}>
           <SelectTrigger className={cn('h-8 w-20 text-xs', tableCardActionClass)}><SelectValue /></SelectTrigger>
@@ -78,7 +78,7 @@ export function ArmazemPresenteismoAlMetaCard() {
         </div>
       ) : linhasVisualizacao.length === 0 ? (
         <p className="p-6 text-center text-sm text-muted-foreground">
-          Nenhuma meta importada ainda — importe em Importação &gt; Armazém.
+          Nenhuma meta importada ainda — importe em RV de Armazém &gt; Importação.
         </p>
       ) : (
         <Table>

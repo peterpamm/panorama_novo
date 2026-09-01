@@ -172,6 +172,19 @@ export const RV_FROTA_DRE: RvIndicadorDre[] = [
 ]
 
 /**
+ * Custos Gerais (DRE 113, "Pacote de Frota" — já mapeado em PACOTES/
+ * PACOTE_CONTA_ORCAMENTO) — mesmo mecanismo dos indicadores de RV_FROTA_DRE
+ * (AVR vs meta do Orçamento), mas fora do array acima de propósito: só as 3
+ * lideranças T1 de Frota participam (Estância, Ponta Grossa e CDR Bahia — ver
+ * `OPERACOES_FROTA_T1`, rv-frota-t1.ts), não a frota inteira, então não pode
+ * entrar no loop genérico de `indicadoresDre` (que aplica pra toda unidade).
+ * O peso é cadastrado na mesma tabela `rv_frota_pesos_dre` (id '113') — só o
+ * card de cadastro (MetasFrotaTab) mostra os dois juntos, o cálculo em
+ * useRvApuracao.ts trata esse `id` à parte, com restrição de unidade.
+ */
+export const CUSTOS_GERAIS_FROTA_DRE: RvIndicadorDre = { id: '113', nome: 'Custos Gerais Frota', tipo: 'avr', prefixos: ['113'] }
+
+/**
  * Indicadores de segurança com origem no DRE — EPI's (074) e Uniformes (075),
  * os mesmos acompanhados no Farol de Metas, por AVR mensal vs meta do Farol.
  * O `id` é a chave do peso em rv_seguranca_pesos_dre.

@@ -21,7 +21,7 @@ import { resolverUnidade } from '@/lib/unidade-resolver'
 interface LinhaMatriz {
   matricula: string
   unidade: string
-  /** Operação exatamente como cadastrada em Importação > Gente > RV das Lideranças — padrão que o GInfo aceita na importação da folha. */
+  /** Operação exatamente como cadastrada em Importação > Cadastro de Lideranças — padrão que o GInfo aceita na importação da folha. */
   operacao: string
   negocio: string
   setor: string
@@ -69,7 +69,7 @@ export function MatrizRvPage() {
     anoForcado: verAno || undefined, mesForcado: verMes || undefined,
   })
   const frota = useRvApuracao({
-    setorLabel: 'FROTA', ehDoSetor: ehSetorFrota, indicadoresDre: RV_FROTA_DRE, tabelaPesos: 'rv_frota_pesos_dre', incluirDescontoCivf: true, incluirDescontoStressTest: true,
+    setorLabel: 'FROTA', ehDoSetor: ehSetorFrota, indicadoresDre: RV_FROTA_DRE, tabelaPesos: 'rv_frota_pesos_dre', incluirDescontoCivf: true, incluirDescontoStressTest: true, incluirFrotaT1: true,
     anoForcado: verAno || undefined, mesForcado: verMes || undefined,
   })
   const seguranca = useRvApuracao({

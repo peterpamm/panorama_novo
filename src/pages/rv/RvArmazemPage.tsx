@@ -4,15 +4,16 @@ import { ChevronLeft } from 'lucide-react'
 import { Toaster } from '@/components/ui/toaster'
 import { PillToggle } from '@/components/ui/pill-toggle'
 import { ehSetorArmazem } from '@/lib/rv-gente'
-import { IndicadoresArmazemT2Card } from '@/components/rv/IndicadoresArmazemT2Card'
-import { IndicadoresArmazemT1Card } from '@/components/rv/IndicadoresArmazemT1Card'
+import { AcompanhamentoArmazemTab } from '@/components/rv/AcompanhamentoArmazemTab'
 import { RvApuracao } from '@/components/rv/RvApuracao'
+import { ImportacaoArmazemPanel } from '@/components/importacao/ImportacaoArmazemPanel'
 
-type AbaRvArmazem = 'acompanhamento' | 'apuracao'
+type AbaRvArmazem = 'acompanhamento' | 'apuracao' | 'importacao'
 
 const ABAS = [
   { value: 'acompanhamento', label: 'Acompanhamento' },
   { value: 'apuracao', label: 'Apuração' },
+  { value: 'importacao', label: 'Importação' },
 ] as const
 
 /**
@@ -28,29 +29,22 @@ export function RvArmazemPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link
-            to="/remuneracao-variavel"
-            className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Remuneração Variável
-          </Link>
-          <span className="text-muted-foreground/40">/</span>
-          <h2 className="text-base font-semibold text-foreground">RV de Armazém</h2>
-        </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Link
+          to="/remuneracao-variavel"
+          className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Remuneração Variável
+        </Link>
+        <span className="text-muted-foreground/40">/</span>
+        <h2 className="text-base font-semibold text-foreground">RV de Armazém</h2>
         <PillToggle opcoes={ABAS} value={aba} onChange={setAba} />
       </div>
 
       {aba === 'acompanhamento' ? (
-        <div className="space-y-6">
-          <IndicadoresArmazemT2Card />
-          <div className="border-t pt-6">
-            <IndicadoresArmazemT1Card />
-          </div>
-        </div>
-      ) : (
+        <AcompanhamentoArmazemTab />
+      ) : aba === 'apuracao' ? (
         <RvApuracao
           setorLabel="ARMAZÉM"
           ehDoSetor={ehSetorArmazem}
@@ -63,6 +57,8 @@ export function RvArmazemPage() {
           incluirArmazemPresenteismoAlT1
           incluirArmazemQuebras
         />
+      ) : (
+        <ImportacaoArmazemPanel />
       )}
       <Toaster />
     </div>

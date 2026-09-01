@@ -14,7 +14,7 @@ describe('mesesParaComparar', () => {
 
 describe('detectarAlteracoes', () => {
   const linhasNovas: ParsedDreRow[] = [
-    { conta_codigo: '021', campos: { jan_realizado: -974827.03, jan_remunerado: -975993.99, fev_realizado: -979000, mar_realizado: -1000 } },
+    { conta_codigo: '021', descricao: 'Custos Operacionais', campos: { jan_realizado: -974827.03, jan_remunerado: -975993.99, fev_realizado: -979000, mar_realizado: -1000 } },
   ]
 
   it('não detecta nada quando os valores são iguais', () => {

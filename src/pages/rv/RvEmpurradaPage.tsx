@@ -28,18 +28,16 @@ export function RvEmpurradaPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link
-            to="/remuneracao-variavel"
-            className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Remuneração Variável
-          </Link>
-          <span className="text-muted-foreground/40">/</span>
-          <h2 className="text-base font-semibold text-foreground">RV de Empurrada</h2>
-        </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <Link
+          to="/remuneracao-variavel"
+          className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Remuneração Variável
+        </Link>
+        <span className="text-muted-foreground/40">/</span>
+        <h2 className="text-base font-semibold text-foreground">RV de Empurrada</h2>
         <PillToggle opcoes={ABAS} value={aba} onChange={setAba} />
       </div>
 

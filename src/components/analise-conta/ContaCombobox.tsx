@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check, ChevronsUpDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -16,6 +16,18 @@ interface ContaComboboxProps {
 export function ContaCombobox({ contas, value, onChange }: ContaComboboxProps) {
   const [open, setOpen] = useState(false)
   const selecionada = contas.find(c => c.codigo === value)
+  const itemRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+
+  // Toda vez que abre, rola até a conta atualmente selecionada em vez de
+  // deixar a lista voltar pro topo do plano de contas — quem analisa uma
+  // conta geralmente quer seguir pra uma vizinha, não procurar do zero.
+  useEffect(() => {
+    if (!open) return
+    const id = requestAnimationFrame(() => {
+      itemRefs.current.get(value)?.scrollIntoView({ block: 'center' })
+    })
+    return () => cancelAnimationFrame(id)
+  }, [open, value])
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -48,6 +60,7 @@ export function ContaCombobox({ contas, value, onChange }: ContaComboboxProps) {
               {contas.map(conta => (
                 <CommandItem
                   key={conta.codigo}
+                  ref={el => { if (el) itemRefs.current.set(conta.codigo, el); else itemRefs.current.delete(conta.codigo) }}
                   value={`${conta.codigo} ${conta.descricao}`}
                   onSelect={() => { onChange(conta.codigo); setOpen(false) }}
                 >

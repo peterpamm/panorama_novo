@@ -160,7 +160,7 @@ export function linhaIndicadorDre(indicador: string, linha: RankingLinhaIndicado
 
 /**
  * Acidentes TRI (acidente grave) acumulado no ano, por unidade — soma de
- * `resultados_tri` (registro manual, Importação > Segurança); mês/unidade
+ * `resultados_tri` (registro manual, RV de Segurança > Importação); mês/unidade
  * sem registro conta como zero, então uma unidade sem NENHUM registro no
  * ano ainda entra no mapa com 0 (não fica de fora). Meta é sempre 0 (fixa,
  * não vem de tabela nenhuma) — mesma regra do painel antigo.

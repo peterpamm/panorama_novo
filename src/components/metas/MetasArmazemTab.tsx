@@ -24,7 +24,7 @@ const ABAS = [
  * todas as unidades); Presenteísmo AL é mensal por unidade. T1: TMA,
  * Disponibilidade de Gente e Presenteísmo AL são mensais por unidade (mudam
  * todo mês); Quebras tem meta única (vale pras duas unidades). Ambos
- * importados em Importação &gt; Armazém. Peso é único por indicador em
+ * importados em RV de Armazém &gt; Importação. Peso é único por indicador em
  * todos os casos.
  */
 export function MetasArmazemTab() {
@@ -35,8 +35,8 @@ export function MetasArmazemTab() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-2xl text-sm text-muted-foreground">
           {aba === 't2'
-            ? 'T2: EFC e TMA (meta por unidade, vale o ano todo), Refugo e Quebras (meta única, vale pra todas as unidades) e Presenteísmo AL (meta mensal, importada em Importação > Armazém). Peso único por indicador.'
-            : 'T1 (Estância/CDR Bahia), cadastro separado do T2: TMA, Disponibilidade de Gente e Presenteísmo AL têm meta mensal por unidade (importada em Importação > Armazém) e Quebras tem meta única (vale pras duas unidades). Peso único por indicador.'}
+            ? 'T2: EFC e TMA (meta por unidade, vale o ano todo), Refugo e Quebras (meta única, vale pra todas as unidades) e Presenteísmo AL (meta mensal, importada em RV de Armazém > Importação). Peso único por indicador.'
+            : 'T1 (Estância/CDR Bahia), cadastro separado do T2: TMA, Disponibilidade de Gente e Presenteísmo AL têm meta mensal por unidade (importada em RV de Armazém > Importação) e Quebras tem meta única (vale pras duas unidades). Peso único por indicador.'}
         </p>
         <PillToggle opcoes={ABAS} value={aba} onChange={setAba} />
       </div>

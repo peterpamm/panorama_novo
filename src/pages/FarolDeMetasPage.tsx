@@ -214,6 +214,7 @@ export function FarolDeMetasPage() {
         {indicadores.map(({ codigo, info, avr, meta, semaforo, impacto }) => (
           <MetaCard
             key={codigo}
+            codigo={codigo}
             nome={info.nome}
             periodoTexto={periodoTexto}
             avr={avr}

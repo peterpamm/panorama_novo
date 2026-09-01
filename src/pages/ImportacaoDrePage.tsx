@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { useData } from '@/context/DataContext'
 import { useUnidades } from '@/hooks/useUnidades'
+import { useContas } from '@/hooks/useContas'
 import { parseDreXlsx, type ParseDreResult } from '@/lib/dre-xlsx-parser'
 import { parseDreFilename, type DreFilenameInfo } from '@/lib/dre-filename-parser'
 import { detectarAlteracoes, mesesParaComparar } from '@/lib/dre-diff-detector'
@@ -15,17 +16,6 @@ import { ImportarDisponibilidadeRotaDialog } from '@/components/importacao/Impor
 import { ImportarDisponibilidadeArmazemDialog } from '@/components/importacao/ImportarDisponibilidadeArmazemDialog'
 import { ImportarScorecardDialog } from '@/components/importacao/ImportarScorecardDialog'
 import { ImportacaoGentePanel } from '@/components/importacao/ImportacaoGentePanel'
-import { ImportarResultadosDtoT2 } from '@/components/importacao/ImportarResultadosDtoT2'
-import { ImportarResultadosDtoT1 } from '@/components/importacao/ImportarResultadosDtoT1'
-import { ImportarResultadosGsd } from '@/components/importacao/ImportarResultadosGsd'
-import { ImportarResultadosLogon } from '@/components/importacao/ImportarResultadosLogon'
-import { ImportarResultadosExcessoVelocidade } from '@/components/importacao/ImportarResultadosExcessoVelocidade'
-import { ImportarResultadosFai } from '@/components/importacao/ImportarResultadosFai'
-import { RegistrarTriCard } from '@/components/importacao/RegistrarTriCard'
-import { ImportarResultadosDistribuicaoBi } from '@/components/importacao/ImportarResultadosDistribuicaoBi'
-import { ImportarMetaPresenteismoDu } from '@/components/importacao/ImportarMetaPresenteismoDu'
-import { ImportarResultadosDescontoFrota } from '@/components/importacao/ImportarResultadosDescontoFrota'
-import { ImportacaoArmazemPanel } from '@/components/importacao/ImportacaoArmazemPanel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -55,6 +45,8 @@ export function ImportacaoDrePage() {
   const { toast } = useToast()
   const { revalidarAposImport } = useData()
   const { unidades, loading: loadingUnidades } = useUnidades()
+  const { contas, loading: loadingContas } = useContas()
+  const nomesContas = useMemo(() => new Map(contas.map(c => [c.codigo, c.descricao])), [contas])
 
   const [stage, setStage] = useState<Stage>('idle')
   const [unidadesState, setUnidadesState] = useState<Unidade[]>([])
@@ -208,7 +200,12 @@ export function ImportacaoDrePage() {
         for (let b = 0; b < linhas.length; b += BATCH_SIZE) {
           const batch = linhas.slice(b, b + BATCH_SIZE)
           const { error } = await supabase.from('dre_lancamentos').upsert(batch, { onConflict: 'unidade,negocio,ano,conta_codigo' })
-          if (error) throw new Error(error.message)
+          // `.details` carrega a informação útil de verdade num erro de FK
+          // (ex: "Key (conta_codigo)=(283) is not present in table
+          // \"contas\"." — conta nova no arquivo, ainda não cadastrada) —
+          // `.message` sozinho só diz qual constraint quebrou, sem dizer qual
+          // valor causou.
+          if (error) throw new Error(error.details ? `${error.message} — ${error.details}` : error.message)
         }
 
         if (ap.alteracoes.length > 0) {
@@ -247,6 +244,26 @@ export function ImportacaoDrePage() {
   const todasAlteracoes = useMemo(() => arquivosProcessados.flatMap(a => a.alteracoes), [arquivosProcessados])
   const totalContasPreview = useMemo(() => arquivosProcessados.reduce((acc, a) => acc + a.parsed.linhas.length, 0), [arquivosProcessados])
   const unidadesEnvolvidas = useMemo(() => unicos(arquivosProcessados.map(a => a.unidadeCodigo)), [arquivosProcessados])
+
+  // Conta nova no arquivo (código que ainda não existe em `contas`) — sem
+  // isso, o "insert or update... violates foreign key constraint" que o
+  // Postgres devolve não diz QUAL código é (o detalhe com o valor só aparece
+  // se o role tiver SELECT na tabela referenciada — não é o caso aqui), então
+  // detectamos aqui antes de tentar importar, com a descrição que veio no
+  // próprio Excel pra já saber o nome certo pra cadastrar.
+  const contasNovas = useMemo(() => {
+    if (loadingContas) return []
+    const codigosConhecidos = new Set(contas.map(c => c.codigo))
+    const vistos = new Map<string, string>()
+    for (const ap of arquivosProcessados) {
+      for (const linha of ap.parsed.linhas) {
+        if (!codigosConhecidos.has(linha.conta_codigo)) vistos.set(linha.conta_codigo, linha.descricao)
+      }
+    }
+    return Array.from(vistos.entries())
+      .map(([codigo, descricao]) => ({ codigo, descricao }))
+      .sort((a, b) => a.codigo.localeCompare(b.codigo))
+  }, [arquivosProcessados, contas, loadingContas])
 
   if (stage === 'done' && resumo) {
     return (
@@ -314,7 +331,27 @@ export function ImportacaoDrePage() {
           </CardContent>
         </Card>
 
-        <RelatorioAlteracoes alteracoes={todasAlteracoes} />
+        {contasNovas.length > 0 && (
+          <Card className="border-l-4 border-l-destructive">
+            <CardContent className="space-y-2 p-4">
+              <p className="text-sm font-semibold text-destructive">
+                {contasNovas.length} conta{contasNovas.length === 1 ? '' : 's'} nova{contasNovas.length === 1 ? '' : 's'} no arquivo — a importação vai falhar até cadastrar {contasNovas.length === 1 ? 'ela' : 'elas'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {contasNovas.length === 1 ? 'Este código' : 'Estes códigos'} ainda não existe{contasNovas.length === 1 ? '' : 'm'} na tabela <code className="rounded bg-black/10 px-1 py-0.5 dark:bg-white/10">contas</code> — cadastre com o código e a descrição abaixo (já vieram do próprio Excel) e reabra o arquivo.
+              </p>
+              <ul className="text-xs">
+                {contasNovas.map(c => (
+                  <li key={c.codigo}>
+                    <span className="font-mono text-muted-foreground">{c.codigo}</span> — {c.descricao}
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
+        )}
+
+        <RelatorioAlteracoes alteracoes={todasAlteracoes} nomesContas={nomesContas} />
 
         {arquivosIgnorados.length > 0 && (
           <Card>
@@ -328,7 +365,7 @@ export function ImportacaoDrePage() {
         )}
 
         <div className="flex gap-3">
-          <Button onClick={handleImportar} disabled={arquivosProcessados.length === 0}>Confirmar importação</Button>
+          <Button onClick={handleImportar} disabled={arquivosProcessados.length === 0 || contasNovas.length > 0}>Confirmar importação</Button>
           <Button variant="outline" onClick={handleReset}>Cancelar</Button>
         </div>
         <Toaster />
@@ -359,31 +396,7 @@ export function ImportacaoDrePage() {
             value="gente"
             className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
           >
-            Gente
-          </TabsTrigger>
-          <TabsTrigger
-            value="seguranca"
-            className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
-          >
-            Segurança
-          </TabsTrigger>
-          <TabsTrigger
-            value="distribuicao"
-            className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
-          >
-            Distribuição
-          </TabsTrigger>
-          <TabsTrigger
-            value="frota"
-            className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
-          >
-            Frota
-          </TabsTrigger>
-          <TabsTrigger
-            value="armazem"
-            className="data-[state=active]:bg-white dark:data-[state=active]:bg-gray-800 data-[state=active]:shadow-md rounded-lg transition-all duration-200 flex-1 md:flex-none"
-          >
-            Armazém
+            Cadastro de Lideranças
           </TabsTrigger>
         </TabsList>
 
@@ -414,55 +427,15 @@ export function ImportacaoDrePage() {
           </div>
         </TabsContent>
 
-        {/* ── Gente: RV das lideranças ── */}
+        {/* ── Cadastro de Lideranças: RV das lideranças (resultados mensais dos indicadores de gente saíram daqui, ver RV de Gente > Importação) ── */}
         <TabsContent value="gente" className="pt-6">
           <ImportacaoGentePanel />
         </TabsContent>
 
-        {/* ── Segurança: resultado mensal do DTO T2, DTO T1, GSD, LogOn, Excesso de Velocidade, FAI e TRI ── */}
-        <TabsContent value="seguranca" className="pt-6">
-          <div className="space-y-8">
-            <ImportarResultadosDtoT2 />
-            <div className="border-t pt-8">
-              <ImportarResultadosDtoT1 />
-            </div>
-            <div className="border-t pt-8">
-              <ImportarResultadosGsd />
-            </div>
-            <div className="border-t pt-8">
-              <ImportarResultadosLogon />
-            </div>
-            <div className="border-t pt-8">
-              <ImportarResultadosExcessoVelocidade />
-            </div>
-            <div className="border-t pt-8">
-              <ImportarResultadosFai />
-            </div>
-            <div className="border-t pt-8">
-              <RegistrarTriCard />
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* ── Distribuição: resultado mensal do LogOn DU, Devolução e Presenteísmo DU + meta mensal do Presenteísmo DU ── */}
-        <TabsContent value="distribuicao" className="pt-6">
-          <div className="space-y-8">
-            <ImportarResultadosDistribuicaoBi />
-            <div className="border-t pt-8">
-              <ImportarMetaPresenteismoDu />
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* ── Frota: resultado mensal do Desconto CIVF e Desconto Stress Test ── */}
-        <TabsContent value="frota" className="pt-6">
-          <ImportarResultadosDescontoFrota />
-        </TabsContent>
-
-        {/* ── Armazém: T2 (resultado + meta do Presenteísmo AL) e T1 (resultado + metas de TMA/Disponibilidade/Presenteísmo AL) ── */}
-        <TabsContent value="armazem" className="pt-6">
-          <ImportacaoArmazemPanel />
-        </TabsContent>
+        {/* Segurança, Distribuição, Frota e Armazém saíram daqui — cada uma
+            agora tem sua própria aba "Importação" dentro da subpágina de
+            Remuneração Variável do setor (RvSegurancaPage/RvDistribuicaoPage/
+            RvFrotaPage/RvArmazemPage). */}
       </Tabs>
 
       <Toaster />

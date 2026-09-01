@@ -1,5 +1,5 @@
 import { Card } from '@/components/ui/card'
-import { cn, formatCurrencyCompact, formatPercentSigned } from '@/lib/utils'
+import { cn, formatCurrencyInteiro, formatPercentSigned } from '@/lib/utils'
 import type { ReducaoCustosResultado } from '@/lib/farol-calculations'
 
 const BORDA: Record<ReducaoCustosResultado['corClasse'], string> = {
@@ -40,7 +40,7 @@ export function ReducaoCard({ nome, periodoTexto, resultado, realAnteriorBruto }
         </span>
       </div>
       <div className="mt-2 flex items-center justify-between">
-        <span className="text-2xl font-bold text-foreground">{formatCurrencyCompact(resultado.realAtual)}</span>
+        <span className="text-2xl font-bold text-foreground">{formatCurrencyInteiro(resultado.realAtual)}</span>
         <span className={cn('text-lg font-semibold', TEXTO[resultado.corClasse])}>
           {formatPercentSigned(resultado.variacaoPct, 1)}
         </span>
@@ -49,14 +49,14 @@ export function ReducaoCard({ nome, periodoTexto, resultado, realAnteriorBruto }
         <div className="space-y-0.5">
           {mostrarBruto ? (
             <>
-              <div>Ano ant. (DRE): {formatCurrencyCompact(realAnteriorBruto)}</div>
-              <div>Ano ant. (ajustado): {formatCurrencyCompact(resultado.realAnterior)}</div>
+              <div>Ano ant. (DRE): {formatCurrencyInteiro(realAnteriorBruto)}</div>
+              <div>Ano ant. (ajustado): {formatCurrencyInteiro(resultado.realAnterior)}</div>
             </>
           ) : (
-            <div>Ano ant: {formatCurrencyCompact(resultado.realAnterior)}</div>
+            <div>Ano ant: {formatCurrencyInteiro(resultado.realAnterior)}</div>
           )}
         </div>
-        <span>Meta (-15%): {formatCurrencyCompact(resultado.metaValor)}</span>
+        <span>Meta (-15%): {formatCurrencyInteiro(resultado.metaValor)}</span>
       </div>
       <div className={cn('mt-1 text-xs font-medium', TEXTO[resultado.corClasse])}>
         {STATUS_LABEL[resultado.status]}

@@ -1,5 +1,6 @@
 import { Card } from '@/components/ui/card'
-import { cn, formatCurrencyCompact, formatPercent, formatPercentSigned } from '@/lib/utils'
+import { IndicadorInfoButton } from '@/components/farol/IndicadorInfoButton'
+import { cn, formatCurrencyInteiro, formatPercent, formatPercentSigned } from '@/lib/utils'
 import type { Semaforo } from '@/lib/farol-calculations'
 
 const BORDA: Record<Semaforo['corClasse'], string> = {
@@ -15,6 +16,8 @@ const TEXTO: Record<Semaforo['corClasse'], string> = {
 }
 
 interface MetaCardProps {
+  /** Id do pacote (mesma chave de PACOTES) — usado só pro botão de info achar a explicação em indicador-explicacoes.ts. */
+  codigo: string
   nome: string
   periodoTexto: string
   avr: number
@@ -23,13 +26,14 @@ interface MetaCardProps {
   semaforo: Semaforo
 }
 
-export function MetaCard({ nome, periodoTexto, avr, meta, impacto, semaforo }: MetaCardProps) {
+export function MetaCard({ codigo, nome, periodoTexto, avr, meta, impacto, semaforo }: MetaCardProps) {
   const corImpacto = meta === null ? 'semCor' : impacto >= 0 ? 'positivo' : 'negativo'
 
   return (
     <Card className={cn('border-l-4 p-4', BORDA[semaforo.corClasse])}>
       <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
         {nome}
+        <IndicadorInfoButton codigo={codigo} />
         <span className="rounded-full bg-muted px-2 py-0.5 text-[0.65rem] font-medium text-muted-foreground">
           {periodoTexto}
         </span>
@@ -37,7 +41,7 @@ export function MetaCard({ nome, periodoTexto, avr, meta, impacto, semaforo }: M
       <div className="mt-2 flex items-center justify-between">
         <span className="text-2xl font-bold text-foreground">{formatPercent(avr, 2)}</span>
         <span className={cn('text-lg font-semibold', TEXTO[corImpacto])}>
-          {meta === null ? 'R$ 0' : formatCurrencyCompact(impacto)}
+          {meta === null ? 'R$ 0' : formatCurrencyInteiro(impacto)}
         </span>
       </div>
       <div className="mt-3 flex justify-between border-t pt-3 text-sm text-muted-foreground">

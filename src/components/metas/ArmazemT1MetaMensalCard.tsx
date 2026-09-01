@@ -25,7 +25,7 @@ interface ArmazemT1MetaMensalCardProps {
 }
 
 /**
- * Meta mensal já cadastrada (importada em Importação &gt; Armazém) de um
+ * Meta mensal já cadastrada (importada em RV de Armazém &gt; Importação) de um
  * indicador do T1 (Estância/CDR Bahia) que muda todo mês — TMA,
  * Disponibilidade de Gente ou Presenteísmo AL. Só a visualização; o peso é
  * único (ver PesosArmazemT1Card).
@@ -76,7 +76,7 @@ export function ArmazemT1MetaMensalCard({ tabela, titulo, formato }: ArmazemT1Me
       titulo={titulo}
       subtitulo={carregando
         ? 'Carregando...'
-        : `${verAno} · ${formato === 'duracao' ? 'duração (HH:MM) por mês' : '% por mês'} · importada em Importação > Armazém`}
+        : `${verAno} · ${formato === 'duracao' ? 'duração (HH:MM) por mês' : '% por mês'} · importada em RV de Armazém > Importação`}
       acoes={
         <Select value={verAno} onValueChange={setVerAno}>
           <SelectTrigger className={cn('h-8 w-20 text-xs', tableCardActionClass)}><SelectValue /></SelectTrigger>
@@ -93,7 +93,7 @@ export function ArmazemT1MetaMensalCard({ tabela, titulo, formato }: ArmazemT1Me
         </div>
       ) : linhasVisualizacao.length === 0 ? (
         <p className="p-6 text-center text-sm text-muted-foreground">
-          Nenhuma meta importada ainda — importe em Importação &gt; Armazém.
+          Nenhuma meta importada ainda — importe em RV de Armazém &gt; Importação.
         </p>
       ) : (
         <Table>

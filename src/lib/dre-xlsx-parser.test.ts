@@ -38,6 +38,13 @@ describe('parseDreXlsx', () => {
     expect(codigos).toEqual(['001', '021'])
   })
 
+  it('extrai a descrição da conta (pra identificar conta nova ainda não cadastrada em `contas`)', async () => {
+    const file = montarArquivoDreTeste()
+    const result = await parseDreXlsx(file)
+    expect(result.linhas.find(l => l.conta_codigo === '001')?.descricao).toBe('( = ) RECEITA LÍQUIDA')
+    expect(result.linhas.find(l => l.conta_codigo === '021')?.descricao).toBe('( - ) CUSTOS OPERACIONAIS')
+  })
+
   it('ignora linhas separadoras sem código de 3 dígitos (ex: "273 | ")', async () => {
     const file = montarArquivoDreTeste()
     const result = await parseDreXlsx(file)

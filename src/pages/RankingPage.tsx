@@ -9,7 +9,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RankingTabelaIndicador, RankingTabelaPerdas, RankingTabelaReceita, type RankingLinhaPerda } from '@/components/ranking/RankingTabelas'
 import { UnidadesMultiSelect } from '@/components/ranking/UnidadesMultiSelect'
 import { PACOTES, RANKING_CUSTOS, RANKING_PERFORMANCE } from '@/lib/constants'
-import { calcularRankingIndicador, calcularRankingReceita, type PeriodoRanking } from '@/lib/ranking-calculations'
+import {
+  CAMACARI_CDL_ID, CAMACARI_CDR_ID, CAMACARI_CODIGO, CAMACARI_CONS_INFO_ID, CAMACARI_INFORMATIVOS,
+  calcularRankingIndicador, calcularRankingReceita, separarCamacariNoCons, type PeriodoRanking,
+} from '@/lib/ranking-calculations'
 import { calcularMatrizPerdas, INDICADORES_PERDAS } from '@/lib/painel-perdas-calculations'
 import { MES_ABREV } from '@/components/farol/chart-shared'
 import { cn } from '@/lib/utils'
@@ -30,7 +33,15 @@ export function RankingPage() {
   const { unidades, loading: loadingUnidades } = useUnidades()
   const { rows, rowsAux, orcamentos: orcamentosTodos, loading: loadingDre } = useRankingDados(unidades)
 
-  const nomesUnidade = useMemo(() => new Map(unidades.map(u => [u.codigo, u.nome])), [unidades])
+  // Nomes das 3 pseudo-unidades do split de Camaçari (ver separarCamacariNoCons)
+  // já entram aqui — só aparecem de fato nas linhas quando o recorte é CONS.
+  const nomesUnidade = useMemo(() => {
+    const mapa = new Map(unidades.map(u => [u.codigo, u.nome]))
+    mapa.set(CAMACARI_CDL_ID, 'CDL Camaçari')
+    mapa.set(CAMACARI_CDR_ID, 'CDR Bahia')
+    mapa.set(CAMACARI_CONS_INFO_ID, 'Camaçari (CONS)')
+    return mapa
+  }, [unidades])
 
   // Filtro de unidades (checkbox) — começa com todas marcadas (mesmo comportamento de
   // antes); só passa a restringir quando o usuário desmarcar alguma.
@@ -108,31 +119,52 @@ export function RankingPage() {
     [orcamentosTodos, selNegocio, selAno],
   )
 
+  // Linhas ROTA/ARM de Camaçari (DRE e Orçamento), fonte pro split do CONS —
+  // ver separarCamacariNoCons em ranking-calculations.ts.
+  const rowsCamacariRotaArm = useMemo(
+    () => rowsFiltradas.filter(r => r.unidade === CAMACARI_CODIGO && r.ano === selAno && (r.negocio === 'ROTA' || r.negocio === 'ARM')),
+    [rowsFiltradas, selAno],
+  )
+  const orcamentoCamacariRotaArm = useMemo(
+    () => orcamentosTodos.filter(o => o.unidade === CAMACARI_CODIGO && o.ano === selAno && (o.negocio === 'ROTA' || o.negocio === 'ARM')),
+    [orcamentosTodos, selAno],
+  )
+  const rowsNegocioAnoAjustado = useMemo(
+    () => selNegocio === 'CONS' ? separarCamacariNoCons(rowsNegocioAno, rowsCamacariRotaArm) : rowsNegocioAno,
+    [rowsNegocioAno, rowsCamacariRotaArm, selNegocio],
+  )
+  const orcamentoRowsAjustado = useMemo(
+    () => selNegocio === 'CONS' ? separarCamacariNoCons(orcamentoRows, orcamentoCamacariRotaArm) : orcamentoRows,
+    [orcamentoRows, orcamentoCamacariRotaArm, selNegocio],
+  )
+
   const rankingReceita = useMemo(
-    () => calcularRankingReceita(rowsNegocioAno, orcamentoRows, { negocio: selNegocio, ano: selAno ?? 0, periodo, mes: selMes ?? 0 }),
-    [rowsNegocioAno, orcamentoRows, selNegocio, selAno, periodo, selMes],
+    () => calcularRankingReceita(
+      rowsNegocioAnoAjustado, orcamentoRowsAjustado, { negocio: selNegocio, ano: selAno ?? 0, periodo, mes: selMes ?? 0 }, CAMACARI_INFORMATIVOS,
+    ),
+    [rowsNegocioAnoAjustado, orcamentoRowsAjustado, selNegocio, selAno, periodo, selMes],
   )
 
   const rankingPerformance = useMemo(
     () => RANKING_PERFORMANCE.map(codigo => ({
       codigo,
       info: PACOTES[codigo],
-      linhas: calcularRankingIndicador(rowsNegocioAno, orcamentoRows, PACOTES[codigo], codigo, {
+      linhas: calcularRankingIndicador(rowsNegocioAnoAjustado, orcamentoRowsAjustado, PACOTES[codigo], codigo, {
         negocio: selNegocio, ano: selAno ?? 0, periodo, mes: selMes ?? 0,
-      }),
+      }, CAMACARI_INFORMATIVOS),
     })),
-    [rowsNegocioAno, orcamentoRows, selNegocio, selAno, periodo, selMes],
+    [rowsNegocioAnoAjustado, orcamentoRowsAjustado, selNegocio, selAno, periodo, selMes],
   )
 
   const rankingCustos = useMemo(
     () => RANKING_CUSTOS.map(codigo => ({
       codigo,
       info: PACOTES[codigo],
-      linhas: calcularRankingIndicador(rowsNegocioAno, orcamentoRows, PACOTES[codigo], codigo, {
+      linhas: calcularRankingIndicador(rowsNegocioAnoAjustado, orcamentoRowsAjustado, PACOTES[codigo], codigo, {
         negocio: selNegocio, ano: selAno ?? 0, periodo, mes: selMes ?? 0,
-      }),
+      }, CAMACARI_INFORMATIVOS),
     })),
-    [rowsNegocioAno, orcamentoRows, selNegocio, selAno, periodo, selMes],
+    [rowsNegocioAnoAjustado, orcamentoRowsAjustado, selNegocio, selAno, periodo, selMes],
   )
 
   // ── Ranking de Perdas (indicadores do Painel de Perdas, sempre CONS) ──────
@@ -155,9 +187,23 @@ export function RankingPage() {
           : [selMes]
 
     const auxFiltrado = unidadesInicializadas ? rowsAux.filter(r => selUnidades.has(r.unidade)) : rowsAux
-    const matriz = calcularMatrizPerdas(rowsFiltradas, auxFiltrado, [], selAno, meses)
+
+    // Matriz original (Camaçari inteiro, CDL+CDR misturados) — é a que
+    // alimenta os indicadores de fonte AUX (Indisponibilidade/Devolução):
+    // não têm quebra por negócio na origem, então não dá pra separar ali.
+    const matrizOriginal = calcularMatrizPerdas(rowsFiltradas, auxFiltrado, [], selAno, meses)
+
+    // Matriz com Camaçari já separado em CDL/CDR (competindo) + CONS
+    // informativo — alimenta os indicadores de fonte DRE, que dá pra
+    // recalcular só com as linhas de ROTA/ARM de Camaçari.
+    const rowsConsSeparado = separarCamacariNoCons(
+      rowsFiltradas.filter(r => r.negocio === 'CONS'),
+      rowsFiltradas.filter(r => r.unidade === CAMACARI_CODIGO && r.ano === selAno && (r.negocio === 'ROTA' || r.negocio === 'ARM')),
+    )
+    const matrizSplit = calcularMatrizPerdas(rowsConsSeparado, auxFiltrado, [], selAno, meses)
 
     return INDICADORES_PERDAS.map(ind => {
+      const matriz = ind.fonte === 'DRE' ? matrizSplit : matrizOriginal
       let valores = matriz.linhas.find(l => l.key === ind.key)?.valores ?? {}
       let nota: string | undefined
 
@@ -177,7 +223,11 @@ export function RankingPage() {
         }
       }
 
-      const individuais = matriz.unidades.filter(u => u !== 'AMBEV')
+      // Camaçari (CONS) só existe na matriz DRE (split) — fica de fora da
+      // competição, listado como informativo antes do AMBEV.
+      const informativosDesseIndicador = ind.fonte === 'DRE' ? CAMACARI_INFORMATIVOS : []
+      const individuais = matriz.unidades.filter(u => u !== 'AMBEV' && !informativosDesseIndicador.includes(u))
+      const informativos = matriz.unidades.filter(u => informativosDesseIndicador.includes(u))
 
       // BNS é receita boa dentro do Painel de Perdas — mantém rank 1 = melhor.
       // Os demais são perdas de verdade: rank 1 = pior, pra dar destaque a quem mais perde.
@@ -192,6 +242,7 @@ export function RankingPage() {
       const linhas: RankingLinhaPerda[] = [
         ...comValor.map(x => ({ ...x, rank: ++rank })),
         ...semValor.map(u => ({ unidade: u, valor: null, rank: null })),
+        ...informativos.map(u => ({ unidade: u, valor: valores[u] ?? null, rank: null })),
       ]
       linhas.push({ unidade: 'AMBEV', valor: valores['AMBEV'] ?? null, rank: null })
 

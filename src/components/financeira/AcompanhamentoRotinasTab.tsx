@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Loader2, MessageSquare } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/context/AuthContext'
 import { useUnidades } from '@/hooks/useUnidades'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { TableCard } from '@/components/ui/table-card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -27,6 +28,18 @@ const STATUS_ESTILO: Record<string, string> = {
   'N/A': 'bg-muted text-muted-foreground',
 }
 
+// Cabeçalho e colunas Setor/Rotina ficam fixos (sticky) na matriz — precisam de
+// fundo próprio e opaco, já que ao "grudar" eles deixam de herdar o gradiente
+// do <thead>/a translucidez do card (senão o conteúdo por trás vaza por baixo).
+const STICKY_HEAD_BG = 'bg-[hsl(222,40%,25%)] dark:bg-[hsl(224,26%,17%)]'
+const STICKY_CELL_BG = 'bg-card' // mesmo token de fundo do card — bg-gray-800 fica bem mais claro que o navy real do app no dark mode e "descola" visualmente
+// Largura travada (min/max iguais) pro Setor — não é só um "hint" de w-32:
+// sem isso o table-layout:auto pode renderizar a coluna mais estreita que
+// 8rem, e aí o `left-32` da Rotina (que precisa bater exatamente com a
+// largura real do Setor pra colar sem espaço) fica desalinhado.
+const COL_SETOR_W = 'w-[8rem] min-w-[8rem] max-w-[8rem]'
+const COL_ROTINA_LEFT = 'left-[8rem]'
+
 
 interface AcompanhamentoRotinasTabProps {
   /** false = só visualização (usuário de unidade) — some o lançamento em massa e as células viram só leitura, sem abrir o dialog de edição. */
@@ -40,8 +53,13 @@ interface AcompanhamentoRotinasTabProps {
  */
 export function AcompanhamentoRotinasTab({ podeEditar }: AcompanhamentoRotinasTabProps) {
   const { toast } = useToast()
+  const { unidade: minhaUnidade } = useAuth()
   const { unidades } = useUnidades()
-  const unidadesFiltro = useMemo(() => unidades.filter(u => u.codigo !== 'AMBEV'), [unidades])
+  // Unidade (não-admin) só vê a própria coluna nessa matriz — admin vê todas.
+  const unidadesFiltro = useMemo(
+    () => unidades.filter(u => u.codigo !== 'AMBEV' && (podeEditar || u.codigo === minhaUnidade)),
+    [unidades, podeEditar, minhaUnidade],
+  )
 
   const [ano, setAno] = useState(String(ANO_ATUAL))
   const [mes, setMes] = useState(String(new Date().getMonth() + 1))
@@ -172,21 +190,27 @@ export function AcompanhamentoRotinasTab({ podeEditar }: AcompanhamentoRotinasTa
             Nenhuma rotina ativa cadastrada — cadastre na aba Cadastro.
           </p>
         ) : (
-          <Table>
+          <div className="max-h-[70vh] overflow-auto">
+          <table className="w-full caption-bottom text-sm">
             <TableHeader>
               <TableRow>
-                <TableHead>Setor</TableHead>
-                <TableHead>Rotina</TableHead>
+                <TableHead className={cn('sticky top-0 left-0 z-20 border-r border-white/10', COL_SETOR_W, STICKY_HEAD_BG)}>Setor</TableHead>
+                <TableHead className={cn('sticky top-0 z-20 min-w-[220px] border-r border-white/10', COL_ROTINA_LEFT, STICKY_HEAD_BG)}>Rotina</TableHead>
                 {unidadesFiltro.map(u => (
-                  <TableHead key={u.codigo} className="text-center">{u.nome}</TableHead>
+                  <TableHead key={u.codigo} className={cn('sticky top-0 z-10 text-center', STICKY_HEAD_BG)}>{u.nome}</TableHead>
                 ))}
               </TableRow>
             </TableHeader>
             <TableBody>
               {rotinas.map(rotina => (
                 <TableRow key={rotina.id} className="border-gray-200/30 dark:border-gray-700/30 hover:bg-gray-50/50 dark:hover:bg-gray-700/30">
-                  <TableCell className="py-1.5 text-xs text-muted-foreground">{rotina.setor}</TableCell>
-                  <TableCell className="max-w-xs py-1.5 text-sm" title={rotina.prazo ? `Prazo: ${rotina.prazo}` : undefined}>
+                  <TableCell className={cn('sticky left-0 z-10 border-r py-1.5 text-xs text-muted-foreground', COL_SETOR_W, STICKY_CELL_BG, 'border-gray-200/50 dark:border-gray-700/50')}>
+                    {rotina.setor}
+                  </TableCell>
+                  <TableCell
+                    className={cn('sticky z-10 min-w-[220px] max-w-xs border-r py-1.5 text-sm', COL_ROTINA_LEFT, STICKY_CELL_BG, 'border-gray-200/50 dark:border-gray-700/50')}
+                    title={rotina.prazo ? `Prazo: ${rotina.prazo}` : undefined}
+                  >
                     {rotina.nome}
                     {rotina.prazo && <span className="ml-1.5 text-xs text-muted-foreground">({rotina.prazo})</span>}
                   </TableCell>
@@ -226,7 +250,8 @@ export function AcompanhamentoRotinasTab({ podeEditar }: AcompanhamentoRotinasTa
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+            </table>
+          </div>
         )}
       </TableCard>
 

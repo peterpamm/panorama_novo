@@ -3,7 +3,7 @@ import { ImportarMetasArmazem } from '@/components/importacao/ImportarMetasArmaz
 import { RegistrarResultadosArmazemQuebras } from '@/components/importacao/RegistrarResultadosArmazemQuebras'
 
 /**
- * Importação > Armazém. Resultados e metas do T1 e do T2 vêm cada um numa
+ * Aba Importação da RV de Armazém. Resultados e metas do T1 e do T2 vêm cada um numa
  * planilha só, com os dois tiers em abas separadas ("RV ARM _T1" /
  * "RV ARM _T2") — então são dois blocos, não quatro. Antes existiam sub-abas
  * T2/T1 com um par de campos cada, todos pedindo o mesmo arquivo: além de

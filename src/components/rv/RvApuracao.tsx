@@ -106,7 +106,7 @@ export function RvApuracao(props: RvApuracaoUiProps) {
         ) : linhas.length === 0 ? (
           <p className="p-6 text-center text-sm text-muted-foreground">
             {liderancas.length === 0
-              ? 'Nenhuma liderança cadastrada — importe a RV das lideranças na página Importação, aba Gente.'
+              ? 'Nenhuma liderança cadastrada — importe a RV das lideranças na página Importação, aba Cadastro de Lideranças.'
               : `Nenhuma liderança do setor ${setorLabel} no cadastro — confira a coluna SETOR da planilha de RV.`}
           </p>
         ) : (

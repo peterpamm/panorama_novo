@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TableCard } from '@/components/ui/table-card'
 import { COR_AVR, MES_ABREV, getChartColors } from '@/components/farol/chart-shared'
 import { useCopiarComoImagem } from '@/hooks/useCopiarComoImagem'
+import { STATUS_PILL } from '@/lib/encontro-contas'
 import { cn, formatCurrencyCompact, formatCurrencyInteiro } from '@/lib/utils'
 import type { EncontroContas, Unidade } from '@/types'
 
@@ -17,6 +18,16 @@ interface DashboardEcTabProps {
   ecs: EncontroContas[]
   unidades: Unidade[]
   loading: boolean
+}
+
+/** Contagem de uma célula da tabela "Status por unidade" — zero fica só um traço neutro, sem colorido, pra destacar visualmente só onde tem EC de fato. */
+function CelulaContagem({ valor, corClasse }: { valor: number; corClasse: string }) {
+  if (valor === 0) return <span className="text-muted-foreground">—</span>
+  return (
+    <span className={cn('inline-flex min-w-[28px] justify-center rounded-full px-2 py-0.5 text-xs font-semibold', corClasse)}>
+      {valor}
+    </span>
+  )
 }
 
 function TooltipEvolucao({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) {
@@ -32,19 +43,6 @@ function TooltipEvolucao({ active, payload, label }: { active?: boolean; payload
   )
 }
 
-const FAROL_ESTILO = {
-  vermelho: { label: 'Com pendência', classe: 'bg-red-500/15 text-red-700 dark:text-red-400' },
-  amarelo: { label: 'Em tratativa', classe: 'bg-amber-500/15 text-amber-700 dark:text-amber-400' },
-  verde: { label: 'Tudo validado', classe: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' },
-  cinza: { label: 'Sem ECs', classe: 'bg-muted text-muted-foreground' },
-} as const
-
-function farolDaUnidade(ecsDaUnidade: EncontroContas[]): keyof typeof FAROL_ESTILO {
-  if (ecsDaUnidade.length === 0) return 'cinza'
-  if (ecsDaUnidade.some(e => e.status === 'pendente')) return 'vermelho'
-  if (ecsDaUnidade.some(e => e.status === 'em_andamento' || e.status === 'concluido')) return 'amarelo'
-  return 'verde'
-}
 
 /** Dashboard (Etapa 7): indicadores gerenciais + farol por unidade (com "Copiar imagem" — `useCopiarComoImagem`, mesmo mecanismo dos cards de Ranking — pra mandar pro grupo). Filtro De/Até restringe cards e tabelas — não a evolução mensal (é uma série histórica) nem o farol (reflete o status atual, não uma janela de datas). Unidade (não-admin) só vê o próprio farol — as ECs já vêm com RLS restrito à própria unidade, então cards/tabelas já saem naturalmente escopados. */
 export function DashboardEcTab({ ecs, unidades, loading }: DashboardEcTabProps) {
@@ -102,13 +100,25 @@ export function DashboardEcTab({ ecs, unidades, loading }: DashboardEcTabProps) 
       .map(([chave, valor]) => ({ mesLabel: `${MES_ABREV[Number(chave.slice(5, 7))]}/${chave.slice(2, 4)}`, valor }))
   }, [ecs])
 
-  const unidadesFarol = useMemo(
-    () => isAdmin ? unidades : unidades.filter(u => u.codigo === minhaUnidade),
+  // AMBEV é o consolidado LOG20 — não existe EC específico dela, então some da lista.
+  const unidadesStatus = useMemo(
+    () => (isAdmin ? unidades : unidades.filter(u => u.codigo === minhaUnidade)).filter(u => u.codigo !== 'AMBEV'),
     [unidades, isAdmin, minhaUnidade],
   )
-  const farolPorUnidade = useMemo(() => {
-    return unidadesFarol.map(u => ({ unidade: u, farol: farolDaUnidade(ecs.filter(e => e.unidade === u.codigo)) }))
-  }, [unidadesFarol, ecs])
+  const statusPorUnidade = useMemo(() => unidadesStatus.map(u => {
+    const daUnidade = ecs.filter(e => e.unidade === u.codigo)
+    return {
+      unidade: u,
+      concluido: daUnidade.filter(e => e.status === 'concluido').length,
+      em_andamento: daUnidade.filter(e => e.status === 'em_andamento').length,
+      pendente: daUnidade.filter(e => e.status === 'pendente').length,
+    }
+  }), [unidadesStatus, ecs])
+  const totaisStatus = useMemo(() => statusPorUnidade.reduce((acc, u) => ({
+    concluido: acc.concluido + u.concluido,
+    em_andamento: acc.em_andamento + u.em_andamento,
+    pendente: acc.pendente + u.pendente,
+  }), { concluido: 0, em_andamento: 0, pendente: 0 }), [statusPorUnidade])
 
   if (loading) {
     return (
@@ -184,6 +194,11 @@ export function DashboardEcTab({ ecs, unidades, loading }: DashboardEcTabProps) 
                     <TableCell className="text-right text-sm font-semibold tabular-nums">{formatCurrencyInteiro(u.valor)}</TableCell>
                   </TableRow>
                 ))}
+                <TableRow className="border-gray-200/30 bg-muted/40 dark:border-gray-700/30 hover:bg-muted/40">
+                  <TableCell className="text-sm font-semibold">Total</TableCell>
+                  <TableCell className="text-center text-sm font-semibold tabular-nums">{cards.total}</TableCell>
+                  <TableCell className="text-right text-sm font-semibold tabular-nums">{formatCurrencyInteiro(cards.valorTotal)}</TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           )}
@@ -210,7 +225,7 @@ export function DashboardEcTab({ ecs, unidades, loading }: DashboardEcTabProps) 
       <TableCard
         ref={refFarol}
         titulo="Status por unidade"
-        subtitulo="Pra enviar um resumo rápido — vermelho tem pendência, amarelo tá em tratativa, verde tudo validado"
+        subtitulo="Quantidade de ECs por status, em cada unidade"
         acoes={
           <Button
             variant="outline" size="sm" className="gap-2" onClick={copiarFarol} disabled={statusFarol === 'copiando'} data-no-print
@@ -220,16 +235,34 @@ export function DashboardEcTab({ ecs, unidades, loading }: DashboardEcTabProps) 
           </Button>
         }
       >
-        <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 lg:grid-cols-4">
-          {farolPorUnidade.map(({ unidade, farol }) => (
-            <div key={unidade.codigo} className="flex items-center justify-between gap-2 rounded-xl border bg-card p-3">
-              <span className="truncate text-sm font-medium text-foreground">{unidade.nome}</span>
-              <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold', FAROL_ESTILO[farol].classe)}>
-                {FAROL_ESTILO[farol].label}
-              </span>
-            </div>
-          ))}
-        </div>
+        {statusPorUnidade.length === 0 ? <p className="p-6 text-center text-sm text-muted-foreground">Sem dados ainda.</p> : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Unidade</TableHead>
+                <TableHead className="text-center">Concluídos</TableHead>
+                <TableHead className="text-center">Em tratativa</TableHead>
+                <TableHead className="text-center">Pendente</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {statusPorUnidade.map(({ unidade, concluido, em_andamento, pendente }) => (
+                <TableRow key={unidade.codigo} className="border-gray-200/30 dark:border-gray-700/30">
+                  <TableCell className="text-sm">{unidade.nome}</TableCell>
+                  <TableCell className="text-center"><CelulaContagem valor={concluido} corClasse={STATUS_PILL.concluido} /></TableCell>
+                  <TableCell className="text-center"><CelulaContagem valor={em_andamento} corClasse={STATUS_PILL.em_andamento} /></TableCell>
+                  <TableCell className="text-center"><CelulaContagem valor={pendente} corClasse={STATUS_PILL.pendente} /></TableCell>
+                </TableRow>
+              ))}
+              <TableRow className="border-gray-200/30 bg-muted/40 dark:border-gray-700/30 hover:bg-muted/40">
+                <TableCell className="text-sm font-semibold">Total</TableCell>
+                <TableCell className="text-center"><CelulaContagem valor={totaisStatus.concluido} corClasse={STATUS_PILL.concluido} /></TableCell>
+                <TableCell className="text-center"><CelulaContagem valor={totaisStatus.em_andamento} corClasse={STATUS_PILL.em_andamento} /></TableCell>
+                <TableCell className="text-center"><CelulaContagem valor={totaisStatus.pendente} corClasse={STATUS_PILL.pendente} /></TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        )}
       </TableCard>
     </div>
   )
