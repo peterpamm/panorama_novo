@@ -63,17 +63,29 @@ function parseNomeAba(sheetName: string): { codigo: string; negocio: string } | 
  * preenchida da linha pra extrair o código (cobre casos como a AMBEV, que no
  * arquivo real tem abas RT/AR criadas mas só a coluna TOTAL preenchida nessa
  * tabela).
+ *
+ * A coluna onde "UNIDADE" cai varia de arquivo pra arquivo (alguns têm uma
+ * coluna em branco antes, outros não — ex: planilhas de unidades novas
+ * montadas por outra pessoa) — por isso acha a coluna também, em vez de
+ * travar em "UNIDADE" na coluna B.
  */
 function parseCodigosInputs(matriz: unknown[][]): Map<string, string> {
   const codigoParaNome = new Map<string, string>()
-  const headerRowIdx = matriz.findIndex(row => normalizarCabecalho(row[1]) === 'UNIDADE')
+
+  let headerRowIdx = -1
+  let colUnidade = -1
+  for (let r = 0; r < matriz.length; r++) {
+    const row = matriz[r] ?? []
+    const c = row.findIndex(cel => normalizarCabecalho(cel) === 'UNIDADE')
+    if (c !== -1) { headerRowIdx = r; colUnidade = c; break }
+  }
   if (headerRowIdx === -1) return codigoParaNome
 
   for (let r = headerRowIdx + 1; r < matriz.length; r++) {
     const row = matriz[r]
-    const nome = toStr(row[1])
+    const nome = toStr(row[colUnidade])
     if (nome === '') break // linha em branco encerra a tabela
-    for (let c = 2; c <= 6; c++) {
+    for (let c = colUnidade + 1; c <= colUnidade + 5; c++) {
       const info = parseNomeAba(toStr(row[c]))
       if (info) { codigoParaNome.set(info.codigo, nome.toUpperCase()); break }
     }
