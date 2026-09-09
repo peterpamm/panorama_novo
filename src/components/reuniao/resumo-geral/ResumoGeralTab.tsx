@@ -56,7 +56,7 @@ export function ResumoGeralTab({ ano, setAno, mes, setMes, linhas, resumoPorLinh
     const base = linhasComResumo.map(l => ({
       unidade: chaveLinha(l.linha),
       pontos: l.resumo.pontuacaoFinal,
-      ebitdaDelta: deltaFarolPacoteUnidadeMes(rowsDre, orcamentos, '232', l.linha.unidade, Number(ano), mesNum, l.linha.negocio),
+      ebitdaDelta: deltaFarolPacoteUnidadeMes(rowsDre, orcamentos, '233', l.linha.unidade, Number(ano), mesNum, l.linha.negocio),
       rank: null as number | null,
     }))
     return atribuirRankComDesempate(base, l => l.pontos, l => l.ebitdaDelta)

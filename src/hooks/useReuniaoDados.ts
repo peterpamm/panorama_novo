@@ -10,7 +10,7 @@ import { calcularPontosGanhos, parseValorInput, resolverNaturezaFormato, unidade
 import { INDICADORES_PERDAS } from '@/lib/painel-perdas-calculations'
 import { buscarAjusteFinanceiro, mapaAjustesFinanceiro } from '@/lib/financeiro-dre-ajustes'
 import { PACOTES } from '@/lib/constants'
-import { avrPorPrefixo, calcularSemaforo, normalizarParaCalculo } from '@/lib/farol-calculations'
+import { avrPorPrefixo, calcularSemaforo, mesesAtivosNoAno, normalizarParaCalculo } from '@/lib/farol-calculations'
 import { buscarMetaOrcamento } from '@/lib/orcamento-farol'
 import { calcularAderenciaPorUnidade } from '@/lib/rotinas-financeiras'
 import type {
@@ -48,19 +48,38 @@ export function valorPerdasUnidadeMes(rowsDre: DreLongoRow[], rowsAux: PainelPer
   return rowsU.filter(r => ind.contas.some(c => r.conta_codigo.startsWith(c))).reduce((acc, r) => acc + (r.diferenca ?? 0), 0)
 }
 
-/** Meta mensal de um indicador de fonte 'perdas' — meta_anual/12 de metas_perdas_indicadores, igual `metaPerdasMensal` em `PainelPerdasPage.tsx`. Não tem dado por negócio — sempre o consolidado da unidade. */
-export function metaPerdasUnidadeMes(metasPerdasIndicadores: MetaPerdaIndicador[], indKey: string, unidade: string, ano: number): number | null {
-  const rows = unidade === 'AMBEV'
-    ? metasPerdasIndicadores.filter(m => m.unidade !== 'AMBEV' && m.ano === ano && m.indicador === indKey)
-    : metasPerdasIndicadores.filter(m => m.unidade === unidade && m.ano === ano && m.indicador === indKey)
-  if (rows.length === 0) return null
-  const metaAnual = rows.reduce((acc, m) => acc + m.meta_anual, 0)
-  return metaAnual / 12
+/**
+ * Meta mensal de um indicador de fonte 'perdas' — meta_anual de
+ * metas_perdas_indicadores dividida pelos meses em que a unidade esteve
+ * ativa no ano (ver `mesesAtivosNoAno`; 12 pras que já operavam desde
+ * janeiro), igual `metaPerdasMensal` em `PainelPerdasPage.tsx`. Não tem dado
+ * por negócio — sempre o consolidado da unidade. AMBEV soma a taxa mensal já
+ * calculada de cada unidade individual (cada uma pode ter um divisor
+ * diferente, não dá pra somar os meta_anual primeiro e dividir uma vez só).
+ */
+export function metaPerdasUnidadeMes(
+  metasPerdasIndicadores: MetaPerdaIndicador[],
+  indKey: string,
+  unidade: string,
+  ano: number,
+  dataEntradaPorUnidade: Map<string, string | null>,
+): number | null {
+  function mensalDaUnidade(u: string): number | null {
+    const rows = metasPerdasIndicadores.filter(m => m.unidade === u && m.ano === ano && m.indicador === indKey)
+    if (rows.length === 0) return null
+    const metaAnual = rows.reduce((acc, m) => acc + m.meta_anual, 0)
+    return metaAnual / mesesAtivosNoAno(dataEntradaPorUnidade.get(u) ?? null, ano)
+  }
+  if (unidade !== 'AMBEV') return mensalDaUnidade(unidade)
+
+  const unidadesComDado = Array.from(new Set(metasPerdasIndicadores.filter(m => m.unidade !== 'AMBEV' && m.ano === ano && m.indicador === indKey).map(m => m.unidade)))
+  const mensalPorUnidade = unidadesComDado.map(mensalDaUnidade).filter((v): v is number => v !== null)
+  return mensalPorUnidade.length > 0 ? mensalPorUnidade.reduce((acc, v) => acc + v, 0) : null
 }
 
 /**
  * AVR mensal de um pacote do Farol (fonte 'farol_pacote') — também usado
- * direto pro EBITDA (código '232') fora do contexto de um indicador
+ * direto pro EBITDA (código '233') fora do contexto de um indicador
  * cadastrado. Único fonte automático que varia por negócio (Camaçari fora do
  * Financeiro tem DRE separado por ROTA/ARM) — `negocio` default 'CONS'
  * (unidade sem split).
@@ -77,7 +96,7 @@ export function valorFarolPacoteUnidadeMes(rowsDre: DreLongoRow[], codigo: strin
  * Delta (AVR - meta do Orçamento, sinal já certo pela natureza) de um pacote
  * do Farol num mês — mesma régua do Ranking (`calcularRankingIndicador` em
  * ranking-calculations.ts), usado como critério de desempate no lugar do
- * AVR puro (ex: EBITDA, código '232': duas unidades com a mesma pontuação
+ * AVR puro (ex: EBITDA, código '233': duas unidades com a mesma pontuação
  * no mês, a com melhor delta de EBITDA vs a própria meta fica na frente —
  * não é mais só "quem teve o % de EBITDA mais alto", que ignorava se a meta
  * de cada unidade era diferente). null quando não tem meta cadastrada
@@ -111,6 +130,7 @@ export function valorRotinasUnidadeMes(rotinasIds: Set<string>, statusAno: Rotin
 export function useReuniaoDados(setor: ReuniaoSetor, ano: string) {
   const { toast } = useToast()
   const { unidades } = useUnidades()
+  const dataEntradaPorUnidade = useMemo(() => new Map(unidades.map(u => [u.codigo, u.data_entrada])), [unidades])
   const { rows: rowsDre } = useDreLongoTodasUnidades()
   const { orcamentos: orcamentoRows, loading: loadingOrcamento } = useOrcamentoTodasUnidades()
   const { rows: rowsAux } = usePainelPerdasAux()
@@ -261,7 +281,7 @@ export function useReuniaoDados(setor: ReuniaoSetor, ano: string) {
           if (ind.fonte === 'perdas' && ind.fonte_chave) {
             mapa[chave] = {
               resultado: valorPerdasUnidadeMes(rowsDre, rowsAux, ind.fonte_chave, p.unidade, Number(ano), mes),
-              meta: ind.meta_fixa ?? metaPerdasUnidadeMes(metasPerdasIndicadores, ind.fonte_chave, p.unidade, Number(ano)),
+              meta: ind.meta_fixa ?? metaPerdasUnidadeMes(metasPerdasIndicadores, ind.fonte_chave, p.unidade, Number(ano), dataEntradaPorUnidade),
             }
           } else if (ind.fonte === 'farol_pacote' && ind.fonte_chave) {
             mapa[chave] = {
@@ -279,7 +299,7 @@ export function useReuniaoDados(setor: ReuniaoSetor, ano: string) {
     }
     return mapa
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [indicadores, participantesPorIndicador, rowsDre, rowsAux, metasPerdasIndicadores, orcamentoRows, rotinasIds, statusAnoRotinas, metaRotinas, ano])
+  }, [indicadores, participantesPorIndicador, rowsDre, rowsAux, metasPerdasIndicadores, orcamentoRows, rotinasIds, statusAnoRotinas, metaRotinas, ano, dataEntradaPorUnidade])
 
   /**
    * Resultado + meta efetivos de um indicador/unidade+negócio/mês. Manual,

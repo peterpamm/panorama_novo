@@ -43,7 +43,7 @@ export function ResultadoMesReuniaoTab({ setor }: ResultadoMesReuniaoTabProps) {
       pontos: totalPorUnidadeMes[`${unidade}|${negocio}|${mesNum}`] ?? null,
       // Delta do EBITDA vs meta — é o critério de desempate E o que aparece
       // na coluna/pódio, mesma régua do Ranking de EBITDA.
-      ebitdaDelta: deltaFarolPacoteUnidadeMes(rowsDre, orcamentos, '232', unidade, Number(ano), mesNum, negocio),
+      ebitdaDelta: deltaFarolPacoteUnidadeMes(rowsDre, orcamentos, '233', unidade, Number(ano), mesNum, negocio),
       rank: null as number | null,
     }))
     return atribuirRankComDesempate(base, l => l.pontos, l => l.ebitdaDelta)

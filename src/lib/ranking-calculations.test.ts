@@ -112,12 +112,12 @@ describe('calcularRankingIndicador', () => {
 
   it('conta de performance: delta positivo (superou a meta) ranqueia primeiro, sem inverter sinal — meta vem do Orçamento (conta 133)', () => {
     const rows: DreLongoRow[] = [
-      linha('A', '232', 1, 'MENSAL', 100000, 120000, 120),
-      linha('B', '232', 1, 'MENSAL', 100000, 80000, 80),
+      linha('A', '233', 1, 'MENSAL', 100000, 120000, 120),
+      linha('B', '233', 1, 'MENSAL', 100000, 80000, 80),
     ]
     const orcamentos: OrcamentoLinha[] = [orcamentoPacote('A', 1, '133', 100), orcamentoPacote('B', 1, '133', 100)]
 
-    const ranking = calcularRankingIndicador(rows, orcamentos, { natureza: 'performance', prefixos: ['232'] }, '232', { negocio: 'ROTA', ano: 2025, periodo: 'mensal', mes: 1 })
+    const ranking = calcularRankingIndicador(rows, orcamentos, { natureza: 'performance', prefixos: ['233'] }, '233', { negocio: 'ROTA', ano: 2025, periodo: 'mensal', mes: 1 })
 
     expect(ranking.map(r => r.unidade)).toEqual(['A', 'B'])
     expect(ranking[0]).toMatchObject({ delta: 20 })

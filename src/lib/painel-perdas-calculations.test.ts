@@ -22,10 +22,10 @@ describe('calcularMatrizPerdas', () => {
     expect(r.linhas).toEqual([])
   })
 
-  it('calcula indicador DRE (Vales = contas 051 e 052)', () => {
+  it('calcula indicador DRE (Vales = contas 052 e 053)', () => {
     const dre = [
-      rowDre({ unidade: 'FOZ', conta_codigo: '051', diferenca: -500 }),
-      rowDre({ unidade: 'FOZ', conta_codigo: '052', diferenca: -300 }),
+      rowDre({ unidade: 'FOZ', conta_codigo: '052', diferenca: -500 }),
+      rowDre({ unidade: 'FOZ', conta_codigo: '053', diferenca: -300 }),
     ]
     const r = calcularMatrizPerdas(dre, [], [], 2025, [1])
     const linhaVales = r.linhas.find(l => l.key === 'vales')!
@@ -59,8 +59,8 @@ describe('calcularMatrizPerdas', () => {
 
   it('TOTAL soma todos os indicadores por unidade', () => {
     const dre = [
-      rowDre({ conta_codigo: '051', diferenca: -400 }),
-      rowDre({ conta_codigo: '137', diferenca: -100 }),
+      rowDre({ conta_codigo: '052', diferenca: -400 }),
+      rowDre({ conta_codigo: '138', diferenca: -100 }),
     ]
     const r = calcularMatrizPerdas(dre, [], [], 2025, [1])
     const linhaTotal = r.linhas.find(l => l.tipo === 'total')!
@@ -90,7 +90,7 @@ describe('calcularMatrizPerdas', () => {
 
   it('PERDAS % = TOTAL / FATURAMENTO (mesmo recorte de meses nos dois)', () => {
     const dre = [
-      rowDre({ conta_codigo: '051', diferenca: -1000 }),
+      rowDre({ conta_codigo: '052', diferenca: -1000 }),
       rowDre({ conta_codigo: '001', mes: 1, remunerado: -100000 }),
     ]
     const r = calcularMatrizPerdas(dre, [], [], 2025, [1])
@@ -143,5 +143,42 @@ describe('calcularMatrizPerdas', () => {
     ]
     const r = calcularMatrizPerdas(dre, [], [], 2025, [1])
     expect(r.unidades[r.unidades.length - 1]).toBe('AMBEV')
+  })
+
+  it('META (R$) divide pelos meses ativos da unidade (data_entrada), não sempre por 12', () => {
+    const dre = [rowDre({ unidade: 'ARA', conta_codigo: '021', diferenca: 0, ano: 2026, mes: 6 })]
+    const metas: MetaPerdaIndicador[] = [
+      { unidade: 'ARA', ano: 2026, indicador: 'vales', meta_anual: -8000 },
+    ]
+    // Aracaju entrou em maio/2026 -> 8 meses ativos
+    const dataEntradaPorUnidade = new Map([['ARA', '2026-05-01']])
+    const r = calcularMatrizPerdas(dre, [], metas, 2026, [6], dataEntradaPorUnidade)
+    const linhaMetaRs = r.linhas.find(l => l.tipo === 'meta_rs')!
+    expect(linhaMetaRs.valores['ARA']).toBeCloseTo(-1000) // -8000/8 * 1 mês selecionado
+  })
+
+  it('META (R$) do AMBEV: cada unidade usa seu próprio divisor de meses ativos, não um só pra todas', () => {
+    const dre = [
+      rowDre({ unidade: 'FOZ', conta_codigo: '021', diferenca: 0, ano: 2026, mes: 6 }), // unidade antiga, 12 meses
+      rowDre({ unidade: 'ARA', conta_codigo: '021', diferenca: 0, ano: 2026, mes: 6 }), // entrou em maio, 8 meses
+    ]
+    const metas: MetaPerdaIndicador[] = [
+      { unidade: 'FOZ', ano: 2026, indicador: 'vales', meta_anual: -12000 }, // -1000/mês
+      { unidade: 'ARA', ano: 2026, indicador: 'vales', meta_anual: -8000 },  // -1000/mês (8 meses, não 12)
+    ]
+    const dataEntradaPorUnidade = new Map([['ARA', '2026-05-01']])
+    const r = calcularMatrizPerdas(dre, [], metas, 2026, [6], dataEntradaPorUnidade)
+    const linhaMetaRs = r.linhas.find(l => l.tipo === 'meta_rs')!
+    expect(linhaMetaRs.valores['AMBEV']).toBeCloseTo(-2000) // -1000 (FOZ) + -1000 (ARA), 1 mês
+  })
+
+  it('sem dataEntradaPorUnidade (omitido), comportamento idêntico a antes: sempre /12', () => {
+    const dre = [rowDre({ unidade: 'ARA', conta_codigo: '021', diferenca: 0, ano: 2026, mes: 1 })]
+    const metas: MetaPerdaIndicador[] = [
+      { unidade: 'ARA', ano: 2026, indicador: 'vales', meta_anual: -12000 },
+    ]
+    const r = calcularMatrizPerdas(dre, [], metas, 2026, [1])
+    const linhaMetaRs = r.linhas.find(l => l.tipo === 'meta_rs')!
+    expect(linhaMetaRs.valores['ARA']).toBeCloseTo(-1000) // -12000/12 * 1
   })
 })

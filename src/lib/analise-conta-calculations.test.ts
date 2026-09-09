@@ -110,9 +110,9 @@ describe('calcularPorUnidadeConta', () => {
 
   it('conta de performance (EBITDA) inverte o sinal: superar a meta é bom', () => {
     const linhas = calcularPorUnidadeConta([
-      { ...linha('232', 1, 100, 150), unidade: 'A', avr: 15 },
+      { ...linha('233', 1, 100, 150), unidade: 'A', avr: 15 },
       receita('A', 1, 1000),
-    ], '232', [orcamento('A', '133', 0, 10)], SEM_ORCAMENTO)
+    ], '233', [orcamento('A', '133', 0, 10)], SEM_ORCAMENTO)
     expect(linhas[0].deltaPp).toBeCloseTo(5)
     expect(linhas[0].impacto).toBeCloseTo(50)
   })

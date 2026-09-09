@@ -19,8 +19,8 @@ const ABAS = [
 /**
  * Subpágina RV de Distribuição — /remuneracao-variavel/distribuicao.
  * Indisponibilidade (todas as lideranças, vem do mesmo dado do Painel de
- * Perdas) + Pacote de Gente (158, origem no DRE, só lideranças da ROTA) +
- * Vales (DRE 051/052 vs % da Meta de Perdas de Vales, todas as lideranças) +
+ * Perdas) + Pacote de Gente (159, origem no DRE, só lideranças da ROTA) +
+ * Vales (DRE 052/053 vs % da Meta de Perdas de Vales, todas as lideranças) +
  * LogOn DU / Devolução / Presenteísmo DU (planilha compartilhada do BI,
  * todas as lideranças). Peso de cada indicador é por função da liderança
  * (COORD. DU / SUPERVISOR DU, cadastrado em Metas Distribuição) — LogOn DU

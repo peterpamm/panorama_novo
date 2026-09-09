@@ -12,7 +12,7 @@ import { JustificativaEAcoesCard } from '@/pages/sdg/JustificativaEAcoesCard'
 import { PACOTES } from '@/lib/constants'
 import type { DreLongoRow, OrcamentoLinha, PlanoAcao, SdgJustificativa } from '@/types'
 
-const CODIGO = '232'
+const CODIGO = '233'
 const INFO   = PACOTES[CODIGO]
 
 interface Props {

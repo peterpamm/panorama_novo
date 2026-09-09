@@ -3,6 +3,7 @@ import { Loader2, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useUnidades } from '@/hooks/useUnidades'
 import { useMetasPerdas } from '@/hooks/useMetasPerdas'
+import { mesesAtivosNoAno } from '@/lib/farol-calculations'
 import { INDICADORES_PERDAS, type IndicadorKey } from '@/lib/painel-perdas-calculations'
 import { ImportarMetasPerdasDialog } from '@/components/metas/ImportarMetasPerdasDialog'
 import { Button } from '@/components/ui/button'
@@ -36,13 +37,13 @@ interface TabelaMetaPerdasProps {
   nomesUnidade: Map<string, string>
   valorIndicador: (indicador: IndicadorKey, unidade: string) => number | null
   metaDaUnidade: (unidade: string) => { meta_anual: number; meta_pct: number } | undefined
-  /** 1 = anual, 12 = mensal (meta anual dividida por 12 — a Meta (%) não muda, é a mesma nos dois quadros). */
-  divisor: number
+  /** 1 = anual (sempre), pro mensal = quantos meses a unidade esteve ativa no ano (ver `mesesAtivosNoAno`) — a Meta (%) não muda, é a mesma nos dois quadros. */
+  divisorDaUnidade: (unidade: string) => number
   carregando: boolean
 }
 
 /** Matriz indicador × unidade — reaproveitada pro quadro anual e pro mensal (mesma estrutura, só muda o divisor). */
-function TabelaMetaPerdas({ titulo, subtitulo, unidadesColunas, nomesUnidade, valorIndicador, metaDaUnidade, divisor, carregando }: TabelaMetaPerdasProps) {
+function TabelaMetaPerdas({ titulo, subtitulo, unidadesColunas, nomesUnidade, valorIndicador, metaDaUnidade, divisorDaUnidade, carregando }: TabelaMetaPerdasProps) {
   return (
     <TableCard titulo={titulo} subtitulo={carregando ? 'Carregando...' : subtitulo}>
       {carregando ? (
@@ -73,7 +74,7 @@ function TabelaMetaPerdas({ titulo, subtitulo, unidadesColunas, nomesUnidade, va
                     const v = valorIndicador(ind.key, u)
                     return (
                       <TableCell key={u} className="py-1.5 text-center text-xs tabular-nums text-muted-foreground">
-                        {v === null ? '—' : fmtValor(v / divisor)}
+                        {v === null ? '—' : fmtValor(v / divisorDaUnidade(u))}
                       </TableCell>
                     )
                   })}
@@ -85,7 +86,7 @@ function TabelaMetaPerdas({ titulo, subtitulo, unidadesColunas, nomesUnidade, va
                   const v = metaDaUnidade(u)?.meta_anual ?? null
                   return (
                     <TableCell key={u} className="py-1.5 text-center text-xs tabular-nums">
-                      {v === null ? '—' : fmtValor(v / divisor)}
+                      {v === null ? '—' : fmtValor(v / divisorDaUnidade(u))}
                     </TableCell>
                   )
                 })}
@@ -143,6 +144,12 @@ export function MetasPerdasTab() {
   const [salvando, setSalvando] = useState(false)
 
   const nomesUnidade = useMemo(() => new Map(unidades.map(u => [u.codigo, u.nome])), [unidades])
+  const dataEntradaPorUnidade = useMemo(() => new Map(unidades.map(u => [u.codigo, u.data_entrada])), [unidades])
+
+  /** Quantos meses do `ano` selecionado a unidade esteve ativa — pra dividir a Meta de Perdas anual só por esses meses (ver `mesesAtivosNoAno`), não sempre por 12. */
+  function mesesAtivosDaUnidade(unidade: string): number {
+    return mesesAtivosNoAno(dataEntradaPorUnidade.get(unidade) ?? null, Number(ano))
+  }
 
   const anosDisponiveis = useMemo(
     () => Array.from(new Set([...metasPerdas.map(m => m.ano), ...indicadores.map(i => i.ano)])).sort((a, b) => b - a),
@@ -269,18 +276,18 @@ export function MetasPerdasTab() {
         nomesUnidade={nomesUnidade}
         valorIndicador={valorIndicador}
         metaDaUnidade={metaDaUnidade}
-        divisor={1}
+        divisorDaUnidade={() => 1}
         carregando={carregando}
       />
 
       <TabelaMetaPerdas
         titulo="Meta de Perdas — Mensal"
-        subtitulo={`${ano} · meta anual dividida por 12 · Meta (%) é a mesma do quadro anual`}
+        subtitulo={`${ano} · meta anual dividida pelos meses ativos de cada unidade (data de entrada em Administração > Unidades — 12 pras que já operavam desde janeiro) · Meta (%) é a mesma do quadro anual`}
         unidadesColunas={unidadesColunas}
         nomesUnidade={nomesUnidade}
         valorIndicador={valorIndicador}
         metaDaUnidade={metaDaUnidade}
-        divisor={12}
+        divisorDaUnidade={mesesAtivosDaUnidade}
         carregando={carregando}
       />
     </div>

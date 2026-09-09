@@ -30,7 +30,7 @@ export interface DreLongoRow {
  * tratar_dre_pro.py a partir do DreLongoRow bruto): `real` e `remun` são
  * sempre valores absolutos (magnitude), `dif` mantém o sinal original
  * (REALIZADO-REMUNERADO), e `avr` tem o sinal invertido para toda conta
- * que não seja EBITDA (232) ou Geração de Caixa (275) — ver normalizarParaCalculo.
+ * que não seja EBITDA (233) ou Geração de Caixa (276) — ver normalizarParaCalculo.
  */
 export interface DreCalculoRow {
   conta_codigo: string
@@ -180,9 +180,9 @@ export interface ResultadoDescontoStressTest {
  * ÚNICOS por indicador (migration 108) — não variam por unidade, mesmo
  * padrão de `rv_desconto_civf_meta`. Todos em % (`meta_pct`), inclusive
  * Disponibilidade Empilhadeira (migration 109 — quanto maior melhor).
- * Custos Gerais (DRE 113) não entra aqui — resultado vem do DRE (AVR) e meta
+ * Custos Gerais (DRE 114) não entra aqui — resultado vem do DRE (AVR) e meta
  * do Orçamento, igual Manutenção/Pneus/Diesel; o peso mora na mesma tabela
- * deles (`rv_frota_pesos_dre`, id '113' — ver `CUSTOS_GERAIS_FROTA_DRE`,
+ * deles (`rv_frota_pesos_dre`, id '114' — ver `CUSTOS_GERAIS_FROTA_DRE`,
  * constants.ts).
  */
 
@@ -794,7 +794,7 @@ export type FinanceiroDreAjusteIndicador = 'multas' | 'vales'
 /**
  * Ajuste manual TEMPORÁRIO do valor de Multas ou Vales do Financeiro, por
  * unidade×ano×mês — solução pro bug do DRE que não soma a receita que a
- * unidade recebe da Ambev nessas contas (137/222 e 051/052), sem mexer na
+ * unidade recebe da Ambev nessas contas (138/223 e 052/053), sem mexer na
  * base oficial do DRE. Só o dono cadastra (RLS `auth_dono()`, migration 104)
  * e só entra no cálculo da Reunião Resultados e da Remuneração Variável do
  * Financeiro — nunca no Painel de Perdas nem no DRE bruto (ver

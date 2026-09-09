@@ -9,10 +9,10 @@ import { topContasFaixa } from '@/lib/top-contas'
 import { cn, formatCurrencyCompact } from '@/lib/utils'
 import type { PlanoAcao, SdgJustificativa } from '@/types'
 
-const CODIGO = '190'
-/** Faixa das subcontas do pacote Despesas ADM Gerais (a linha 190 é o total do pacote). */
-const CONTA_INI = 191
-const CONTA_FIM = 227
+const CODIGO = '191'
+/** Faixa das subcontas do pacote Despesas ADM Gerais (a linha 191 é o total do pacote). */
+const CONTA_INI = 192
+const CONTA_FIM = 228
 
 interface Props extends Omit<IndicadorSdgParams, 'codigo'> {
   justificativa: SdgJustificativa | undefined

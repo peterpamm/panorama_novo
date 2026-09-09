@@ -5,6 +5,7 @@ import {
 } from 'recharts'
 import { PresentationCardValor } from '@/pages/sdg/PresentationCardValor'
 import { usePerdaTodasUnidades } from '@/hooks/usePerdaTodasUnidades'
+import { mesesAtivosNoAno } from '@/lib/farol-calculations'
 import { COR_AVR, COR_META, MES_ABREV, getChartColors } from '@/components/farol/chart-shared'
 import { cn, formatCurrencyCompact, formatCurrencyInteiro } from '@/lib/utils'
 import type { DreLongoRow, Unidade } from '@/types'
@@ -14,7 +15,7 @@ const COR_ORCAMENTO = '#eab308'
 
 interface BlocoIndicadorPerdaProps {
   titulo: string
-  /** Prefixos de conta do indicador (ex: Vales combinado = ['051','052'], só Vales Financeiros = ['051']). */
+  /** Prefixos de conta do indicador (ex: Vales combinado = ['052','053'], só Vales Financeiros = ['052']). */
   contas: readonly string[]
   /** Linhas da unidade em todos os anos (negócio CONS, sem filtro de ano). */
   rowsTodosAnos: DreLongoRow[]
@@ -67,8 +68,8 @@ const MESES_12 = Array.from({ length: 12 }, (_, i) => i + 1)
  * (com Orçado quando `metaAnualIndicador` é passado), evolução vs ano
  * anterior (+ Orçado mensal em amarelo), ranking entre unidades e detalhe
  * mensal (+ linha Orçamento). Usado tanto pro indicador combinado
- * (Vales = 051+052, Multas) quanto pras contas filhas isoladas de Vales
- * (051 Vales Financeiros, 052 Vales Físicos — essas sem orçamento próprio).
+ * (Vales = 052+053, Multas) quanto pras contas filhas isoladas de Vales
+ * (052 Vales Financeiros, 053 Vales Físicos — essas sem orçamento próprio).
  */
 export function BlocoIndicadorPerda({ titulo, contas, rowsTodosAnos, unidadeSel, unidades, ano, mes, metaAnualIndicador }: BlocoIndicadorPerdaProps) {
   const anoAnterior = ano - 1
@@ -76,8 +77,12 @@ export function BlocoIndicadorPerda({ titulo, contas, rowsTodosAnos, unidadeSel,
   const { rows: rowsRanking, loading: loadingRanking } = usePerdaTodasUnidades(contas, ano)
 
   const temOrcamento = metaAnualIndicador !== undefined
-  const metaMensal = metaAnualIndicador != null ? metaAnualIndicador / 12 : null
-  const metaYtd = metaAnualIndicador != null ? (metaAnualIndicador / 12) * mes : null
+  // Divide pelos meses em que `unidadeSel` esteve ativa no `ano` (data_entrada,
+  // Administração > Unidades), não sempre por 12 — ver mesesAtivosNoAno.
+  const dataEntradaSel = unidades.find(u => u.codigo === unidadeSel)?.data_entrada ?? null
+  const mesesAtivos = mesesAtivosNoAno(dataEntradaSel, ano)
+  const metaMensal = metaAnualIndicador != null ? metaAnualIndicador / mesesAtivos : null
+  const metaYtd = metaAnualIndicador != null ? (metaAnualIndicador / mesesAtivos) * mes : null
 
   const valorMensal    = useMemo(() => valorMes(rowsTodosAnos, contas, ano, mes),          [rowsTodosAnos, contas, ano, mes])
   const valorMensalAnt = useMemo(() => valorMes(rowsTodosAnos, contas, anoAnterior, mes),  [rowsTodosAnos, contas, anoAnterior, mes])

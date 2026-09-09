@@ -203,6 +203,7 @@ export function calcularPacotePerdasPorUnidade(
   rowsAux: PainelPerdasAux[],
   metasPerdasIndicadores: MetaPerdaIndicador[],
   ano: number,
+  dataEntradaPorUnidade: Map<string, string | null> = new Map(),
 ): Map<string, PacotePerdasItem> {
   const meses = Array.from(new Set(
     rowsDre.filter(r => r.negocio === 'CONS' && r.tipo_periodo === 'MENSAL' && r.ano === ano).map(r => r.mes),
@@ -211,7 +212,7 @@ export function calcularPacotePerdasPorUnidade(
   const mapa = new Map<string, PacotePerdasItem>()
   if (meses.length === 0) return mapa
 
-  const matriz = calcularMatrizPerdas(rowsDre, rowsAux, metasPerdasIndicadores.filter(m => m.ano === ano), ano, meses)
+  const matriz = calcularMatrizPerdas(rowsDre, rowsAux, metasPerdasIndicadores.filter(m => m.ano === ano), ano, meses, dataEntradaPorUnidade)
   const linhaReal = matriz.linhas.find(l => l.tipo === 'perdas_pct')
   const linhaMeta = matriz.linhas.find(l => l.tipo === 'meta_pct')
   for (const u of matriz.unidades) {

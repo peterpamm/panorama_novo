@@ -139,7 +139,7 @@ describe('linhaIndicadorDre', () => {
 describe('calcularPacotePerdasPorUnidade', () => {
   it('calcula % de perdas acumuladas (mesma régua do Painel de Perdas)', () => {
     const rows: DreLongoRow[] = [
-      rowDre({ conta_codigo: '051', diferenca: -1000 }),
+      rowDre({ conta_codigo: '052', diferenca: -1000 }),
       rowDre({ conta_codigo: '001', remunerado: -100000 }),
     ]
     const mapa = calcularPacotePerdasPorUnidade(rows, [], [], 2026)

@@ -57,7 +57,7 @@ export function DetalhesUnidadeTab({ ano, setAno, mes, setMes, linhas, setores, 
     const base = linhas.map(l => ({
       unidade: `${l.unidade}|${l.negocio}`,
       pontos: resumoPorLinhaMes[`${l.unidade}|${l.negocio}|${mesNum}`]?.pontuacaoFinal ?? null,
-      ebitdaDelta: deltaFarolPacoteUnidadeMes(rowsDre, orcamentos, '232', l.unidade, Number(ano), mesNum, l.negocio),
+      ebitdaDelta: deltaFarolPacoteUnidadeMes(rowsDre, orcamentos, '233', l.unidade, Number(ano), mesNum, l.negocio),
       rank: null as number | null,
     }))
     const ranking = atribuirRankComDesempate(base, l => l.pontos, l => l.ebitdaDelta)

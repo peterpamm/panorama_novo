@@ -6,6 +6,7 @@ import {
   Legend, LabelList, ResponsiveContainer, Customized,
 } from 'recharts'
 import { supabase } from '@/lib/supabase'
+import { mesesAtivosNoAno } from '@/lib/farol-calculations'
 import { useDreLongoTodasUnidades } from '@/hooks/useDreLongoTodasUnidades'
 import { usePainelPerdasAux } from '@/hooks/usePainelPerdasAux'
 import { useUnidades } from '@/hooks/useUnidades'
@@ -125,11 +126,36 @@ function valorIndicadorUnidadeMes(
  * Meta de Perdas (Metas > Metas de Perdas) do indicador, distribuída
  * linearmente pelo ano — a tabela metas_perdas_indicadores só guarda o total
  * anual (meta_anual, R$ negativo), então o valor "mensal" é sempre
- * meta_anual/12. Existe pra todos os indicadores (DRE e AUX), diferente do
- * orçamento (que só cobre conta do DRE). AMBEV soma a meta anual de todas as
- * unidades (a planilha de metas de perdas não importa uma linha AMBEV própria).
+ * meta_anual dividido pelos meses em que a unidade esteve ativa (ver
+ * `mesesAtivosNoAno` — 12 pras que já operavam desde janeiro). Existe pra
+ * todos os indicadores (DRE e AUX), diferente do orçamento (que só cobre
+ * conta do DRE). AMBEV soma a taxa mensal já calculada de cada unidade
+ * individual (não dá pra somar os meta_anual primeiro e dividir uma vez só,
+ * já que cada unidade pode ter um divisor diferente — a planilha de metas de
+ * perdas também não importa uma linha AMBEV própria).
  */
 function metaPerdasMensal(
+  metasPerdasIndicadores: MetaPerdaIndicador[],
+  ind: (typeof INDICADORES_PERDAS)[number],
+  unidade: string,
+  ano: number,
+  dataEntradaPorUnidade: Map<string, string | null>,
+): number | null {
+  function mensalDaUnidade(u: string): number | null {
+    const rows = metasPerdasIndicadores.filter(m => m.unidade === u && m.ano === ano && m.indicador === ind.key)
+    if (rows.length === 0) return null
+    const metaAnual = rows.reduce((acc, m) => acc + m.meta_anual, 0)
+    return metaAnual / mesesAtivosNoAno(dataEntradaPorUnidade.get(u) ?? null, ano)
+  }
+  if (unidade !== 'AMBEV') return mensalDaUnidade(unidade)
+
+  const unidadesComDado = Array.from(new Set(metasPerdasIndicadores.filter(m => m.unidade !== 'AMBEV' && m.ano === ano && m.indicador === ind.key).map(m => m.unidade)))
+  const mensalPorUnidade = unidadesComDado.map(mensalDaUnidade).filter((v): v is number => v !== null)
+  return mensalPorUnidade.length > 0 ? mensalPorUnidade.reduce((acc, v) => acc + v, 0) : null
+}
+
+/** Total anual "cru" (sem dividir pelos meses ativos) — só pra reconstruir quanto ainda falta da meta na curva de captura (`serieCapturaPerdas`), não pra exibir como "meta mensal". */
+function metaPerdasAnualTotal(
   metasPerdasIndicadores: MetaPerdaIndicador[],
   ind: (typeof INDICADORES_PERDAS)[number],
   unidade: string,
@@ -139,8 +165,7 @@ function metaPerdasMensal(
     ? metasPerdasIndicadores.filter(m => m.unidade !== 'AMBEV' && m.ano === ano && m.indicador === ind.key)
     : metasPerdasIndicadores.filter(m => m.unidade === unidade && m.ano === ano && m.indicador === ind.key)
   if (rows.length === 0) return null
-  const metaAnual = rows.reduce((acc, m) => acc + m.meta_anual, 0)
-  return metaAnual / 12
+  return rows.reduce((acc, m) => acc + m.meta_anual, 0)
 }
 
 // ─── Tooltip do gráfico ──────────────────────────────────────────────────────
@@ -339,6 +364,7 @@ export function PainelPerdasPage() {
   const { rows: rowsDre, loading: loadingDre } = useDreLongoTodasUnidades()
   const { rows: rowsAux, loading: loadingAux } = usePainelPerdasAux()
   const { unidades } = useUnidades()
+  const dataEntradaPorUnidade = useMemo(() => new Map(unidades.map(u => [u.codigo, u.data_entrada])), [unidades])
 
   const loading = loadingDre || loadingAux
 
@@ -397,8 +423,8 @@ export function PainelPerdasPage() {
   const matriz = useMemo(() => {
     if (rowsDre.length === 0) return null
     const mesesOrdenados = Array.from(mesesAtivos).sort((a, b) => a - b)
-    return calcularMatrizPerdas(rowsDre, rowsAux, metasPerdasIndicadoresConsolidado, anoAtivo, mesesOrdenados)
-  }, [rowsDre, rowsAux, metasPerdasIndicadoresConsolidado, anoAtivo, mesesAtivos])
+    return calcularMatrizPerdas(rowsDre, rowsAux, metasPerdasIndicadoresConsolidado, anoAtivo, mesesOrdenados, dataEntradaPorUnidade)
+  }, [rowsDre, rowsAux, metasPerdasIndicadoresConsolidado, anoAtivo, mesesAtivos, dataEntradaPorUnidade])
 
   // ── Tab Evolução ──────────────────────────────────────────────────────────
 
@@ -505,11 +531,12 @@ export function PainelPerdasPage() {
     const realizadoAnterior = anoAnterior !== null
       ? somaAcumulada(mes => valorIndicadorUnidadeMes(rowsDre, rowsAux, indSel, selUnidadeLinhas, anoAnterior, mes))
       : null
-    const metaMensal = metaPerdasMensal(metasPerdasIndicadores, indSel, selUnidadeLinhas, anoAtual)
+    const metaMensal = metaPerdasMensal(metasPerdasIndicadores, indSel, selUnidadeLinhas, anoAtual, dataEntradaPorUnidade)
     const metaAcumulada = metaMensal !== null ? metaMensal * mesCorte : null
+    const metaAnualTotal = metaPerdasAnualTotal(metasPerdasIndicadores, indSel, selUnidadeLinhas, anoAtual)
 
-    return { anoAtual, anoAnterior, mesCorte, realizadoAtual, realizadoAnterior, metaMensal, metaAcumulada }
-  }, [anosEvoOrdenados, rowsDre, rowsAux, metasPerdasIndicadores, indSel, selUnidadeLinhas])
+    return { anoAtual, anoAnterior, mesCorte, realizadoAtual, realizadoAnterior, metaMensal, metaAcumulada, metaAnualTotal }
+  }, [anosEvoOrdenados, rowsDre, rowsAux, metasPerdasIndicadores, indSel, selUnidadeLinhas, dataEntradaPorUnidade])
 
   /**
    * A meta mensal entra como um dataKey de verdade (não um ReferenceLine) pra
@@ -570,8 +597,7 @@ export function PainelPerdasPage() {
    */
   const serieCapturaPerdas = useMemo(() => {
     if (!acumulado) return []
-    const { mesCorte, anoAtual, metaMensal, realizadoAtual } = acumulado
-    const metaAnualTotal = metaMensal !== null ? metaMensal * 12 : null
+    const { mesCorte, anoAtual, metaMensal, realizadoAtual, metaAnualTotal } = acumulado
     const mesesRestantes = 12 - mesCorte
     const necessarioPorMes = (metaAnualTotal !== null && realizadoAtual !== null && mesesRestantes > 0)
       ? (metaAnualTotal - realizadoAtual) / mesesRestantes

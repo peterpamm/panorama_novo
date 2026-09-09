@@ -13,11 +13,11 @@ import { cn, formatCurrencyCompact, formatPercent } from '@/lib/utils'
 import { CONTAS_TOTALIZADORAS_ADM, PACOTES } from '@/lib/constants'
 import type { DreLongoRow, OrcamentoLinha, Unidade } from '@/types'
 
-const CODIGO = '157'
+const CODIGO = '158'
 const INFO = PACOTES[CODIGO]
-/** Faixa das contas do pacote (157 é o total; 158–227 são as subcontas que compõem a Despesa Administrativa). */
-const CONTA_INI = 157
-const CONTA_FIM = 227
+/** Faixa das contas do pacote (158 é o total; 159–228 são as subcontas que compõem a Despesa Administrativa). */
+const CONTA_INI = 158
+const CONTA_FIM = 228
 
 interface Props {
   /** Linhas do negócio selecionado, de todas as unidades, já filtradas pro ano selecionado. */

@@ -54,7 +54,7 @@ export function RankingPorSetorTab({ ano, setAno, mes, setMes, unidades, setores
         unidade: `${unidade}|${negocio}`,
         pontos: s.totalPorUnidadeMes[`${unidade}|${negocio}|${mesNum}`] ?? null,
         // Delta do EBITDA vs meta — critério de desempate e o que aparece na coluna/pódio.
-        ebitdaDelta: deltaFarolPacoteUnidadeMes(rowsDre, orcamentos, '232', unidade, Number(ano), mesNum, negocio),
+        ebitdaDelta: deltaFarolPacoteUnidadeMes(rowsDre, orcamentos, '233', unidade, Number(ano), mesNum, negocio),
         rank: null as number | null,
       }))
       return { label: s.label, ranking: atribuirRankComDesempate(base, l => l.pontos, l => l.ebitdaDelta) }

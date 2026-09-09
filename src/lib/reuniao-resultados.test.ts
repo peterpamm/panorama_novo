@@ -156,8 +156,8 @@ describe('naturezaEFormatoAutomaticos', () => {
   })
 
   it('farol_pacote deriva a natureza do PACOTES e formato é sempre percentual', () => {
-    expect(naturezaEFormatoAutomaticos('farol_pacote', '157')).toEqual({ natureza: 'custo', formato: 'percentual' })
-    expect(naturezaEFormatoAutomaticos('farol_pacote', '232')).toEqual({ natureza: 'performance', formato: 'percentual' })
+    expect(naturezaEFormatoAutomaticos('farol_pacote', '158')).toEqual({ natureza: 'custo', formato: 'percentual' })
+    expect(naturezaEFormatoAutomaticos('farol_pacote', '233')).toEqual({ natureza: 'performance', formato: 'percentual' })
   })
 
   it('farol_pacote com chave desconhecida retorna null', () => {

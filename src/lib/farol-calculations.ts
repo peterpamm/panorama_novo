@@ -310,6 +310,19 @@ export function mesEntradaNoAno(dataEntrada: string | null, ano: number): number
 }
 
 /**
+ * Quantos meses do `ano` a unidade esteve ativa na LOG20 — usado pra dividir
+ * uma meta anual (Meta de Perdas, Redução de Custos) só pelos meses em que
+ * ela existia, em vez de sempre por 12 (ex: unidade que entrou em maio:
+ * 12 − 5 + 1 = 8 meses). Sem `dataEntrada` (unidade antiga) ou unidade que
+ * nem existia nesse ano (`mesEntradaNoAno` null — sem base pra estimar) cai
+ * no padrão cheio de 12.
+ */
+export function mesesAtivosNoAno(dataEntrada: string | null, ano: number): number {
+  const mesEntrada = mesEntradaNoAno(dataEntrada, ano)
+  return mesEntrada === null ? 12 : 12 - mesEntrada + 1
+}
+
+/**
  * Soma do REAL no `ano` informado pra um conjunto de `meses`, ajustando pra
  * `dataEntrada` da unidade: meses anteriores à entrada (unidade ainda não
  * existia) usam a média mensal do período em que ela já operava nesse mesmo

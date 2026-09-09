@@ -13,7 +13,7 @@ interface Props {
   titulo: string
   /** Chave do indicador em `metas_perdas_indicadores`/`INDICADORES_PERDAS` (ex: 'vales', 'multas'). */
   indicador: IndicadorKey
-  /** Prefixos de conta do indicador (ex: Vales = ['051','052'], Multas = ['137','222']). */
+  /** Prefixos de conta do indicador (ex: Vales = ['052','053'], Multas = ['138','223']). */
   contas: readonly string[]
   /** Linhas do ano selecionado, de todas as unidades — sem filtro de negócio (indicadores de Perdas são sempre CONS, ver painel-perdas-calculations.ts). */
   rowsAnoTodosNegocios: DreLongoRow[]

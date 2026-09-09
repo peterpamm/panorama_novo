@@ -282,7 +282,7 @@ export function SdgFinanceiroPage() {
             )}
             {slideIdx === 1 && (
               <SlideIndicador
-                codigo="157"
+                codigo="158"
                 rowsAno={rowsAno}
                 orcamentoRows={orcamentoRows}
                 unidade={selUnidade}
@@ -310,7 +310,7 @@ export function SdgFinanceiroPage() {
             {slideIdx === 3 && (
               <SlidePerdaDre
                 titulo="Vales"
-                contas={['051', '052']}
+                contas={['052', '053']}
                 rowsTodosAnos={rowsNegocio}
                 unidadeSel={selUnidade}
                 unidades={unidades}
@@ -322,8 +322,8 @@ export function SdgFinanceiroPage() {
             )}
             {slideIdx === 4 && (
               <SlidePerdaDre
-                titulo="051 Vales Financeiros"
-                contas={['051']}
+                titulo="052 Vales Financeiros"
+                contas={['052']}
                 rowsTodosAnos={rowsNegocio}
                 unidadeSel={selUnidade}
                 unidades={unidades}
@@ -335,8 +335,8 @@ export function SdgFinanceiroPage() {
             )}
             {slideIdx === 5 && (
               <SlidePerdaDre
-                titulo="052 Vales Físicos"
-                contas={['052']}
+                titulo="053 Vales Físicos"
+                contas={['053']}
                 rowsTodosAnos={rowsNegocio}
                 unidadeSel={selUnidade}
                 unidades={unidades}
@@ -381,7 +381,7 @@ export function SdgFinanceiroPage() {
             {slideIdx === 9 && (
               <SlidePerdaDre
                 titulo="Multas"
-                contas={['137', '222']}
+                contas={['138', '223']}
                 rowsTodosAnos={rowsNegocio}
                 unidadeSel={selUnidade}
                 unidades={unidades}

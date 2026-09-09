@@ -185,14 +185,14 @@ export function AcompanhamentoFrotaTab() {
       const negocio = negocioDreFrotaT1(unidade.codigo, unidades)
       const rowsMes = rowsDre.filter(r => r.unidade === unidade.codigo && r.negocio === negocio && r.tipo_periodo === 'MENSAL' && r.ano === ano && r.mes === mes)
       if (rowsMes.length === 0) return null
-      return avrPorPrefixo(normalizarParaCalculo(rowsMes), ['113'])
+      return avrPorPrefixo(normalizarParaCalculo(rowsMes), ['114'])
     }
     return resultadosT1.find(r => r.unidade === unidade.codigo && r.ano === ano && r.mes === mes)?.valor ?? null
   }
   function metaDoMesT1(unidade: Unidade, mes: number): number | undefined {
     if (indT1.fonte === 'dre') {
       const negocio = negocioDreFrotaT1(unidade.codigo, unidades)
-      return buscarMetaOrcamento(orcamentos, { unidade: unidade.codigo, negocio, ano, codigo: '113', mes }) ?? undefined
+      return buscarMetaOrcamento(orcamentos, { unidade: unidade.codigo, negocio, ano, codigo: '114', mes }) ?? undefined
     }
     return metaT1 ? (indT1.formato === 'pct' ? metaT1.meta_pct : metaT1.meta_valor) : undefined
   }

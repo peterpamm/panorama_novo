@@ -10,7 +10,7 @@ import { parseNumeroPtBr } from '@/lib/utils'
  * Indicadores da RV de Empurrada com meta e peso únicos, em R$ — Indisponibilidade
  * (mesmo dado do Painel de Perdas que a Distribuição usa, meta própria de
  * Empurrada) e Avaria de Transporte (mesmo resultado do indicador Vales —
- * DRE contas 051/052 — mas com meta direta em R$, não % da Meta de Perdas
+ * DRE contas 052/053 — mas com meta direta em R$, não % da Meta de Perdas
  * anual como Distribuição/Financeiro usam). Mesmo padrão do
  * DescontosFrotaMetaCard, na mesma caixa pra economizar espaço.
  */

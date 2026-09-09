@@ -127,8 +127,8 @@ export function ReuniaoResumoGeralPage() {
             pontos: s.totalPorUnidadeMes[`${linha.unidade}|${negocioBusca}|${m}`] ?? null,
           }
         })
-        const ebitdaAvr = valorFarolPacoteUnidadeMes(rowsDre, '232', linha.unidade, Number(ano), m, 'CONS')
-        const ebitdaMeta = buscarMetaOrcamento(orcamentoRows, { unidade: linha.unidade, negocio: 'CONS', ano: Number(ano), codigo: '232', mes: m })
+        const ebitdaAvr = valorFarolPacoteUnidadeMes(rowsDre, '233', linha.unidade, Number(ano), m, 'CONS')
+        const ebitdaMeta = buscarMetaOrcamento(orcamentoRows, { unidade: linha.unidade, negocio: 'CONS', ano: Number(ano), codigo: '233', mes: m })
         mapa[`${linha.unidade}|${linha.negocio}|${m}`] = resolverResumoMesUnidade({
           contribuicoesSetores,
           ebitdaAvr,

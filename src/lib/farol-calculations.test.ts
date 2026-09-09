@@ -14,6 +14,7 @@ import {
   calcularSerieCaptura,
   calcularSerieCapturaReducaoCustos,
   calcularSerieReducaoCustos,
+  mesesAtivosNoAno,
   metaPorPrefixoAvo,
   normalizarParaCalculo,
   somaRealAnoAnteriorComMedia,
@@ -42,17 +43,17 @@ function linha(
 const JAN_MENSAL: DreLongoRow[] = [
   linha('002', 1, 'MENSAL', 1258969.50, 1252522.80, -6446.70, 100.00),
   linha('021', 1, 'MENSAL', -975993.99, -974827.03, 1166.96, -77.83),
-  linha('157', 1, 'MENSAL', -108149.49, -108118.20, 31.29, -8.63),
-  linha('232', 1, 'MENSAL', 161786.65, 148470.12, -13316.53, 11.85),
-  linha('275', 1, 'MENSAL', -10694.47, 77668.03, 88362.50, 6.20),
-  linha('035', 1, 'MENSAL', -242661.09, -242715.34, -54.25, -19.38),
-  linha('160', 1, 'MENSAL', -55661.91, -55200.21, 461.70, -4.41),
+  linha('158', 1, 'MENSAL', -108149.49, -108118.20, 31.29, -8.63),
+  linha('233', 1, 'MENSAL', 161786.65, 148470.12, -13316.53, 11.85),
+  linha('276', 1, 'MENSAL', -10694.47, 77668.03, 88362.50, 6.20),
+  linha('036', 1, 'MENSAL', -242661.09, -242715.34, -54.25, -19.38),
+  linha('161', 1, 'MENSAL', -55661.91, -55200.21, 461.70, -4.41),
 ]
 
 const TOTAL_ACUMULADO: DreLongoRow[] = [
   linha('002', 11, 'ACUMULADO_ANO', 13133781.79, 13285586.90, 151805.11, 100.00),
   linha('021', 11, 'ACUMULADO_ANO', -9989706.37, -9690320.27, 299386.10, -72.94),
-  linha('157', 11, 'ACUMULADO_ANO', -1202261.60, -1174320.12, 27941.48, -8.84),
+  linha('158', 11, 'ACUMULADO_ANO', -1202261.60, -1174320.12, 27941.48, -8.84),
 ]
 
 describe('normalizarParaCalculo', () => {
@@ -64,31 +65,31 @@ describe('normalizarParaCalculo', () => {
     expect(custo021.avr).toBeCloseTo(77.83, 2)   // invertido: -(-77.83)
   })
 
-  it('não inverte o AVR de EBITDA (232) e Geração de Caixa (275)', () => {
+  it('não inverte o AVR de EBITDA (233) e Geração de Caixa (276)', () => {
     const calc = normalizarParaCalculo(JAN_MENSAL)
-    const ebitda = calc.find(r => r.conta_codigo === '232')!
-    const geracaoCaixa = calc.find(r => r.conta_codigo === '275')!
+    const ebitda = calc.find(r => r.conta_codigo === '233')!
+    const geracaoCaixa = calc.find(r => r.conta_codigo === '276')!
     expect(ebitda.avr).toBeCloseTo(11.85, 2)
     expect(geracaoCaixa.avr).toBeCloseTo(6.20, 2)
   })
 })
 
 describe('avrPorPrefixo', () => {
-  it('prefixo único (232, EBITDA) retorna o próprio AVR da conta', () => {
+  it('prefixo único (233, EBITDA) retorna o próprio AVR da conta', () => {
     const calc = normalizarParaCalculo(JAN_MENSAL)
-    expect(avrPorPrefixo(calc, '232')).toBeCloseTo(11.85, 2)
+    expect(avrPorPrefixo(calc, '233')).toBeCloseTo(11.85, 2)
   })
 
-  it('múltiplos prefixos (pacote 900 = 021+157) retorna soma do REAL / receita(002) * 100', () => {
+  it('múltiplos prefixos (pacote 900 = 021+158) retorna soma do REAL / receita(002) * 100', () => {
     const calc = normalizarParaCalculo(JAN_MENSAL)
     // ground truth calculado em Python: (974827.03+108118.20)/1252522.80*100
-    expect(avrPorPrefixo(calc, ['021', '157'])).toBeCloseTo(86.46111911096548, 6)
+    expect(avrPorPrefixo(calc, ['021', '158'])).toBeCloseTo(86.46111911096548, 6)
   })
 
   it('mesmo pacote no acumulado do ano (TOTAL) usa as linhas ACUMULADO_ANO', () => {
     const calc = normalizarParaCalculo(TOTAL_ACUMULADO)
     // ground truth: (9690320.27+1174320.12)/13285586.90*100
-    expect(avrPorPrefixo(calc, ['021', '157'])).toBeCloseTo(81.77764724868874, 6)
+    expect(avrPorPrefixo(calc, ['021', '158'])).toBeCloseTo(81.77764724868874, 6)
   })
 
   it('retorna 0 quando não há REAL para o prefixo', () => {
@@ -106,7 +107,7 @@ describe('calcularReceita', () => {
 describe('calcularImpactoFinanceiro', () => {
   it('custo: impacto negativo quando o AVR realizado supera a meta (gastou mais que o orçado)', () => {
     const calc = normalizarParaCalculo(JAN_MENSAL)
-    const avr900 = avrPorPrefixo(calc, ['021', '157']) // 86.46%
+    const avr900 = avrPorPrefixo(calc, ['021', '158']) // 86.46%
     const receita = calcularReceita(calc)
     const impacto = calcularImpactoFinanceiro(avr900, 85, receita, 'custo')
     expect(impacto).toBeCloseTo(-18300.85, 1) // ground truth Python: ((85-86.461119)/100)*1252522.80
@@ -158,7 +159,7 @@ describe('calcularSemaforo', () => {
 describe('calcularEstouroZero', () => {
   it('soma real/remun em magnitude e dif com o sinal original (Salários: 035+160, janeiro)', () => {
     const calc = normalizarParaCalculo(JAN_MENSAL)
-    const r = calcularEstouroZero(calc, ['035', '160'])
+    const r = calcularEstouroZero(calc, ['036', '161'])
     expect(r.real).toBeCloseTo(297915.55, 2)
     expect(r.remun).toBeCloseTo(298323.00, 2)
     expect(r.impacto).toBeCloseTo(407.45, 2)
@@ -400,7 +401,7 @@ describe('normalizarParaCalculo (avo)', () => {
   })
 
   it('não inverte o avo de EBITDA/Geração de Caixa', () => {
-    const calc = normalizarParaCalculo([linha('232', 1, 'MENSAL', 161786.65, 148470.12, -13316.53, 11.85, 15.00)])
+    const calc = normalizarParaCalculo([linha('233', 1, 'MENSAL', 161786.65, 148470.12, -13316.53, 11.85, 15.00)])
     expect(calc[0].avo).toBeCloseTo(15.00, 2)
   })
 
@@ -416,12 +417,12 @@ describe('metaPorPrefixoAvo', () => {
     expect(metaPorPrefixoAvo(calc, '021')).toBeCloseTo(85.00, 2)
   })
 
-  it('múltiplos prefixos (pacote 900 = 021+157): soma direta dos avo de cada conta', () => {
+  it('múltiplos prefixos (pacote 900 = 021+158): soma direta dos avo de cada conta', () => {
     const calc = normalizarParaCalculo([
       linha('021', 1, 'MENSAL', 0, 0, 0, 0, -85.00),
-      linha('157', 1, 'MENSAL', 0, 0, 0, 0, -8.50),
+      linha('158', 1, 'MENSAL', 0, 0, 0, 0, -8.50),
     ])
-    expect(metaPorPrefixoAvo(calc, ['021', '157'])).toBeCloseTo(93.50, 2)
+    expect(metaPorPrefixoAvo(calc, ['021', '158'])).toBeCloseTo(93.50, 2)
   })
 
   it('retorna null quando nenhuma conta do pacote tem avo no período', () => {
@@ -432,9 +433,9 @@ describe('metaPorPrefixoAvo', () => {
   it('soma só as contas que têm avo, ignorando as que não têm', () => {
     const calc = normalizarParaCalculo([
       linha('021', 1, 'MENSAL', 0, 0, 0, 0, -85.00),
-      linha('157', 1, 'MENSAL', 0, 0, 0, 0), // sem avo
+      linha('158', 1, 'MENSAL', 0, 0, 0, 0), // sem avo
     ])
-    expect(metaPorPrefixoAvo(calc, ['021', '157'])).toBeCloseTo(85.00, 2)
+    expect(metaPorPrefixoAvo(calc, ['021', '158'])).toBeCloseTo(85.00, 2)
   })
 })
 
@@ -620,5 +621,31 @@ describe('calcularEvolucaoReducaoCustos', () => {
     ])
     expect(semIncremento.meses[0].resultado.realAnterior).toBeCloseTo(5000, 2)
     expect(comIncremento.meses[0].resultado.realAnterior).toBeCloseTo(6000, 2) // +1000 de incremento (média jan, antes da entrada em mar)
+  })
+})
+
+describe('mesesAtivosNoAno', () => {
+  it('sem data_entrada (unidade antiga) sempre 12', () => {
+    expect(mesesAtivosNoAno(null, 2026)).toBe(12)
+  })
+
+  it('entrou em maio de 2026: 12 − 5 + 1 = 8 meses ativos', () => {
+    expect(mesesAtivosNoAno('2026-05-12', 2026)).toBe(8)
+  })
+
+  it('entrou em janeiro: 12 meses ativos, igual a não ter data_entrada', () => {
+    expect(mesesAtivosNoAno('2026-01-01', 2026)).toBe(12)
+  })
+
+  it('entrou em dezembro: só 1 mês ativo', () => {
+    expect(mesesAtivosNoAno('2026-12-15', 2026)).toBe(1)
+  })
+
+  it('entrada em ano anterior ao consultado: unidade já operava o ano inteiro, 12 meses', () => {
+    expect(mesesAtivosNoAno('2025-05-12', 2026)).toBe(12)
+  })
+
+  it('unidade que nem existia ainda nesse ano (entrada é no ano seguinte): cai no padrão de 12', () => {
+    expect(mesesAtivosNoAno('2027-01-01', 2026)).toBe(12)
   })
 })

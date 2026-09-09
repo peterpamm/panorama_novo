@@ -48,7 +48,7 @@ export function AcompanhamentoFinanceiroTab() {
     ? (ind.tipo === 'avr'
       ? `${verAno} · AVR do mês vs meta do Orçamento · quanto menor melhor · verde = meta batida, vermelho = meta perdida`
       : `${verAno} · dispersão do mês (coluna diferença do DRE, contas ${ind.prefixos.join(' + ')}) · verde = sem estouro (≥ 0)`)
-    : `${verAno} · dispersão do mês (contas 051/052, DRE consolidado) vs % da Meta de Perdas de Vales`
+    : `${verAno} · dispersão do mês (contas 052/053, DRE consolidado) vs % da Meta de Perdas de Vales`
 
   return (
     <div className="space-y-4">

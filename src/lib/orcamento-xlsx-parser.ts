@@ -99,6 +99,12 @@ function parseCodigosInputs(matriz: unknown[][]): Map<string, string> {
  * lidos pelo subcabeçalho), mas com sub-colunas ORCADO/AV/AH. Considera os
  * blocos de mês (Jan-Dez) e o bloco TOTAL final (a meta do ano, mes=0) —
  * ignora só o bloco anual "Ano: XXXX" (comparação com o ano anterior, sem AV/AH).
+ *
+ * Unidades novas (onboardadas com o orçamento já na numeração nativa do DRE
+ * — ver `usaNumeracaoDreNativa` em orcamento-farol.ts) vêm num template com
+ * sub-colunas ORÇADO/REALIZADO/AVO (%)/AHO (%) em vez de ORÇADO/AV/AH — mais
+ * uma coluna (REALIZADO, ignorada aqui, não é usada em nenhum cálculo) e AV/AH
+ * renomeados pra AVO/AHO. Mesmo valor, só nome diferente — aceita os dois.
  */
 function parseAbaOrcamento(raw: unknown[][]): ParsedOrcamentoConta[] {
   const headerRowIdx = raw.findIndex(row => toStr(row?.[0]).toUpperCase() === 'CONTA')
@@ -123,8 +129,11 @@ function parseAbaOrcamento(raw: unknown[][]): ParsedOrcamentoConta[] {
     for (let c = col; c < fimExclusivo; c++) {
       const sub = normalizarCabecalho(subHeaderRow[c])
       if (sub === 'ORCADO') colOrcado = c
-      else if (sub === 'AV') colAv = c
-      else if (sub === 'AH') colAh = c
+      // 'AV'/'AH' (template antigo) ou 'AVO (%)'/'AHO (%)' (unidades novas,
+      // numeração nativa do DRE) — mesmo dado, nome diferente. REALIZADO
+      // (só existe no template novo) não é usado em nada, ignorado.
+      else if (sub === 'AV' || sub.startsWith('AVO')) colAv = c
+      else if (sub === 'AH' || sub.startsWith('AHO')) colAh = c
     }
     return { mes, colOrcado, colAv, colAh }
   })

@@ -226,7 +226,7 @@ export function SdgCorporativoPage() {
             {slideIdx === 1 && (
               <SlideIndicadorFarol
                 titulo="Geração de Caixa"
-                codigo="275"
+                codigo="276"
                 rowsAno={rowsAno}
                 orcamentoAno={orcamentoAno}
                 unidades={unidades}
@@ -238,7 +238,7 @@ export function SdgCorporativoPage() {
             {slideIdx === 2 && (
               <SlideIndicadorFarol
                 titulo="EBITDA"
-                codigo="232"
+                codigo="233"
                 rowsAno={rowsAno}
                 orcamentoAno={orcamentoAno}
                 unidades={unidades}
@@ -276,7 +276,7 @@ export function SdgCorporativoPage() {
               <SlideIndicadorPerdas
                 titulo="Vales"
                 indicador="vales"
-                contas={['051', '052']}
+                contas={['052', '053']}
                 rowsAnoTodosNegocios={rowsAnoTodosNegocios}
                 unidades={unidades}
                 ano={selAno}
@@ -287,7 +287,7 @@ export function SdgCorporativoPage() {
               <SlideIndicadorPerdas
                 titulo="Multas"
                 indicador="multas"
-                contas={['137', '222']}
+                contas={['138', '223']}
                 rowsAnoTodosNegocios={rowsAnoTodosNegocios}
                 unidades={unidades}
                 ano={selAno}

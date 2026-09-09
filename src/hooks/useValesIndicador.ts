@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useUnidades } from '@/hooks/useUnidades'
 import { useDreLongoTodasUnidades } from '@/hooks/useDreLongoTodasUnidades'
+import { mesesAtivosNoAno } from '@/lib/farol-calculations'
 import type { CelulaIndicador, LinhaIndicador } from '@/components/rv/TabelaIndicadorGenerica'
 import type { MetaPerdaIndicador } from '@/types'
 
-const PREFIXOS_VALES = ['051', '052']
+const PREFIXOS_VALES = ['052', '053']
 
 interface ValesMeta {
   peso: number
@@ -17,7 +18,7 @@ function fmtValor(v: number): string {
 }
 
 /**
- * Indicador Vales — dispersão do DRE consolidado (contas 051/052, mesma conta
+ * Indicador Vales — dispersão do DRE consolidado (contas 052/053, mesma conta
  * do indicador Vales do Painel de Perdas) vs % da Meta de Perdas de Vales
  * (metas_perdas_indicadores, anual/12) — mesma regra e mesmos números usados
  * na apuração da RV (RvApuracao, prop valesPerdasTabela). Reaproveitado pelo
@@ -27,6 +28,7 @@ function fmtValor(v: number): string {
 export function useValesIndicador(tabelaMeta: 'rv_vales_distribuicao_meta' | 'rv_vales_financeiro_meta', ano: number | null) {
   const { unidades } = useUnidades()
   const nomesUnidades = useMemo(() => new Map(unidades.map(u => [u.codigo, u.nome])), [unidades])
+  const dataEntradaPorUnidade = useMemo(() => new Map(unidades.map(u => [u.codigo, u.data_entrada])), [unidades])
   const { rows: rowsDre, loading: loadingDre } = useDreLongoTodasUnidades()
 
   const [metasPerdasVales, setMetasPerdasVales] = useState<MetaPerdaIndicador[]>([])
@@ -68,6 +70,7 @@ export function useValesIndicador(tabelaMeta: 'rv_vales_distribuicao_meta' | 'rv
     return codigosUnidades.map(unidade => {
       const rowsUnidade = mensal.filter(r => r.unidade === unidade)
       const metaPerdas = metasPerdasVales.find(m => m.unidade === unidade && m.ano === ano)
+      const mesesAtivos = mesesAtivosNoAno(dataEntradaPorUnidade.get(unidade) ?? null, ano)
       const meses: (CelulaIndicador | null)[] = Array.from({ length: 12 }, (_, i) => {
         const mes = i + 1
         const rowsMes = rowsUnidade.filter(r => r.mes === mes)
@@ -75,7 +78,7 @@ export function useValesIndicador(tabelaMeta: 'rv_vales_distribuicao_meta' | 'rv
         const resultado = rowsMes
           .filter(r => PREFIXOS_VALES.some(p => r.conta_codigo.startsWith(p)))
           .reduce((acc, r) => acc + (r.diferenca ?? 0), 0)
-        const meta = metaPerdas && valesMeta ? (metaPerdas.meta_anual / 12) * (valesMeta.pct_meta / 100) : null
+        const meta = metaPerdas && valesMeta ? (metaPerdas.meta_anual / mesesAtivos) * (valesMeta.pct_meta / 100) : null
         return {
           texto: fmtValor(resultado),
           tooltip: meta !== null ? `Meta: R$ ${fmtValor(meta)}` : 'Sem Meta de Perdas de Vales cadastrada',
@@ -84,7 +87,7 @@ export function useValesIndicador(tabelaMeta: 'rv_vales_distribuicao_meta' | 'rv
       })
       return { key: unidade, nome: nomesUnidades.get(unidade) ?? unidade, destaque: unidade === 'AMBEV', meses }
     })
-  }, [rowsDre, metasPerdasVales, valesMeta, ano, nomesUnidades])
+  }, [rowsDre, metasPerdasVales, valesMeta, ano, nomesUnidades, dataEntradaPorUnidade])
 
   return { linhas, carregando: loadingDre || carregandoMeta, anosDisponiveis }
 }

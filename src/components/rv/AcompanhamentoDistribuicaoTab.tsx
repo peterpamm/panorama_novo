@@ -315,7 +315,7 @@ export function AcompanhamentoDistribuicaoTab() {
       default:
         return {
           linhas: linhasVales, carregando: carregandoVales, titulo: 'Vales',
-          subtitulo: `${verAno} · dispersão do mês (contas 051/052, DRE consolidado) vs % da Meta de Perdas de Vales`,
+          subtitulo: `${verAno} · dispersão do mês (contas 052/053, DRE consolidado) vs % da Meta de Perdas de Vales`,
           semDados: 'Sem dados do DRE pra esse ano.',
         }
     }

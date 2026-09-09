@@ -29,7 +29,7 @@ const ANO_ATUAL = new Date().getFullYear()
  * de cada gerente são ligados ao próprio negócio (ver `unidadesCardsFarol`).
  *
  * Ligados a dado real (acumulado do ano — YTD): Gastos Totais e EBITDA
- * (DRE, pacotes '900'/'232', igual o resto do app — EBITDA Global é sempre
+ * (DRE, pacotes '900'/'233', igual o resto do app — EBITDA Global é sempre
  * o resultado da AMBEV consolidada, mesmo valor em todo card), Acidentes
  * TRI (registro manual, RV de Segurança > Importação > TRI — meta sempre 0),
  * Pacote de Perdas (% de perdas sobre faturamento, mesmo cálculo do Painel
@@ -48,13 +48,14 @@ export function FarolGerentesPage() {
   } = useFarolGerentesDados(unidades)
 
   const unidadesOperacionais = useMemo(() => unidades.filter(u => u.codigo !== 'AMBEV'), [unidades])
+  const dataEntradaPorUnidade = useMemo(() => new Map(unidades.map(u => [u.codigo, u.data_entrada])), [unidades])
 
   const mapaGastos = useMemo(
     () => calcularIndicadorPorNegocio(rows, orcamentos, '900', ANO_ATUAL),
     [rows, orcamentos],
   )
   const mapaEbitda = useMemo(
-    () => calcularIndicadorPorNegocio(rows, orcamentos, '232', ANO_ATUAL),
+    () => calcularIndicadorPorNegocio(rows, orcamentos, '233', ANO_ATUAL),
     [rows, orcamentos],
   )
   const mapaTri = useMemo(
@@ -62,8 +63,8 @@ export function FarolGerentesPage() {
     [resultadosTri, unidades],
   )
   const mapaPerdas = useMemo(
-    () => calcularPacotePerdasPorUnidade(rows, rowsAux, metasPerdasIndicadores, ANO_ATUAL),
-    [rows, rowsAux, metasPerdasIndicadores],
+    () => calcularPacotePerdasPorUnidade(rows, rowsAux, metasPerdasIndicadores, ANO_ATUAL, dataEntradaPorUnidade),
+    [rows, rowsAux, metasPerdasIndicadores, dataEntradaPorUnidade],
   )
   const mapaDispRota = useMemo(
     () => new Map(disponibilidadeRota.map(d => [d.unidade, d])),

@@ -3,43 +3,50 @@ import type { PacoteInfo } from '@/types'
 /**
  * Espelha o dict PACOTES de dashboard/pages/1_Farol_de_Metas.py (linha ~549) no
  * Panorama Financeiro original. Mantido 1:1, inclusive a inconsistência conhecida
- * do código '159', que usa prefixos: ['158'] (igual ao pacote '158') no Python —
- * não corrigido aqui de propósito, para preservar paridade de cálculo.
+ * do código '160' (era '159'), que usa prefixos: ['159'] (igual ao pacote '159',
+ * era '158') no Python — não corrigido aqui de propósito, para preservar
+ * paridade de cálculo.
+ *
+ * Códigos atualizados em 09/2026 pro cutover da numeração nova do DRE (283
+ * contas — o GInfo inseriu a conta "GASTOS COM SALÁRIOS" logo após a 034,
+ * deslocando +1 tudo que já era ≥ 035). Ids e prefixos aqui são sempre a
+ * numeração NOVA a partir de agora; ver `ULTIMO_ANO_ORCAMENTO_ESTRUTURA_ANTIGA`
+ * em orcamento-farol.ts pra tradução reversa usada só no Orçamento de 2026.
  */
 export const PACOTES: Record<string, PacoteInfo> = {
-  '232': { nome: 'EBITDA',                     natureza: 'performance', prefixos: ['232'] },
-  '275': { nome: 'Geração de Caixa',            natureza: 'performance', prefixos: ['275'] },
-  '900': { nome: 'Gastos Totais',               natureza: 'custo',       prefixos: ['021', '157'] },
+  '233': { nome: 'EBITDA',                     natureza: 'performance', prefixos: ['233'] },
+  '276': { nome: 'Geração de Caixa',            natureza: 'performance', prefixos: ['276'] },
+  '900': { nome: 'Gastos Totais',               natureza: 'custo',       prefixos: ['021', '158'] },
   '021': { nome: 'Custo Operacional',           natureza: 'custo',       prefixos: ['021'] },
-  '158': { nome: 'Pacote de Gente',             natureza: 'custo',       prefixos: ['158', '033'] },
+  '159': { nome: 'Pacote de Gente',             natureza: 'custo',       prefixos: ['159', '033'] },
   '033': { nome: 'Custo com Pessoal',           natureza: 'custo',       prefixos: ['033'] },
-  '159': { nome: 'Despesa com Pessoal ADM',     natureza: 'custo',       prefixos: ['158'] }, // [sic] igual ao Python original
-  '190': { nome: 'Despesas ADM Gerais',         natureza: 'custo',       prefixos: ['190'] },
-  '217': { nome: 'Despesas Frota Leve',         natureza: 'custo',       prefixos: ['217'] },
-  '218': { nome: 'Manutenção Frota Leve',       natureza: 'custo',       prefixos: ['218'] },
-  '113': { nome: 'Pacote de Frota',             natureza: 'custo',       prefixos: ['113'] },
-  '117': { nome: 'Manutenção',                  natureza: 'custo',       prefixos: ['117'] },
-  '131': { nome: 'Pneus',                       natureza: 'custo',       prefixos: ['131'] },
-  '115': { nome: 'Combustíveis',                natureza: 'custo',       prefixos: ['115'] },
-  '157': { nome: 'Despesa Administrativa',      natureza: 'custo',       prefixos: ['157'] },
-  '073': { nome: 'Pacote Segurança',            natureza: 'custo',       prefixos: ['073'] },
-  '074': { nome: "EPI's",                       natureza: 'custo',       prefixos: ['074'] },
-  '075': { nome: 'Uniformes',                   natureza: 'custo',       prefixos: ['075'] },
+  '160': { nome: 'Despesa com Pessoal ADM',     natureza: 'custo',       prefixos: ['159'] }, // [sic] igual ao Python original
+  '191': { nome: 'Despesas ADM Gerais',         natureza: 'custo',       prefixos: ['191'] },
+  '218': { nome: 'Despesas Frota Leve',         natureza: 'custo',       prefixos: ['218'] },
+  '219': { nome: 'Manutenção Frota Leve',       natureza: 'custo',       prefixos: ['219'] },
+  '114': { nome: 'Pacote de Frota',             natureza: 'custo',       prefixos: ['114'] },
+  '118': { nome: 'Manutenção',                  natureza: 'custo',       prefixos: ['118'] },
+  '132': { nome: 'Pneus',                       natureza: 'custo',       prefixos: ['132'] },
+  '116': { nome: 'Combustíveis',                natureza: 'custo',       prefixos: ['116'] },
+  '158': { nome: 'Despesa Administrativa',      natureza: 'custo',       prefixos: ['158'] },
+  '074': { nome: 'Pacote Segurança',            natureza: 'custo',       prefixos: ['074'] },
+  '075': { nome: "EPI's",                       natureza: 'custo',       prefixos: ['075'] },
+  '076': { nome: 'Uniformes',                   natureza: 'custo',       prefixos: ['076'] },
 }
 
-export const PACOTES_RESUMO    = ['232', '275', '900', '021', '158', '113', '157', '073']
-export const PACOTES_GENTE     = ['158', '033', '159']
-export const PACOTES_FROTA     = ['113', '117', '131', '115']
-export const PACOTES_SEGURANCA = ['073', '074', '075']
-export const PACOTES_ADM       = ['159', '190', '217', '218']
+export const PACOTES_RESUMO    = ['233', '276', '900', '021', '159', '114', '158', '074']
+export const PACOTES_GENTE     = ['159', '033', '160']
+export const PACOTES_FROTA     = ['114', '118', '132', '116']
+export const PACOTES_SEGURANCA = ['074', '075', '076']
+export const PACOTES_ADM       = ['160', '191', '218', '219']
 
 /**
- * Contas totalizadoras da faixa da Despesa Administrativa (157–227) — cada
+ * Contas totalizadoras da faixa da Despesa Administrativa (158–228) — cada
  * uma é a soma de subcontas que já aparecem na própria faixa, então elas
  * ocupariam o topo do Top Contas repetindo o que está logo abaixo. Ficam de
  * fora do ranking (ver `topContasFaixa`, opção `excluir`).
  */
-export const CONTAS_TOTALIZADORAS_ADM = ['157', '158', '159', '162', '171', '183', '187', '190', '217']
+export const CONTAS_TOTALIZADORAS_ADM = ['158', '159', '160', '163', '172', '184', '188', '191', '218']
 
 /** Código da conta "Receita Líquida Operacional", usado como base de todo cálculo de % de faturamento e impacto financeiro. */
 export const CONTA_RECEITA = '002'
@@ -52,8 +59,8 @@ export const NOME_RECEITA = 'Receita Líquida Operacional'
  * pra natureza/prefixos) — mantido como lista separada porque é um recorte
  * diferente de PACOTES_RESUMO (usado no Farol).
  */
-export const RANKING_PERFORMANCE = ['232', '275']
-export const RANKING_CUSTOS = ['900', '021', '158', '113', '157', '074', '075']
+export const RANKING_PERFORMANCE = ['233', '276']
+export const RANKING_CUSTOS = ['900', '021', '159', '114', '158', '075', '076']
 
 /**
  * Contas cujo AVR (%) do GInfo NÃO é invertido ao normalizar (mantém o sinal
@@ -63,7 +70,7 @@ export const RANKING_CUSTOS = ['900', '021', '158', '113', '157', '074', '075']
  * exporta o AVR de custo com o mesmo sinal do REALIZADO (negativo), e o Farol
  * espera custo como percentual positivo (ex: "77,83% da receita").
  */
-export const CODIGOS_PERFORMANCE = ['232', '275']
+export const CODIGOS_PERFORMANCE = ['233', '276']
 
 /**
  * Código(s) de conta NO PRÓPRIO ORÇAMENTO (tabela `orcamentos` — numeração
@@ -75,6 +82,13 @@ export const CODIGOS_PERFORMANCE = ['232', '275']
  * problema porque a planilha tem linhas duplicadas (ex: "048 UNIFORMES" e
  * "051 UNIFORMES" são a mesma descrição, contas diferentes). Pacotes sem
  * entrada aqui continuam usando a tabela `metas` normalmente.
+ *
+ * IMPORTANTE (cutover 09/2026): as CHAVES aqui continuam sendo os ids
+ * ANTIGOS do pacote (pré-numeração nova do DRE), de propósito — o Orçamento
+ * de 2026 nunca vai ser re-numerado, então esse dict fica congelado na
+ * estrutura antiga. `buscarMetaOrcamento` (orcamento-farol.ts) traduz o id
+ * novo de volta pro antigo antes de indexar aqui, só pra `ano <=
+ * ULTIMO_ANO_ORCAMENTO_ESTRUTURA_ANTIGA`. Não atualizar essas chaves.
  */
 export const PACOTE_CONTA_ORCAMENTO: Record<string, string[]> = {
   '232': ['133'], // EBITDA
@@ -98,14 +112,40 @@ export const PACOTE_CONTA_ORCAMENTO: Record<string, string[]> = {
 }
 
 /**
- * Códigos de conta do orçamento realmente usados por algum pacote do Farol
- * (todos os valores de PACOTE_CONTA_ORCAMENTO) + a Receita Líquida
+ * Códigos-alvo de PACOTE_CONTA_ORCAMENTO (esquema bespoke, unidades antigas)
+ * deslocados +1 pro equivalente na aba TT (consolidado) das unidades novas
+ * — mesma regra de `paraCodigoTtDeslocado` em orcamento-farol.ts (mantida
+ * em sincronia manualmente, os dois são a mesma gambiarra temporária).
+ * Sem isso, os valores da aba TT dessas unidades (código já deslocado,
+ * ex: '134' em vez de '133') nunca apareceriam numa query filtrada por
+ * CONTAS_ORCAMENTO_USADAS — mesmo depois de buscarMetaOrcamento saber
+ * traduzir, a linha em si já teria sido cortada antes de chegar no cliente.
+ */
+const CONTAS_ORCAMENTO_USADAS_TT_DESLOCADO = Object.values(PACOTE_CONTA_ORCAMENTO)
+  .flat()
+  .map((codigo) => {
+    const n = Number(codigo)
+    return n >= 22 && n <= 155 ? String(n + 1).padStart(3, '0') : codigo
+  })
+
+/**
+ * Códigos de conta do orçamento realmente usados por algum pacote do Farol:
+ * todos os valores de PACOTE_CONTA_ORCAMENTO (esquema bespoke, unidades
+ * antigas) + seus equivalentes deslocados na aba TT das unidades novas
+ * (CONTAS_ORCAMENTO_USADAS_TT_DESLOCADO) + os prefixos de PACOTES (usados
+ * direto pelas abas RT/AR das unidades novas, que já vêm na numeração
+ * nativa do DRE — ver usaNumeracaoDreNativa) + a Receita Líquida
  * Operacional (denominador de qualquer AV/semestre). Usado pra recalcular
- * só o necessário em vez de todas as ~155 contas de cada aba — bem mais
- * rápido e mais leve pro Supabase.
+ * só o necessário em vez de todas as contas de cada aba — bem mais rápido e
+ * mais leve pro Supabase.
  */
 export const CONTAS_ORCAMENTO_USADAS = Array.from(
-  new Set([CONTA_RECEITA, ...Object.values(PACOTE_CONTA_ORCAMENTO).flat()]),
+  new Set([
+    CONTA_RECEITA,
+    ...Object.values(PACOTE_CONTA_ORCAMENTO).flat(),
+    ...CONTAS_ORCAMENTO_USADAS_TT_DESLOCADO,
+    ...Object.values(PACOTES).flatMap((p) => p.prefixos),
+  ]),
 )
 
 export const CORES_FAROL = {
@@ -117,8 +157,8 @@ export const CORES_FAROL = {
 
 /** Cards "Estouro Zero" da aba Gente — real não pode exceder remunerado. */
 export const ESTOURO_ZERO_CARDS = [
-  { nome: 'Salários',   prefixos: ['035', '160'] },
-  { nome: 'Benefícios', prefixos: ['055', '171'] },
+  { nome: 'Salários',   prefixos: ['036', '161'] },
+  { nome: 'Benefícios', prefixos: ['056', '172'] },
 ]
 
 /** Indicador de RV com origem no DRE — 'avr' compara com a meta do Farol; 'dispersao' usa a coluna DIFERENÇA (≥ 0 = bateu). */
@@ -140,23 +180,23 @@ export interface RvIndicadorDre {
  * O `id` é a chave do peso em rv_gente_pesos_dre.
  */
 export const RV_GENTE_DRE: RvIndicadorDre[] = [
-  { id: '158',        nome: 'Pacote de Gente',      tipo: 'avr',       prefixos: ['158', '033'] },
-  { id: 'SALARIOS',   nome: 'Salários',             tipo: 'dispersao', prefixos: ['035', '160'] },
-  { id: 'BENEFICIOS', nome: 'Pacote de Benefícios', tipo: 'dispersao', prefixos: ['055', '171'] },
+  { id: '159',        nome: 'Pacote de Gente',      tipo: 'avr',       prefixos: ['159', '033'] },
+  { id: 'SALARIOS',   nome: 'Salários',             tipo: 'dispersao', prefixos: ['036', '161'] },
+  { id: 'BENEFICIOS', nome: 'Pacote de Benefícios', tipo: 'dispersao', prefixos: ['056', '172'] },
 ]
 
 /**
  * Indicadores do setor financeiro — todos com origem no DRE, sem importação
  * de metas (AVR usa a meta do Farol; dispersão usa as contas do Painel de
  * Perdas). O `id` é a chave do peso em rv_financeiro_pesos_dre. Vales (contas
- * 051/052) não entra aqui — vira o indicador `valesPerdasTabela` do
+ * 052/053) não entra aqui — vira o indicador `valesPerdasTabela` do
  * RvApuracao (mesma regra da Distribuição: dispersão vs % da Meta de Perdas
  * de Vales, não mais ≥ 0).
  */
 export const RV_FINANCEIRO_DRE: RvIndicadorDre[] = [
-  { id: '157',    nome: 'Despesa Administrativa', tipo: 'avr',       prefixos: ['157'] },
+  { id: '158',    nome: 'Despesa Administrativa', tipo: 'avr',       prefixos: ['158'] },
   { id: '021',    nome: 'Custo Operacional',      tipo: 'avr',       prefixos: ['021'] },
-  { id: 'MULTAS', nome: 'Multas',                 tipo: 'dispersao', prefixos: ['137', '222'] },
+  { id: 'MULTAS', nome: 'Multas',                 tipo: 'dispersao', prefixos: ['138', '223'] },
 ]
 
 /**
@@ -166,38 +206,38 @@ export const RV_FINANCEIRO_DRE: RvIndicadorDre[] = [
  * rv_frota_pesos_dre.
  */
 export const RV_FROTA_DRE: RvIndicadorDre[] = [
-  { id: '117', nome: 'Manutenção',            tipo: 'avr', prefixos: ['117'] },
-  { id: '131', nome: 'Pneus',                 tipo: 'avr', prefixos: ['131'] },
-  { id: '115', nome: 'Diesel (Combustíveis)', tipo: 'avr', prefixos: ['115'] },
+  { id: '118', nome: 'Manutenção',            tipo: 'avr', prefixos: ['118'] },
+  { id: '132', nome: 'Pneus',                 tipo: 'avr', prefixos: ['132'] },
+  { id: '116', nome: 'Diesel (Combustíveis)', tipo: 'avr', prefixos: ['116'] },
 ]
 
 /**
- * Custos Gerais (DRE 113, "Pacote de Frota" — já mapeado em PACOTES/
+ * Custos Gerais (DRE 114, "Pacote de Frota" — já mapeado em PACOTES/
  * PACOTE_CONTA_ORCAMENTO) — mesmo mecanismo dos indicadores de RV_FROTA_DRE
  * (AVR vs meta do Orçamento), mas fora do array acima de propósito: só as 3
  * lideranças T1 de Frota participam (Estância, Ponta Grossa e CDR Bahia — ver
  * `OPERACOES_FROTA_T1`, rv-frota-t1.ts), não a frota inteira, então não pode
  * entrar no loop genérico de `indicadoresDre` (que aplica pra toda unidade).
- * O peso é cadastrado na mesma tabela `rv_frota_pesos_dre` (id '113') — só o
+ * O peso é cadastrado na mesma tabela `rv_frota_pesos_dre` (id '114') — só o
  * card de cadastro (MetasFrotaTab) mostra os dois juntos, o cálculo em
  * useRvApuracao.ts trata esse `id` à parte, com restrição de unidade.
  */
-export const CUSTOS_GERAIS_FROTA_DRE: RvIndicadorDre = { id: '113', nome: 'Custos Gerais Frota', tipo: 'avr', prefixos: ['113'] }
+export const CUSTOS_GERAIS_FROTA_DRE: RvIndicadorDre = { id: '114', nome: 'Custos Gerais Frota', tipo: 'avr', prefixos: ['114'] }
 
 /**
- * Indicadores de segurança com origem no DRE — EPI's (074) e Uniformes (075),
+ * Indicadores de segurança com origem no DRE — EPI's (075) e Uniformes (076),
  * os mesmos acompanhados no Farol de Metas, por AVR mensal vs meta do Farol.
  * O `id` é a chave do peso em rv_seguranca_pesos_dre.
  */
 export const RV_SEGURANCA_DRE: RvIndicadorDre[] = [
-  { id: '074', nome: "EPI's",     tipo: 'avr', prefixos: ['074'] },
-  { id: '075', nome: 'Uniformes', tipo: 'avr', prefixos: ['075'] },
+  { id: '075', nome: "EPI's",     tipo: 'avr', prefixos: ['075'] },
+  { id: '076', nome: 'Uniformes', tipo: 'avr', prefixos: ['076'] },
 ]
 
 /**
- * Metadados do indicador Pacote de Gente da Distribuição — 158, contas
- * 158+033 (inclui a Despesa com Pessoal ADM, mesmo pacote do Farol de
- * Metas), AVR mensal vs meta do Farol do pacote 158. Só conta na apuração
+ * Metadados do indicador Pacote de Gente da Distribuição — 159, contas
+ * 159+033 (inclui a Despesa com Pessoal ADM, mesmo pacote do Farol de
+ * Metas), AVR mensal vs meta do Farol do pacote 159. Só conta na apuração
  * das lideranças da ROTA (negocio: 'ROTA') — a RV é da liderança da
  * rota/distribuição, então usa sempre o resultado do negócio ROTA (nunca
  * CONS/consolidado), mesmo em unidades sem split de negócio no DRE. Usado
@@ -206,13 +246,13 @@ export const RV_SEGURANCA_DRE: RvIndicadorDre[] = [
  * liderança (rv_distribuicao_peso_funcao), não por indicador único.
  */
 export const RV_DISTRIBUICAO_DRE: RvIndicadorDre[] = [
-  { id: '158', nome: 'Pacote de Gente', tipo: 'avr', prefixos: ['158', '033'], negocio: 'ROTA' },
+  { id: '159', nome: 'Pacote de Gente', tipo: 'avr', prefixos: ['159', '033'], negocio: 'ROTA' },
 ]
 
 /** Cards "Redução de Custos -15%" da aba ADM. */
 export const REDUCAO_CUSTOS_CARDS = [
-  { nome: 'Despesas Frota Leve', contas: ['217'] },
-  { nome: 'Despesas com Viagem', contas: ['147', '192'] },
+  { nome: 'Despesas Frota Leve', contas: ['218'] },
+  { nome: 'Despesas com Viagem', contas: ['148', '193'] },
 ]
 
 /**
@@ -224,8 +264,8 @@ export const REDUCAO_CUSTOS_CARDS = [
 export const PACOTES_DRE: Record<string, [number, number]> = {
   'Receita': [1, 20],
   'Custo Operacional Geral': [21, 32],
-  'Pacote de Gente Operacional': [33, 112],
-  'Frota': [113, 156],
-  'Despesa Administrativa': [157, 227],
-  'Contas Finais do DRE': [228, 282],
+  'Pacote de Gente Operacional': [33, 113],
+  'Frota': [114, 157],
+  'Despesa Administrativa': [158, 228],
+  'Contas Finais do DRE': [229, 283],
 }

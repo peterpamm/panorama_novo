@@ -34,7 +34,7 @@ export function useVencedoresReuniaoMensal(ano: string, mes: number) {
       const base = dados.unidadesDoTotal.map(({ unidade, negocio }) => ({
         unidade: `${unidade}|${negocio}`,
         pontos: dados.totalPorUnidadeMes[`${unidade}|${negocio}|${mes}`] ?? null,
-        ebitdaDelta: deltaFarolPacoteUnidadeMes(dados.rowsDre, dados.orcamentos, '232', unidade, Number(ano), mes, negocio),
+        ebitdaDelta: deltaFarolPacoteUnidadeMes(dados.rowsDre, dados.orcamentos, '233', unidade, Number(ano), mes, negocio),
         rank: null as number | null,
       }))
       const ranking = atribuirRankComDesempate(base, l => l.pontos, l => l.ebitdaDelta)

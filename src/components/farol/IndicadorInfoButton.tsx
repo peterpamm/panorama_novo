@@ -5,7 +5,7 @@ import { INDICADOR_EXPLICACOES } from '@/lib/indicador-explicacoes'
 import { cn } from '@/lib/utils'
 
 interface IndicadorInfoButtonProps {
-  /** Mesmo id usado em PACOTES/RV_*_DRE (ex: '232' = EBITDA) — busca a explicação em INDICADOR_EXPLICACOES. */
+  /** Mesmo id usado em PACOTES/RV_*_DRE (ex: '233' = EBITDA) — busca a explicação em INDICADOR_EXPLICACOES. */
   codigo: string
   className?: string
 }

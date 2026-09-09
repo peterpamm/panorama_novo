@@ -15,7 +15,7 @@ import { cn } from '@/lib/utils'
 import type { PainelPerdasAux, ReuniaoIndicador, ReuniaoResultadoMensal } from '@/types'
 
 const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-const PREFIXOS_AVARIA_TRANSPORTE = ['051', '052']
+const PREFIXOS_AVARIA_TRANSPORTE = ['052', '053']
 
 const INDICADORES_EMPURRADA = [
   { id: 'indisponibilidade', nome: 'Indisponibilidade' },
@@ -44,7 +44,7 @@ function fmtValor(v: number): string {
  * Acompanhamento dos 5 indicadores da RV de Empurrada (só Estância) — mesmos
  * dados e mesma regra da apuração (RvApuracao, RvEmpurradaPage): Indisponibilidade
  * (painel_perdas_aux, mesmo dado do Painel de Perdas) e Avaria de Transporte
- * (DRE 051/052, mesmo resultado do indicador Vales, meta direta em R$) vêm do
+ * (DRE 052/053, mesmo resultado do indicador Vales, meta direta em R$) vêm do
  * Painel de Perdas; GTY/TMV/Tempo de Rendição já vêm importados na Reunião
  * Resultados (setor Distribuição, nomes T1) — sem cadastro de meta aqui, só
  * exibição.
@@ -246,7 +246,7 @@ export function AcompanhamentoEmpurradaCard() {
       ) : indId === 'avaria_transporte' ? (
         <TableCard
           titulo="Avaria de Transporte"
-          subtitulo={carregando ? 'Carregando...' : `Estância · ${ano} · dispersão do mês (contas 051/052, DRE consolidado) vs meta (R$)`}
+          subtitulo={carregando ? 'Carregando...' : `Estância · ${ano} · dispersão do mês (contas 052/053, DRE consolidado) vs meta (R$)`}
         >
           {carregando ? (
             <div className="flex items-center justify-center gap-2 p-8 text-sm text-muted-foreground">

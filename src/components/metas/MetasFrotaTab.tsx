@@ -6,8 +6,8 @@ import { FrotaT1MetaCard } from '@/components/metas/FrotaT1MetaCard'
 const INDICADORES_DRE_FROTA = [...RV_FROTA_DRE, CUSTOS_GERAIS_FROTA_DRE]
 
 /**
- * Aba "Metas de Frota": os indicadores com origem no DRE — Manutenção (117),
- * Pneus (131), Diesel (115) e Custos Gerais Frota (113) — apurados por AVR
+ * Aba "Metas de Frota": os indicadores com origem no DRE — Manutenção (118),
+ * Pneus (132), Diesel (116) e Custos Gerais Frota (114) — apurados por AVR
  * contra a meta do Orçamento, peso único (Custos Gerais Frota só conta pras 3
  * lideranças T1, mas o peso mora na mesma tabela — a restrição de unidade é
  * só no cálculo, ver useRvApuracao.ts) — o Desconto CIVF / Desconto Stress Test, cadastro
@@ -20,10 +20,10 @@ export function MetasFrotaTab() {
     <div className="space-y-6">
       <p className="max-w-2xl text-sm text-muted-foreground">
         Indicadores de frota com origem no DRE —{' '}
-        <strong className="text-foreground">Manutenção (117)</strong>,{' '}
-        <strong className="text-foreground">Pneus (131)</strong>,{' '}
-        <strong className="text-foreground">Diesel (115)</strong> e{' '}
-        <strong className="text-foreground">Custos Gerais Frota (113)</strong> — apurados pelo AVR do
+        <strong className="text-foreground">Manutenção (118)</strong>,{' '}
+        <strong className="text-foreground">Pneus (132)</strong>,{' '}
+        <strong className="text-foreground">Diesel (116)</strong> e{' '}
+        <strong className="text-foreground">Custos Gerais Frota (114)</strong> — apurados pelo AVR do
         mês contra a meta do Orçamento. Cadastre só o peso de cada indicador — Custos Gerais Frota só
         entra pras 3 lideranças T1 (Estância/Ponta Grossa/CDR Bahia), os demais valem pra todas.
       </p>

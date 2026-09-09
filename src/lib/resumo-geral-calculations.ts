@@ -29,7 +29,7 @@ export function somarBonusRankingAmbev(posicoes: PosicoesAmbev): number {
   return bonusRankingAmbev(posicoes.gente) + bonusRankingAmbev(posicoes.frota) + bonusRankingAmbev(posicoes.seguranca)
 }
 
-/** Bateu a meta mensal de EBITDA — natureza 'performance' (PACOTES['232']): maior é melhor. */
+/** Bateu a meta mensal de EBITDA — natureza 'performance' (PACOTES['233']): maior é melhor. */
 export function ebitdaBatido(avr: number | null, meta: number | null): boolean {
   return avr !== null && meta !== null && avr >= meta
 }

@@ -13,7 +13,7 @@ import type { DreLongoRow, OrcamentoLinha, Unidade } from '@/types'
 
 interface Props {
   titulo: string
-  /** Código do pacote em `PACOTES` (ex: '232' EBITDA, '900' Gastos Totais). */
+  /** Código do pacote em `PACOTES` (ex: '233' EBITDA, '900' Gastos Totais). */
   codigo: string
   /** Linhas do negócio selecionado, de todas as unidades, já filtradas pro ano selecionado. */
   rowsAno: DreLongoRow[]

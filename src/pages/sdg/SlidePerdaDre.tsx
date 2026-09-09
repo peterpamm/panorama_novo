@@ -6,7 +6,7 @@ import type { DreLongoRow, MetaPerdaIndicador, PlanoAcao, SdgJustificativa, Unid
 
 interface SlidePerdaDreProps {
   titulo: string
-  /** Prefixos de conta do indicador de perda (ex: Vales combinado = ['051','052'], Vales Financeiros = ['051'], Multas = ['137','222']). */
+  /** Prefixos de conta do indicador de perda (ex: Vales combinado = ['052','053'], Vales Financeiros = ['052'], Multas = ['138','223']). */
   contas: readonly string[]
   /** Linhas da unidade em todos os anos (negócio CONS, sem filtro de ano). */
   rowsTodosAnos: DreLongoRow[]

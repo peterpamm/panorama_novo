@@ -6,7 +6,7 @@ import { useOrcamentoTodasUnidades } from '@/hooks/useOrcamentoTodasUnidades'
 import type { RvIndicadorDre } from '@/lib/constants'
 import { RV_DISTRIBUICAO_DRE } from '@/lib/constants'
 import type { TabelaPesosDre } from '@/components/metas/PesosDreCard'
-import { avrPorPrefixo, calcularSemaforo, normalizarParaCalculo } from '@/lib/farol-calculations'
+import { avrPorPrefixo, calcularSemaforo, mesesAtivosNoAno, normalizarParaCalculo } from '@/lib/farol-calculations'
 import { buscarMetaOrcamento } from '@/lib/orcamento-farol'
 import { menorMelhor, negocioCompativel, negocioDreDaPessoa, unidadeSplitNegocio } from '@/lib/rv-gente'
 import { negocioPorPrefixo, normalizarNomeUnidade, resolverUnidade } from '@/lib/unidade-resolver'
@@ -96,7 +96,7 @@ export interface RvApuracaoProps {
    */
   indisponibilidadeTabela?: 'rv_indisponibilidade_meta' | 'rv_empurrada_indisponibilidade_meta'
   /**
-   * Inclui o indicador Vales (DRE contas 051/052 × % configurável da Meta de
+   * Inclui o indicador Vales (DRE contas 052/053 × % configurável da Meta de
    * Perdas de Vales — metas_perdas_indicadores, anual/12) — Distribuição e
    * Financeiro usam, cada um com sua própria tabela de peso/%. Independente
    * do negócio. Na Distribuição, o peso é por função e só existe pra
@@ -121,7 +121,7 @@ export interface RvApuracaoProps {
   incluirTempoRendicao?: boolean
   /**
    * Inclui o indicador Avaria de Transporte — só a RV de Empurrada usa. Mesmo
-   * resultado do indicador Vales (DRE contas 051/052, independente do
+   * resultado do indicador Vales (DRE contas 052/053, independente do
    * negócio), mas com meta direta em R$ (rv_empurrada_avaria_transporte_meta)
    * em vez de % da Meta de Perdas anual — diferente do mecanismo de
    * `valesPerdasTabela` usado por Distribuição/Financeiro.
@@ -781,22 +781,22 @@ export function useRvApuracao({
         // (ROTA, mesma unidade.codigo) é T2, por isso a checagem usa
         // `pessoa.negocio`, não só o código da unidade.
         if (incluirFrotaT1) {
-          // Custos Gerais (DRE conta 113) — AVR direto do DRE vs meta do
+          // Custos Gerais (DRE conta 114) — AVR direto do DRE vs meta do
           // Orçamento, mesmo mecanismo dos indicadores gerais de Frota
           // (Manutenção/Pneus/Diesel — inclusive o peso mora na mesma tabela,
           // `pesosDre`), só que restrito às 3 unidades T1 (checagem explícita
           // aqui, já que o peso não é por unidade — diferente do FAI/DTO T1).
-          const custosGeraisPeso = pesosDre.get('113') ?? 0
+          const custosGeraisPeso = pesosDre.get('114') ?? 0
           if (ehFrotaT1(unidade.codigo, pessoa.negocio) && custosGeraisPeso > 0) {
             let status: StatusItem
             let detalhe: string
             let avr: number | null = null
-            const metaOrcamento = buscarMetaOrcamento(orcamentos, { unidade: unidade.codigo, negocio: negocioDre, ano, codigo: '113', mes })
+            const metaOrcamento = buscarMetaOrcamento(orcamentos, { unidade: unidade.codigo, negocio: negocioDre, ano, codigo: '114', mes })
             if (rowsMes.length === 0) {
               status = 'pendente'
               detalhe = 'Sem DRE importado pro mês'
             } else {
-              avr = avrPorPrefixo(normalizarParaCalculo(rowsMes), ['113'])
+              avr = avrPorPrefixo(normalizarParaCalculo(rowsMes), ['114'])
               if (metaOrcamento === null) {
                 status = 'pendente'
                 detalhe = `AVR ${fmtPct(avr)}% · sem meta cadastrada no Orçamento`
@@ -1410,10 +1410,11 @@ export function useRvApuracao({
         }
 
         // Indicador Vales (Distribuição e Financeiro) — resultado é a mesma
-        // soma da coluna diferença do DRE (contas 051/052) usada no
+        // soma da coluna diferença do DRE (contas 052/053) usada no
         // indicador Vales do Painel de Perdas; a meta é um % (ex: 95%) da
-        // Meta de Perdas de Vales do mês (metas_perdas_indicadores,
-        // anual/12) — a liderança tem que gastar no máximo esse % do que a
+        // Meta de Perdas de Vales do mês (metas_perdas_indicadores, anual
+        // dividida pelos meses ativos da unidade — ver mesesAtivosNoAno) —
+        // a liderança tem que gastar no máximo esse % do que a
         // Meta de Perdas permite. Independente do negócio. Peso: por função
         // na Distribuição (só conta pra SUPERVISOR DU — sem peso cadastrado
         // pra COORD. DU), único no Financeiro (cada um com sua própria tabela).
@@ -1439,10 +1440,11 @@ export function useRvApuracao({
               detalhe = 'Sem Meta de Perdas de Vales cadastrada pro ano'
             } else {
               valorDreVales = rowsMes
-                .filter(r => r.conta_codigo.startsWith('051') || r.conta_codigo.startsWith('052'))
+                .filter(r => r.conta_codigo.startsWith('052') || r.conta_codigo.startsWith('053'))
                 .reduce((acc, r) => acc + (r.diferenca ?? 0), 0)
               const resultado = ajusteVales ? ajusteVales.valor : valorDreVales
-              const metaMensal = (metaPerdasVales.meta_anual / 12) * (valesMeta.pct_meta / 100)
+              const mesesAtivos = mesesAtivosNoAno(unidade.data_entrada, ano)
+              const metaMensal = (metaPerdasVales.meta_anual / mesesAtivos) * (valesMeta.pct_meta / 100)
               status = resultado >= metaMensal ? 'bateu' : 'perdeu'
               detalhe = ajusteVales
                 ? `Resultado R$ ${fmtValor(resultado)} (ajuste manual) · Meta R$ ${fmtValor(metaMensal)} (${fmtPeso(valesMeta.pct_meta)}% da Meta de Perdas)`
@@ -1467,7 +1469,7 @@ export function useRvApuracao({
 
         // Indicador Avaria de Transporte (só a RV de Empurrada usa) — mesmo
         // resultado do indicador Vales (soma da diferença do DRE, contas
-        // 051/052, independente do negócio), mas com meta direta em R$ (não
+        // 052/053, independente do negócio), mas com meta direta em R$ (não
         // % da Meta de Perdas anual como Distribuição/Financeiro usam).
         // Peso único, direto da tabela.
         if (incluirAvariaTransporte && avariaTransporteMeta && avariaTransporteMeta.peso > 0) {
