@@ -1527,8 +1527,13 @@ export function useRvApuracao({
           } else {
             const bateu = calcularSemaforo(linhaResultado.resultado, linhaResultado.meta, indConfig.natureza).corClasse === 'positivo'
             status = bateu ? 'bateu' : 'perdeu'
-            resultadoFmt = formatarResultado(linhaResultado.resultado, indConfig.formato)
-            metaFmt = linhaResultado.meta !== null ? formatarResultado(linhaResultado.meta, indConfig.formato) : null
+            // `linhaResultado.formato` já vem resolvido da importação (lado
+            // nome/nome_t1 do indicador combinado, ex: ON TIME × TMV — cada
+            // um pode ter um tipo de valor diferente, ver migration 112);
+            // null (linha antiga) cai no formato único cadastrado.
+            const formatoCelula = linhaResultado.formato ?? indConfig.formato
+            resultadoFmt = formatarResultado(linhaResultado.resultado, formatoCelula)
+            metaFmt = linhaResultado.meta !== null ? formatarResultado(linhaResultado.meta, formatoCelula) : null
             detalhe = `Resultado ${resultadoFmt}${metaFmt ? ` · Meta ${metaFmt}` : ''}`
           }
           itens.push({

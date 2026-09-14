@@ -175,6 +175,14 @@ export interface SeriePontoMensal {
   mes: number
   avr: number
   meta: number | null
+  /**
+   * Receita do mês, pra converter o ponto em impacto financeiro (R$) sob
+   * demanda — ver `calcularImpactoFinanceiro`. Opcional porque séries que já
+   * nascem em R$ em vez de % (ex: `calcularSerieReducaoCustos`) reaproveitam
+   * esse mesmo tipo sem preencher esse campo — não faz sentido "converter pra
+   * R$" o que já é R$.
+   */
+  receita?: number
 }
 
 /**
@@ -194,7 +202,8 @@ export function calcularSerieAnual(
     const calc = normalizarParaCalculo(mensal.filter(r => r.mes === mes))
     const avr = avrPorPrefixo(calc, params.prefixos)
     const meta = buscarMetaComFallback(calc, metasManual, { ...params, isYtd: false, mes })
-    return { mes, avr, meta }
+    const receita = calcularReceita(calc)
+    return { mes, avr, meta, receita }
   })
 }
 
@@ -205,6 +214,15 @@ export interface SeriePontoCaptura {
   /** Ritmo médio necessário nos meses restantes pra fechar o ano na meta — só nos meses futuros (mais o mês de transição, igual ao avrRealizado, pra a linha conectar sem buraco). */
   avrNecessario: number | null
   metaAnual: number | null
+  /**
+   * Receita do mês, pra converter o ponto em impacto financeiro (R$) sob
+   * demanda — ver `calcularImpactoFinanceiro`. Só nos meses já realizados
+   * (`null` nos futuros/projetados — sem dado real pra calcular; quem usa
+   * projeta com a média dos meses realizados). Opcional porque séries que já
+   * nascem em R$ (ex: `calcularSerieCapturaReducaoCustos`) reaproveitam esse
+   * mesmo tipo sem preencher esse campo.
+   */
+  receita?: number | null
 }
 
 /**
@@ -234,28 +252,29 @@ export function calcularSerieCaptura(
     unidade: params.unidade, negocio: params.negocio, ano: params.ano, codigo: params.codigo, isYtd: true, mes: 0,
   })
 
-  const avrPorMes = new Map(mesesRealizados.map(mes => {
+  const porMes = new Map(mesesRealizados.map(mes => {
     const calc = normalizarParaCalculo(mensal.filter(r => r.mes === mes))
-    return [mes, avrPorPrefixo(calc, params.prefixos)] as const
+    return [mes, { avr: avrPorPrefixo(calc, params.prefixos), receita: calcularReceita(calc) }] as const
   }))
 
   const ultimoMes = mesesRealizados[mesesRealizados.length - 1]
   const mesesRestantes = 12 - ultimoMes
-  const somaAvrMensal = [...avrPorMes.values()].reduce((acc, v) => acc + v, 0)
+  const somaAvrMensal = [...porMes.values()].reduce((acc, v) => acc + v.avr, 0)
   const ritmoNecessario = metaAnual === null || mesesRestantes <= 0
     ? null
     : (metaAnual * 12 - somaAvrMensal) / mesesRestantes
 
   const pontos: SeriePontoCaptura[] = mesesRealizados.map(mes => ({
     mes,
-    avrRealizado: avrPorMes.get(mes)!,
+    avrRealizado: porMes.get(mes)!.avr,
     // ponto de conexão com a linha do necessário, só quando existe projeção futura
-    avrNecessario: mes === ultimoMes && ritmoNecessario !== null ? avrPorMes.get(mes)! : null,
+    avrNecessario: mes === ultimoMes && ritmoNecessario !== null ? porMes.get(mes)!.avr : null,
     metaAnual,
+    receita: porMes.get(mes)!.receita,
   }))
   if (ritmoNecessario !== null) {
     for (let mes = ultimoMes + 1; mes <= 12; mes++) {
-      pontos.push({ mes, avrRealizado: null, avrNecessario: ritmoNecessario, metaAnual })
+      pontos.push({ mes, avrRealizado: null, avrNecessario: ritmoNecessario, metaAnual, receita: null })
     }
   }
   return pontos

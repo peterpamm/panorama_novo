@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Bomb, Camera, Check, Table2, Trophy } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useCopiarComoImagem } from '@/hooks/useCopiarComoImagem'
+import { useLogosUnidades } from '@/hooks/useLogosUnidades'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { TableCard, tableCardActionClass } from '@/components/ui/table-card'
 import { Button } from '@/components/ui/button'
@@ -70,6 +71,34 @@ export interface PodioItem {
   detalhe?: React.ReactNode
   /** Decide em qual lista entra (verde/vermelha) do 4º lugar em diante. */
   positivo: boolean
+  /** URL do logo da unidade (`useLogosUnidades`) — null/undefined cai no placeholder da inicial. Preenchido pelo próprio `PodioView`/`PodioPioresView`, não pelo chamador. */
+  logoUrl?: string | null
+}
+
+/**
+ * Espaço de logo do pódio. Com logo: mostra a imagem grande e sem moldura
+ * (sem círculo/anel cortando o desenho) — tamanho pensado pra dar destaque
+ * quando o print for mandado em grupo. Sem logo (ou se a imagem falhar ao
+ * carregar): cai no círculo com a inicial + anel da cor da medalha, mesmo
+ * placeholder de sempre.
+ */
+function LogoOuInicial({ nome, logoUrl, anelClasse }: { nome: string; logoUrl?: string | null; anelClasse: string }) {
+  const [quebrado, setQuebrado] = useState(false)
+  if (logoUrl && !quebrado) {
+    return (
+      <img
+        src={logoUrl}
+        alt={nome}
+        className="h-36 w-36 object-contain drop-shadow-md"
+        onError={() => setQuebrado(true)}
+      />
+    )
+  }
+  return (
+    <div className={cn('flex h-24 w-24 items-center justify-center rounded-full bg-white shadow-lg ring-4 dark:bg-gray-800', anelClasse)}>
+      <span className="text-3xl font-black text-gray-700 dark:text-gray-200">{nome[0] ?? '?'}</span>
+    </div>
+  )
 }
 
 const PODIO = {
@@ -82,13 +111,8 @@ function LugarPodio({ item, posicao }: { item: PodioItem; posicao: 1 | 2 | 3 }) 
   const estilo = PODIO[posicao]
   return (
     <div className="flex w-full flex-col items-center gap-2">
-      {/* Espaço pra logo da unidade (placeholder com a inicial) */}
-      <div className={cn(
-        'flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-md ring-2 dark:bg-gray-800',
-        estilo.anel,
-      )}>
-        <span className="text-lg font-black text-gray-700 dark:text-gray-200">{item.nome[0] ?? '?'}</span>
-      </div>
+      {/* Logo da unidade (`useLogosUnidades`), grande e sem moldura — placeholder com a inicial (em círculo) se não tiver. */}
+      <LogoOuInicial nome={item.nome} logoUrl={item.logoUrl} anelClasse={estilo.anel} />
       <div className="text-center">
         <div className="max-w-[140px] truncate text-sm font-semibold text-gray-900 dark:text-white">{item.nome}</div>
         <div className="text-xl font-bold tabular-nums text-gray-900 dark:text-white">{item.valorFmt}</div>
@@ -114,13 +138,10 @@ function LugarPodioPior({ item, posicao }: { item: PodioItem; posicao: 1 | 2 | 3
   const estilo = PODIO_PIOR[posicao]
   return (
     <div className="flex w-full flex-col items-center gap-2">
-      <div className={cn(
-        'relative flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-md ring-2 dark:bg-gray-800',
-        estilo.anel,
-      )}>
-        <span className="text-lg font-black text-gray-700 dark:text-gray-200">{item.nome[0] ?? '?'}</span>
-        <span className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 ring-2 ring-white dark:ring-gray-900">
-          <Bomb className="h-3 w-3 text-white" />
+      <div className="relative">
+        <LogoOuInicial nome={item.nome} logoUrl={item.logoUrl} anelClasse={estilo.anel} />
+        <span className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 ring-2 ring-white dark:ring-gray-900">
+          <Bomb className="h-3.5 w-3.5 text-white" />
         </span>
       </div>
       <div className="text-center">
@@ -146,7 +167,8 @@ function PodioPioresView({ itens, tituloPositivo, tituloNegativo }: {
   tituloPositivo: string
   tituloNegativo: string
 }) {
-  const ranqueados = itens.filter(i => i.rank !== null)
+  const logos = useLogosUnidades()
+  const ranqueados: PodioItem[] = itens.filter(i => i.rank !== null).map(i => ({ ...i, logoUrl: logos.get(i.chave.split('|')[0]) ?? null }))
   const candidatos = ranqueados
     .filter(i => !i.positivo)
     .sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0))
@@ -235,7 +257,8 @@ function PodioView({ itens, tituloPositivo, tituloNegativo }: {
   tituloPositivo: string
   tituloNegativo: string
 }) {
-  const ranqueados = itens.filter(i => i.rank !== null)
+  const logos = useLogosUnidades()
+  const ranqueados: PodioItem[] = itens.filter(i => i.rank !== null).map(i => ({ ...i, logoUrl: logos.get(i.chave.split('|')[0]) ?? null }))
   const top3 = ([2, 1, 3] as const)
     .map(pos => ({ pos, item: ranqueados.find(i => i.rank === pos) }))
     .filter((x): x is { pos: 1 | 2 | 3; item: PodioItem } => x.item !== undefined)

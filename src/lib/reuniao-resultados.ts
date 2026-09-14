@@ -113,6 +113,14 @@ function ehCamacari(u: Unidade): boolean {
     || (u.apelidos ?? []).some(a => normalizarNomeUnidade(a).includes(alvo))
 }
 
+/** Carambeí (ex-"VIDROS") só tem operação de armazém, sem Distribuição/Rota — mesma regra já usada em `disponibilidadesDaUnidade`/`participaContagemEbitda` (farol-gerentes.ts). */
+function ehCarambei(u: Unidade): boolean {
+  const alvo = 'CARAMBE'
+  return normalizarNomeUnidade(u.codigo).includes(alvo)
+    || normalizarNomeUnidade(u.nome).includes(alvo)
+    || (u.apelidos ?? []).some(a => normalizarNomeUnidade(a).includes(alvo))
+}
+
 export interface ReuniaoParticipavel {
   unidade: string
   negocio: string
@@ -127,15 +135,21 @@ export interface ReuniaoParticipavel {
  * como split); e só fora do Financeiro, que fica sempre consolidado (uma
  * linha só, negocio 'CONS' — já cadastrado assim). Todas as outras unidades
  * são sempre 1 linha, negocio 'CONS'.
+ *
+ * Setor 'distribuicao' é exceção adicional: é operação de Rota/DU, então
+ * Camaçari só entra pelo lado ROTA (o Armazém de Camaçari — CDR — não tem
+ * Distribuição) e Carambeí (só armazém) fica de fora inteiramente — mesma
+ * regra que Carambeí já segue em Disponibilidade (`ehCarambei` acima).
  */
 export function unidadesParticipaveis(unidades: Unidade[], setor: ReuniaoSetor): ReuniaoParticipavel[] {
   if (setor === 'financeiro') return unidades.map(u => ({ unidade: u.codigo, negocio: 'CONS', nome: u.nome }))
 
   const linhas: ReuniaoParticipavel[] = []
   for (const u of unidades) {
+    if (setor === 'distribuicao' && ehCarambei(u)) continue
     if (ehCamacari(u)) {
       linhas.push({ unidade: u.codigo, negocio: 'ROTA', nome: `${u.nome} · Rota` })
-      linhas.push({ unidade: u.codigo, negocio: 'ARM', nome: `${u.nome} · Armazém` })
+      if (setor !== 'distribuicao') linhas.push({ unidade: u.codigo, negocio: 'ARM', nome: `${u.nome} · Armazém` })
     } else {
       linhas.push({ unidade: u.codigo, negocio: 'CONS', nome: u.nome })
     }

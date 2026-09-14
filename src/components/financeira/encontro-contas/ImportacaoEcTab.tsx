@@ -3,6 +3,8 @@ import { ListTree, Loader2, Plus, Upload } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { parseEncontroContasFile, type ParsedEncontroContasRow } from '@/lib/encontro-contas-parser'
+import { MODELO_ENCONTRO_CONTAS } from '@/lib/modelos-importacao'
+import { BotaoModeloPlanilha } from '@/components/importacao/BotaoModeloPlanilha'
 import { FilePickerButton } from '@/components/importacao/FilePickerButton'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -162,6 +164,7 @@ export function ImportacaoEcTab({ ecsExistentes, unidades, motivos, isAdmin, onI
 
       <div className="flex flex-wrap items-end gap-3">
         <FilePickerButton label="Planilha (.xlsx/.csv)" accept=".xlsx,.xls,.csv" file={file} onFile={handleFile} />
+        <BotaoModeloPlanilha nomeArquivo="modelo_encontro_contas" abas={MODELO_ENCONTRO_CONTAS} />
       </div>
 
       {errosParse.length > 0 && (

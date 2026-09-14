@@ -92,6 +92,43 @@ export const MODELO_LIDERANCAS_PAGAMENTO: AbaModelo[] = [
 ]
 
 /**
+ * Encontro de Contas — colunas Data/Descrição/Valor (a Unidade não entra
+ * aqui, é atribuída depois na aba Tratativas). Descrição precisa seguir o
+ * padrão "EC - <chamado> - <nome de quem abriu>", senão a linha cai pra
+ * revisão manual — o exemplo já mostra isso pronto.
+ */
+export const MODELO_ENCONTRO_CONTAS: AbaModelo[] = [
+  {
+    nome: 'Encontro de Contas',
+    linhas: [
+      ['DATA', 'DESCRICAO', 'VALOR'],
+      ['15/01/2026', 'EC - R14602322 - Vinicius Etges Silveira', '1234,56'],
+      ['22/01/2026', 'EC - R14611087 - Ana Paula Ferreira', '850,00'],
+    ],
+  },
+]
+
+/**
+ * Termômetro (Reunião Resultados > Gente/Frota/Segurança > Importação) —
+ * Unidade + a pontuação do mês (o cabeçalho da 2ª coluna é lido pela
+ * posição, pode ser qualquer nome de mês) + a coluna opcional Posição (a
+ * colocação da unidade no Ranking Ambev do setor, que sem essa coluna
+ * continua sendo lançada à mão no Resumo Geral).
+ */
+export const MODELO_TERMOMETRO: AbaModelo[] = [
+  {
+    nome: 'Termômetro',
+    linhas: [
+      ['Unidade', 'Junho', 'Posição'],
+      ['ESTÂNCIA', '92,5', 1],
+      ['CDR BAHIA', '88', 2],
+      ['CD CASCAVEL', '81,3', 3],
+      ['CD FOZ DO IGUAÇU', '75', ''],
+    ],
+  },
+]
+
+/**
  * Meta do Presenteísmo DU — formato simples (um mês por arquivo, o mês vem do
  * seletor da tela) e o histórico (uma coluna por mês) na segunda aba, que é a
  * forma de trazer vários meses fechados de uma vez.
@@ -112,6 +149,42 @@ export const MODELO_META_PRESENTEISMO_DU: AbaModelo[] = [
       ['INDICADOR', 'UNIDADE', 'JAN', 'FEV', 'MAR'],
       ['PRESENTEISMO DU', 'CD CASCAVEL', '2,5%', '2,4%', '2,6%'],
       ['PRESENTEISMO DU', 'CD FOZ DO IGUAÇU', '3%', '3,1%', '2,9%'],
+    ],
+  },
+]
+
+/**
+ * Planilha padrão de Reunião Resultados (`Import_RR - Arm&DU.xlsx` — meta,
+ * peso, resultado e pontos já prontos, ver `reuniao-planilha-parser.ts`) —
+ * uma linha de título (o mês) acima do cabeçalho de verdade, igual o arquivo
+ * real. PESO entra no exemplo mas é só informativo (não é lido, já está
+ * cadastrado como `pontos` do indicador). Nome do INDICADOR precisa bater
+ * com o "Nome" ou "Nome no T1" cadastrado em Cadastro pro setor/ano — os
+ * nomes do exemplo são só ilustrativos, não uma garantia de cadastro.
+ */
+export const MODELO_INDICADORES_ARMAZEM: AbaModelo[] = [
+  {
+    nome: 'Import RR_ARM',
+    linhas: [
+      ['Mês: Agosto/2026'],
+      ['Unidade', 'Indicador', 'Meta', 'Peso', 'Result', 'Pts'],
+      ['ESTÂNCIA', 'TMA', '01:40', 20, '01:38', 20],
+      ['ESTÂNCIA', 'DISPONIBILIDADE DE GENTE', '95,9%', 20, '96,4%', 20],
+      ['CD CASCAVEL', 'PRESENTEISMO AL', '1,14%', 20, '1,20%', 0],
+    ],
+  },
+]
+
+/** Mesmo formato de `MODELO_INDICADORES_ARMAZEM`, aba/indicadores do setor Distribuição (DU/Empurrada). */
+export const MODELO_INDICADORES_DU: AbaModelo[] = [
+  {
+    nome: 'Import RR_DU',
+    linhas: [
+      ['Mês: Agosto/2026'],
+      ['Unidade', 'Indicador', 'Meta', 'Peso', 'Result', 'Pts'],
+      ['CD CASCAVEL', 'GTY', '95%', 20, '96,2%', 20],
+      ['CD CASCAVEL', 'TMV', '00:45', 20, '00:42', 20],
+      ['CD FOZ DO IGUAÇU', 'TEMPO DE RENDIÇÃO', '00:15', 20, '00:18', 0],
     ],
   },
 ]

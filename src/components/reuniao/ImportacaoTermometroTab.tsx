@@ -5,12 +5,19 @@ import { useUnidades } from '@/hooks/useUnidades'
 import { parseTermometroFile, type ParsedTermometroRow } from '@/lib/reuniao-termometro-parser'
 import { negocioParaImportacao } from '@/lib/reuniao-resultados'
 import { negocioPorPrefixo, resolverUnidade } from '@/lib/unidade-resolver'
+import { MODELO_TERMOMETRO } from '@/lib/modelos-importacao'
+import { BotaoModeloPlanilha } from '@/components/importacao/BotaoModeloPlanilha'
 import { FilePickerButton } from '@/components/importacao/FilePickerButton'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/use-toast'
-import type { ReuniaoIndicador, ReuniaoSetor, Unidade } from '@/types'
+import type { ReuniaoIndicador, ReuniaoSetor, ResumoGeralAmbevSetor, Unidade } from '@/types'
+
+/** Só Gente/Frota/Segurança têm Ranking Ambev próprio (ver ResumoGeralAmbevSetor) — os outros setores da Reunião Resultados não têm onde gravar a Posição, mesmo que venha preenchida na planilha. */
+function ehSetorRankingAmbev(setor: ReuniaoSetor): setor is ResumoGeralAmbevSetor {
+  return setor === 'gente' || setor === 'frota' || setor === 'seguranca'
+}
 
 const BATCH_SIZE = 500
 const MESES_NOMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -32,6 +39,12 @@ interface ImportacaoTermometroTabProps {
  * tabela do lançamento manual — só que preenchida em lote em vez de célula a
  * célula). Precisa existir um indicador `fonte='termometro'` cadastrado
  * pro setor/ano antes de importar.
+ *
+ * A planilha também aceita uma 3ª coluna opcional "Posição" — a colocação da
+ * unidade no Ranking Ambev do setor (Gente/Frota/Segurança) naquele mês, que
+ * hoje só dava pra lançar à mão no Resumo Geral (`resumo_geral_ranking_ambev`,
+ * ver `ResumoGeralTab.tsx`). Vindo na planilha, grava direto nessa tabela
+ * junto com a pontuação — sem precisar digitar de novo lá.
  */
 export function ImportacaoTermometroTab({ setor }: ImportacaoTermometroTabProps) {
   const { toast } = useToast()
@@ -94,10 +107,20 @@ export function ImportacaoTermometroTab({ setor }: ImportacaoTermometroTabProps)
   async function handleImportar() {
     if (!indicador) return
     const mes = Number(mesImport)
+    const ano = Number(anoImport)
     const registros = resolucao.resolvidas.map(({ linha, unidade, negocio }) => ({
       indicador_id: indicador.id, unidade: unidade.codigo, negocio, mes, resultado: linha.valor,
     }))
     if (registros.length === 0) return
+
+    // Posição no Ranking Ambev (coluna opcional) — só grava pra quem veio
+    // preenchida na planilha; unidade sem posição não mexe no que já estava
+    // lançado (upsert é por unidade, não apaga o resto).
+    const registrosPosicao = ehSetorRankingAmbev(setor)
+      ? resolucao.resolvidas
+        .filter(({ linha }) => linha.posicao !== undefined)
+        .map(({ linha, unidade, negocio }) => ({ unidade: unidade.codigo, negocio, ano, mes, setor, posicao: linha.posicao }))
+      : []
 
     setImportando(true)
     try {
@@ -106,9 +129,16 @@ export function ImportacaoTermometroTab({ setor }: ImportacaoTermometroTabProps)
         const { error } = await supabase.from('reuniao_resultados_mensais').upsert(batch, { onConflict: 'indicador_id,unidade,negocio,mes' })
         if (error) throw new Error(error.message)
       }
+      for (let i = 0; i < registrosPosicao.length; i += BATCH_SIZE) {
+        const batch = registrosPosicao.slice(i, i + BATCH_SIZE)
+        const { error } = await supabase.from('resumo_geral_ranking_ambev').upsert(batch, { onConflict: 'unidade,negocio,ano,mes,setor' })
+        if (error) throw new Error(error.message)
+      }
       toast({
         title: `${registros.length} pontuação(ões) do Termômetro importada(s)`,
-        description: `${MESES_NOMES[mes - 1]}/${anoImport}.`,
+        description: registrosPosicao.length > 0
+          ? `${MESES_NOMES[mes - 1]}/${anoImport} — ${registrosPosicao.length} posição(ões) no Ranking Ambev também atualizada(s).`
+          : `${MESES_NOMES[mes - 1]}/${anoImport}.`,
       })
       setFile(null)
       setLinhas([])
@@ -127,6 +157,10 @@ export function ImportacaoTermometroTab({ setor }: ImportacaoTermometroTabProps)
         Suba a planilha (Excel ou CSV) com as colunas <span className="font-mono text-xs">Unidade</span> e a pontuação
         do mês (o nome da 2ª coluna não importa — é lida pela posição, não pelo texto do cabeçalho). Cada arquivo é a
         pontuação de um único mês/ano, escolhido abaixo — fica guardado por mês, pra manter o histórico.
+        {ehSetorRankingAmbev(setor) && (
+          <> Se a planilha trouxer também a coluna <span className="font-mono text-xs">Posição</span> (a colocação da
+          unidade no Ranking Ambev), ela já entra direto no Resumo Geral, sem precisar digitar lá.</>
+        )}
       </p>
 
       <div className="flex flex-wrap items-end gap-3">
@@ -149,6 +183,7 @@ export function ImportacaoTermometroTab({ setor }: ImportacaoTermometroTabProps)
           </Select>
         </div>
         <FilePickerButton label="Planilha (.xlsx ou .csv)" accept=".xlsx,.xls,.csv,.txt" file={file} onFile={handleFile} />
+        <BotaoModeloPlanilha nomeArquivo="modelo_termometro" abas={MODELO_TERMOMETRO} />
       </div>
 
       {carregandoIndicador ? (

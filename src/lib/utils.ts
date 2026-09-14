@@ -24,6 +24,13 @@ export function formatCurrencyInteiro(value: number | null | undefined): string 
 }
 
 /** Espelha formatar_valor_monetario do Python: R$ X.XK / R$ X.XM, ou inteiro com separador de milhar. */
+/** Mesmo `formatCurrencyInteiro`, mas negativo entre parênteses em vez de sinal de menos — convenção contábil pedida no SDG Corporativo de Frota (só usada ali; o resto do app continua com o sinal de menos padrão). */
+export function formatCurrencyParenteses(value: number | null | undefined): string {
+  if (value == null) return '—'
+  const formatado = formatCurrencyInteiro(Math.abs(value))
+  return value < 0 ? `(${formatado})` : formatado
+}
+
 export function formatCurrencyCompact(value: number | null | undefined): string {
   if (value == null) return '—'
   const abs = Math.abs(value)

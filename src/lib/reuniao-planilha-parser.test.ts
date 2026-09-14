@@ -106,4 +106,15 @@ describe('resolverValorImportado', () => {
     expect(resolverValorImportado('', 'duracao')).toBeNull()
     expect(resolverValorImportado(null, 'duracao')).toBeNull()
   })
+
+  it('formato percentual: célula formatada como % de verdade no Excel (fração 0-1) converte pra escala 0-100', () => {
+    expect(resolverValorImportado(0.9727, 'percentual')).toBe(97.27)
+    expect(resolverValorImportado(1, 'percentual')).toBe(100)
+    expect(resolverValorImportado(0.5, 'percentual')).toBe(50)
+  })
+
+  it('formato percentual: valor já em escala 0-100 (>1) não é reconvertido', () => {
+    expect(resolverValorImportado(95, 'percentual')).toBe(95)
+    expect(resolverValorImportado(97.27, 'percentual')).toBe(97.27)
+  })
 })

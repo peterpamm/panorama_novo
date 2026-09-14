@@ -32,7 +32,7 @@ export function AcompanhamentoReuniaoTab({ setor }: AcompanhamentoReuniaoTabProp
   const {
     carregando, indicadores, participantesPorIndicador,
     valoresInput, setValoresInput, salvando, handleSalvar,
-    resultadoEMeta, pontosGanhos, unidadesDoTotal, totalPorUnidadeMes, maiorPorMes, nomesParticipaveis,
+    resultadoEMeta, formatoEfetivo, pontosGanhos, unidadesDoTotal, totalPorUnidadeMes, maiorPorMes, nomesParticipaveis,
     ajusteFinanceiroDoIndicador, salvarAjusteFinanceiro, removerAjusteFinanceiro,
   } = useReuniaoDados(setor, ano)
 
@@ -81,7 +81,7 @@ export function AcompanhamentoReuniaoTab({ setor }: AcompanhamentoReuniaoTabProp
           {indicadores.map(ind => {
             const participantes = participantesPorIndicador[ind.id] ?? []
             const automatico = ind.fonte !== 'manual'
-            const { natureza, formato } = resolverNaturezaFormato(ind)
+            const { natureza } = resolverNaturezaFormato(ind)
             return (
               <TableCard
                 key={ind.id}
@@ -133,7 +133,7 @@ export function AcompanhamentoReuniaoTab({ setor }: AcompanhamentoReuniaoTabProp
                                     {automatico ? (
                                       <div className="flex items-center justify-center gap-1">
                                         <p className={cn('text-xs tabular-nums', infoAjuste?.ajuste ? 'font-semibold text-amber-600 dark:text-amber-400' : 'text-foreground')}>
-                                          {formatarResultado(resultado, formato)}
+                                          {formatarResultado(resultado, formatoEfetivo(ind, p.unidade, p.negocio, mes))}
                                         </p>
                                         {infoAjuste && (
                                           <button

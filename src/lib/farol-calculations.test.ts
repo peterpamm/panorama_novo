@@ -524,6 +524,18 @@ describe('calcularSerieAnual', () => {
     const serie = calcularSerieAnual(rowsAno, metasManuais, { unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '021', prefixos: '021' })
     expect(serie[0].meta).toBe(70)
   })
+
+  it('cada ponto carrega a receita do próprio mês (pra dar pra calcular impacto financeiro sob demanda)', () => {
+    const rowsAno: DreLongoRow[] = [
+      linha('002', 1, 'MENSAL', 1000000, 1200000, 200000, 100),
+      linha('021', 1, 'MENSAL', -1000000, -800000, 200000, -80),
+      linha('002', 2, 'MENSAL', 1000000, 900000, -100000, 100),
+      linha('021', 2, 'MENSAL', -1000000, -900000, 100000, -90),
+    ]
+    const serie = calcularSerieAnual(rowsAno, [], { unidade: 'FOZ', negocio: 'ROTA', ano: 2026, codigo: '021', prefixos: '021' })
+    expect(serie[0].receita).toBeCloseTo(1200000, 2)
+    expect(serie[1].receita).toBeCloseTo(900000, 2)
+  })
 })
 
 describe('calcularSerieCaptura', () => {
@@ -567,6 +579,17 @@ describe('calcularSerieCaptura', () => {
     const serie = calcularSerieCaptura(rowsAno, metasManuais, { unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '021', prefixos: '021' })
     expect(serie).toHaveLength(1)
     expect(serie[0].mes).toBe(12)
+  })
+
+  it('meses realizados carregam a receita do próprio mês; meses futuros/projetados ficam com receita null', () => {
+    const metasManuais: Meta[] = [{ unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '021', mes: 0, meta_avr: 90 }]
+    const rowsAno: DreLongoRow[] = [
+      linha('002', 1, 'MENSAL', 1000000, 1100000, 100000, 100),
+      linha('021', 1, 'MENSAL', -1000000, -1000000, 0, -80),
+    ]
+    const serie = calcularSerieCaptura(rowsAno, metasManuais, { unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '021', prefixos: '021' })
+    expect(serie[0].receita).toBeCloseTo(1100000, 2) // janeiro, realizado
+    expect(serie[1].receita).toBeNull()               // fevereiro em diante, projetado
   })
 })
 

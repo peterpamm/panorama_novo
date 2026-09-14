@@ -4,7 +4,8 @@ import { supabase } from '@/lib/supabase'
 import { useUnidades } from '@/hooks/useUnidades'
 import { calcularAderenciaPorUnidade, type AderenciaMensal } from '@/lib/rotinas-financeiras'
 import { atribuirRank } from '@/lib/ranking-calculations'
-import { RankingTabelaAderencia, type RankingLinhaAderencia } from '@/components/ranking/RankingTabelas'
+import type { RankingLinhaAderencia } from '@/components/ranking/RankingTabelas'
+import { RankingAderenciaGlass } from '@/components/ranking/RankingAderenciaGlass'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { TableCard } from '@/components/ui/table-card'
 import { Label } from '@/components/ui/label'
@@ -175,7 +176,7 @@ export function DashboardRotinasTab() {
               </SelectContent>
             </Select>
           </div>
-          <RankingTabelaAderencia
+          <RankingAderenciaGlass
             linhas={linhasRankingMes}
             nomesUnidade={nomesUnidade}
             titulo={`Ranking do Mês — ${MESES_NOMES[Number(mes) - 1]}/${ano}`}
@@ -185,7 +186,7 @@ export function DashboardRotinasTab() {
         </div>
 
         <div className="space-y-3 lg:pt-[34px]">
-          <RankingTabelaAderencia
+          <RankingAderenciaGlass
             linhas={linhasRankingAno}
             nomesUnidade={nomesUnidade}
             titulo={`Ranking Acumulado — ${ano}`}

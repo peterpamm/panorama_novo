@@ -1,10 +1,19 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { PillToggle } from '@/components/ui/pill-toggle'
 import { IndicadorChart } from '@/components/farol/IndicadorChart'
 import { CapturaChart } from '@/components/farol/CapturaChart'
-import type { SeriePontoCaptura, SeriePontoMensal } from '@/lib/farol-calculations'
+import { calcularImpactoFinanceiro, type SeriePontoCaptura, type SeriePontoMensal } from '@/lib/farol-calculations'
+import { formatCurrencyInteiro } from '@/lib/utils'
 import type { Natureza } from '@/types'
+
+type ModoExibicao = 'pct' | 'rs'
+
+const OPCOES_MODO = [
+  { value: 'pct' as const, label: '%' },
+  { value: 'rs' as const, label: 'Impacto R$' },
+]
 
 export interface IndicadorPainelItem {
   codigo: string
@@ -29,6 +38,11 @@ interface IndicadorPainelProps {
 
 export function IndicadorPainel({ indicadores, ano, nomeSerie, nomeMeta, formatter, onSelecionadoChange }: IndicadorPainelProps) {
   const [selecionado, setSelecionado] = useState(indicadores[0]?.codigo ?? '')
+  // "%" ou "Impacto R$" — só faz sentido pra séries que ainda são percentual
+  // (formatter não veio de fora, ex: Redução de Custos já é R$ nativo, sem o
+  // que converter). Pedido dos usuários: às vezes é difícil enxergar QUANTO
+  // precisa economizar só olhando o percentual — ver calcularImpactoFinanceiro.
+  const [modo, setModo] = useState<ModoExibicao>('pct')
 
   useEffect(() => {
     if (indicadores.length > 0 && !indicadores.some(i => i.codigo === selecionado)) {
@@ -40,8 +54,55 @@ export function IndicadorPainel({ indicadores, ano, nomeSerie, nomeMeta, formatt
     if (selecionado) onSelecionadoChange?.(selecionado)
   }, [selecionado, onSelecionadoChange])
 
-  if (indicadores.length === 0) return null
+  const toggleDisponivel = formatter === undefined
+  const modoImpacto = toggleDisponivel && modo === 'rs'
+
   const atual = indicadores.find(i => i.codigo === selecionado) ?? indicadores[0]
+
+  // Receita média dos meses já realizados na curva de captura — usada só
+  // pra estimar o impacto (R$) do ritmo necessário nos meses futuros, que
+  // não têm receita própria ainda (sem DRE importado). Aproximação: assume
+  // que a receita futura segue perto da média já realizada no ano.
+  const receitaMediaCaptura = useMemo(() => {
+    if (!atual) return 0
+    const valores = atual.serieCaptura.map(p => p.receita).filter((v): v is number => v !== null && v !== undefined)
+    return valores.length > 0 ? valores.reduce((acc, v) => acc + v, 0) / valores.length : 0
+  }, [atual])
+
+  const serieAnualExibida: SeriePontoMensal[] = useMemo(() => {
+    if (!atual) return []
+    if (!modoImpacto) return atual.serieAnual
+    return atual.serieAnual.map(p => ({
+      mes: p.mes,
+      avr: calcularImpactoFinanceiro(p.avr, p.meta, p.receita ?? 0, atual.natureza),
+      meta: 0, // linha de equilíbrio — o alvo do impacto é nunca ficar negativo
+    }))
+  }, [atual, modoImpacto])
+
+  const serieCapturaExibida: SeriePontoCaptura[] = useMemo(() => {
+    if (!atual) return []
+    if (!modoImpacto) return atual.serieCaptura
+    return atual.serieCaptura.map(p => ({
+      mes: p.mes,
+      avrRealizado: p.avrRealizado === null || p.receita == null
+        ? null
+        : calcularImpactoFinanceiro(p.avrRealizado, p.metaAnual, p.receita, atual.natureza),
+      avrNecessario: p.avrNecessario === null
+        ? null
+        : calcularImpactoFinanceiro(p.avrNecessario, p.metaAnual, receitaMediaCaptura, atual.natureza),
+      metaAnual: 0,
+    }))
+  }, [atual, modoImpacto, receitaMediaCaptura])
+
+  if (indicadores.length === 0 || !atual) return null
+
+  // Em modo Impacto R$ os dois pontos de comparação já viram avr=impacto/meta=0
+  // (ver acima) — forçar natureza='performance' faz o semáforo (verde/vermelho)
+  // dos gráficos usar a mesma regra "positivo é sempre bom", que já é como
+  // calcularImpactoFinanceiro devolve o sinal (independente de custo/performance).
+  const naturezaExibida: Natureza = modoImpacto ? 'performance' : atual.natureza
+  const formatterExibido = modoImpacto ? formatCurrencyInteiro : formatter
+  const nomeSerieExibido = modoImpacto ? 'Impacto Financeiro' : nomeSerie
 
   return (
     <Card className="p-6">
@@ -50,23 +111,38 @@ export function IndicadorPainel({ indicadores, ano, nomeSerie, nomeMeta, formatt
           <div className="text-base font-semibold text-foreground">Tendência do indicador</div>
           <div className="text-xs text-muted-foreground">Ano {ano}</div>
         </div>
-        <Select value={selecionado} onValueChange={setSelecionado}>
-          <SelectTrigger className="w-60"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {indicadores.map(i => <SelectItem key={i.codigo} value={i.codigo}>{i.nome}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        <div className="flex flex-wrap items-center gap-3">
+          {toggleDisponivel && <PillToggle opcoes={OPCOES_MODO} value={modo} onChange={setModo} />}
+          <Select value={selecionado} onValueChange={setSelecionado}>
+            <SelectTrigger className="w-60"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {indicadores.map(i => <SelectItem key={i.codigo} value={i.codigo}>{i.nome}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="space-y-8">
         <div>
           <div className="mb-2 text-sm font-medium text-muted-foreground">Acompanhamento mensal</div>
-          <IndicadorChart serie={atual.serieAnual} gradientId={`grad-mensal-${atual.codigo}`} natureza={atual.natureza} nomeSerie={nomeSerie} formatter={formatter} />
+          <IndicadorChart
+            serie={serieAnualExibida}
+            gradientId={`grad-mensal-${atual.codigo}`}
+            natureza={naturezaExibida}
+            nomeSerie={nomeSerieExibido}
+            formatter={formatterExibido}
+          />
         </div>
 
         <div>
           <div className="mb-2 text-sm font-medium text-muted-foreground">Curva de captura da meta anual</div>
-          <CapturaChart serie={atual.serieCaptura} natureza={atual.natureza} nomeSerie={nomeSerie} nomeMeta={nomeMeta} formatter={formatter} />
+          <CapturaChart
+            serie={serieCapturaExibida}
+            natureza={naturezaExibida}
+            nomeSerie={nomeSerieExibido}
+            nomeMeta={nomeMeta}
+            formatter={formatterExibido}
+          />
         </div>
       </div>
 

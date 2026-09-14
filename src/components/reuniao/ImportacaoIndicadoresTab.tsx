@@ -5,12 +5,14 @@ import { useUnidades } from '@/hooks/useUnidades'
 import { parsePlanilhaReuniaoXlsx, resolverValorImportado, type ParsedPlanilhaRow } from '@/lib/reuniao-planilha-parser'
 import { negocioParaImportacao } from '@/lib/reuniao-resultados'
 import { negocioPorPrefixo, normalizarNomeUnidade, resolverUnidade } from '@/lib/unidade-resolver'
+import { MODELO_INDICADORES_ARMAZEM, MODELO_INDICADORES_DU } from '@/lib/modelos-importacao'
+import { BotaoModeloPlanilha } from '@/components/importacao/BotaoModeloPlanilha'
 import { FilePickerButton } from '@/components/importacao/FilePickerButton'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/use-toast'
-import type { ReuniaoIndicador, ReuniaoSetor, Unidade } from '@/types'
+import type { ReuniaoFormato, ReuniaoIndicador, ReuniaoSetor, Unidade } from '@/types'
 
 const BATCH_SIZE = 500
 const MESES_NOMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
@@ -26,6 +28,12 @@ interface ImportacaoIndicadoresTabProps {
   nomeAba: string
 }
 
+/** Modelo de planilha por setor — só Armazém e Distribuição usam esse componente hoje. */
+const MODELOS_POR_SETOR: Partial<Record<ReuniaoSetor, typeof MODELO_INDICADORES_ARMAZEM>> = {
+  armazem: MODELO_INDICADORES_ARMAZEM,
+  distribuicao: MODELO_INDICADORES_DU,
+}
+
 interface LinhaResolvida {
   linha: ParsedPlanilhaRow
   unidade: Unidade
@@ -33,6 +41,8 @@ interface LinhaResolvida {
   indicador: ReuniaoIndicador
   resultado: number
   meta: number | null
+  /** Formato EFETIVO dessa linha — `indicador.formato_t1` quando o texto da coluna Indicador bateu com `nome_t1` (e o indicador tem um formato próprio cadastrado pro T1), senão `indicador.formato`. Gravado junto no `reuniao_resultados_mensais` pra exibição não precisar re-adivinhar o lado depois (ver migration 112). */
+  formato: ReuniaoFormato
 }
 
 /**
@@ -47,6 +57,7 @@ interface LinhaResolvida {
 export function ImportacaoIndicadoresTab({ setor, nomeAba }: ImportacaoIndicadoresTabProps) {
   const { toast } = useToast()
   const { unidades } = useUnidades()
+  const modelo = MODELOS_POR_SETOR[setor]
 
   const [anoImport, setAnoImport] = useState(String(new Date().getFullYear()))
   const [mesImport, setMesImport] = useState(String(new Date().getMonth() + 1))
@@ -95,15 +106,20 @@ export function ImportacaoIndicadoresTab({ setor, nomeAba }: ImportacaoIndicador
       if (!unidade) { unidadesNaoReconhecidas.add(linha.unidade); continue }
       const negocio = negocioParaImportacao(unidade, negocioPorPrefixo(linha.unidade), setor)
       const alvo = normalizarNomeUnidade(linha.indicador)
-      const indicador = indicadores.find(i =>
-        normalizarNomeUnidade(i.nome) === alvo || (i.nome_t1 !== null && normalizarNomeUnidade(i.nome_t1) === alvo),
-      )
+      const indicador = indicadores.find(i => normalizarNomeUnidade(i.nome) === alvo)
+        ?? indicadores.find(i => i.nome_t1 !== null && normalizarNomeUnidade(i.nome_t1) === alvo)
       if (!indicador) { indicadoresNaoReconhecidos.add(linha.indicador); continue }
-      // Só sabemos se RESULT/META é duração (fração de dia do Excel) ou número puro depois de resolver o indicador e ver o formato cadastrado.
-      const resultado = resolverValorImportado(linha.resultado, indicador.formato)
+      // Indicador combinado (nome/nome_t1, ex: ON TIME/TMV) pode ter formato
+      // diferente por lado — o texto da coluna Indicador já diz qual lado é
+      // essa linha (bateu com nome_t1 e não com nome); só sabemos se
+      // RESULT/META é duração (fração de dia do Excel) ou número puro depois
+      // de resolver esse formato efetivo.
+      const ladoT1 = normalizarNomeUnidade(indicador.nome) !== alvo
+      const formato = ladoT1 ? (indicador.formato_t1 ?? indicador.formato) : indicador.formato
+      const resultado = resolverValorImportado(linha.resultado, formato)
       if (resultado === null) { valoresInvalidos.add(`${linha.unidade} / ${linha.indicador}`); continue }
-      const meta = linha.meta === null ? null : resolverValorImportado(linha.meta, indicador.formato)
-      resolvidas.push({ linha, unidade, negocio, indicador, resultado, meta })
+      const meta = linha.meta === null ? null : resolverValorImportado(linha.meta, formato)
+      resolvidas.push({ linha, unidade, negocio, indicador, resultado, meta, formato })
     }
     return {
       resolvidas,
@@ -115,9 +131,9 @@ export function ImportacaoIndicadoresTab({ setor, nomeAba }: ImportacaoIndicador
 
   async function handleImportar() {
     const mes = Number(mesImport)
-    const registros = resolucao.resolvidas.map(({ linha, unidade, negocio, indicador, resultado, meta }) => ({
+    const registros = resolucao.resolvidas.map(({ linha, unidade, negocio, indicador, resultado, meta, formato }) => ({
       indicador_id: indicador.id, unidade: unidade.codigo, negocio, mes,
-      resultado, meta, pontos: linha.pontos,
+      resultado, meta, pontos: linha.pontos, formato,
     }))
     if (registros.length === 0) return
 
@@ -171,6 +187,7 @@ export function ImportacaoIndicadoresTab({ setor, nomeAba }: ImportacaoIndicador
           </Select>
         </div>
         <FilePickerButton label="Planilha (.xlsx)" accept=".xlsx,.xls" file={file} onFile={handleFile} />
+        {modelo && <BotaoModeloPlanilha nomeArquivo={`modelo_importacao_rr_${setor}`} abas={modelo} />}
       </div>
 
       {carregandoIndicadores ? (

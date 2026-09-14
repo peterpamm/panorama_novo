@@ -15,7 +15,7 @@ import { buscarMetaOrcamento } from '@/lib/orcamento-farol'
 import { calcularAderenciaPorUnidade } from '@/lib/rotinas-financeiras'
 import type {
   DreLongoRow, FinanceiroDreAjusteIndicador, MetaPerdaIndicador, OrcamentoLinha,
-  PainelPerdasAux as PainelPerdasAuxRow, ReuniaoIndicador, ReuniaoResultadoMensal, ReuniaoSetor,
+  PainelPerdasAux as PainelPerdasAuxRow, ReuniaoFormato, ReuniaoIndicador, ReuniaoResultadoMensal, ReuniaoSetor,
   RotinaFinanceira, RotinaFinanceiraStatus,
 } from '@/types'
 
@@ -156,6 +156,7 @@ export function useReuniaoDados(setor: ReuniaoSetor, ano: string) {
   const [resultados, setResultados] = useState<Record<string, number | null>>({})
   const [metasImportadas, setMetasImportadas] = useState<Record<string, number | null>>({})
   const [pontosImportados, setPontosImportados] = useState<Record<string, number | null>>({})
+  const [formatosImportados, setFormatosImportados] = useState<Record<string, ReuniaoFormato | null>>({})
   const [valoresInput, setValoresInput] = useState<Record<string, string>>({})
   const [salvando, setSalvando] = useState<string | null>(null)
 
@@ -216,6 +217,7 @@ export function useReuniaoDados(setor: ReuniaoSetor, ano: string) {
       setResultados({})
       setMetasImportadas({})
       setPontosImportados({})
+      setFormatosImportados({})
       setValoresInput({})
       setCarregando(false)
       return
@@ -242,18 +244,21 @@ export function useReuniaoDados(setor: ReuniaoSetor, ano: string) {
     const resMap: Record<string, number | null> = {}
     const metaImportMap: Record<string, number | null> = {}
     const pontosImportMap: Record<string, number | null> = {}
+    const formatoImportMap: Record<string, ReuniaoFormato | null> = {}
     const inputMap: Record<string, string> = {}
     for (const r of (mensais as ReuniaoResultadoMensal[]) ?? []) {
       const chave = `${r.indicador_id}|${r.unidade}|${r.negocio}|${r.mes}`
       resMap[chave] = r.resultado
       metaImportMap[chave] = r.meta
       pontosImportMap[chave] = r.pontos
+      formatoImportMap[chave] = r.formato
       const ind = indicadoresAtivos.find(i => i.id === r.indicador_id)
       if (ind) inputMap[chave] = valorParaInputEditavel(r.resultado, ind.formato)
     }
     setResultados(resMap)
     setMetasImportadas(metaImportMap)
     setPontosImportados(pontosImportMap)
+    setFormatosImportados(formatoImportMap)
     setValoresInput(inputMap)
     setCarregando(false)
   }
@@ -359,6 +364,22 @@ export function useReuniaoDados(setor: ReuniaoSetor, ano: string) {
     }
   }
 
+  /**
+   * Formato EFETIVO de exibição pra uma célula — só varia da `formato`
+   * cadastrada no indicador pra fonte 'importado' com indicador combinado
+   * (`nome_t1`): a planilha diz por linha se aquele resultado é do lado nome
+   * ou nome_t1 (ex: ON TIME × TMV), e cada lado pode usar um tipo de valor
+   * diferente (% × duração) — `formatosImportados` guarda o que foi
+   * resolvido na importação (ver `ImportacaoIndicadoresTab.tsx`). null (linha
+   * antiga, importada antes da migration 112, ou indicador sem os dois
+   * lados) cai no `formato` único cadastrado, igual sempre foi.
+   */
+  function formatoEfetivo(ind: ReuniaoIndicador, unidade: string, negocio: string, mes: number): ReuniaoFormato {
+    const { formato } = resolverNaturezaFormato(ind)
+    if (ind.fonte !== 'importado') return formato
+    return formatosImportados[`${ind.id}|${unidade}|${negocio}|${mes}`] ?? formato
+  }
+
   /** Pontos ganhos, já resolvendo a fonte 'importado' (pontos prontos da planilha) — centraliza o que antes era repetido em cada tela. */
   function pontosGanhos(ind: ReuniaoIndicador, unidade: string, negocio: string, mes: number): number | null {
     const { resultado, meta } = resultadoEMeta(ind, unidade, negocio, mes)
@@ -425,8 +446,8 @@ export function useReuniaoDados(setor: ReuniaoSetor, ano: string) {
 
   return {
     carregando: carregando || loadingOrcamento, indicadores, participantesPorIndicador,
-    resultados, metasImportadas, pontosImportados, valoresInput, setValoresInput, salvando, handleSalvar,
-    resultadoEMeta, pontosGanhos, unidadesDoTotal, totalPorUnidadeMes, maiorPorMes,
+    resultados, metasImportadas, pontosImportados, formatosImportados, valoresInput, setValoresInput, salvando, handleSalvar,
+    resultadoEMeta, formatoEfetivo, pontosGanhos, unidadesDoTotal, totalPorUnidadeMes, maiorPorMes,
     nomesUnidades, nomesParticipaveis, rowsDre, orcamentos: orcamentoRows,
     ajusteFinanceiroDoIndicador, carregandoAjustesFinanceiro, salvarAjusteFinanceiro, removerAjusteFinanceiro,
   }

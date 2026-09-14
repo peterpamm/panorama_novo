@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
-import { formatarResultado, naturezaEFormatoAutomaticos, resolverNaturezaFormato, unidadesParticipaveis } from '@/lib/reuniao-resultados'
+import { formatarResultado, naturezaEFormatoAutomaticos, resolverNaturezaFormato, unidadesParticipaveis, type ReuniaoParticipavel } from '@/lib/reuniao-resultados'
 import { formatarMinutosComoDuracao, parseDuracaoParaMinutos } from '@/lib/duracao'
 import { INDICADORES_PERDAS } from '@/lib/painel-perdas-calculations'
 import { PACOTES } from '@/lib/constants'
@@ -44,7 +44,7 @@ const PONTOS_MAX_SETOR = 200
 
 const FORM_INICIAL = {
   nome: '', nomeT1: '', meta: '', formato: 'numero' as ReuniaoFormato, natureza: 'performance' as Natureza, pontos: '',
-  fonte: 'manual' as ReuniaoFonte, fonteChave: '', metaFixa: '',
+  fonte: 'manual' as ReuniaoFonte, fonteChave: '', metaFixa: '', formatoT1: '' as ReuniaoFormato | '',
 }
 
 /** Nome amigável da fonte automática escolhida — só pra mostrar na listagem e no formulário. */
@@ -111,6 +111,7 @@ export function CadastroIndicadoresTab({ setor }: CadastroIndicadoresTabProps) {
       fonte: i.fonte,
       fonteChave: i.fonte_chave ?? '',
       metaFixa: i.meta_fixa !== null ? String(i.meta_fixa) : '',
+      formatoT1: i.formato_t1 ?? '',
     })
     setDialogAberto(true)
   }
@@ -141,10 +142,11 @@ export function CadastroIndicadoresTab({ setor }: CadastroIndicadoresTabProps) {
         toast({ title: 'Preencha a meta corretamente', variant: 'destructive' })
         return
       }
-      payload = { setor, ano: Number(ano), nome, nome_t1: nomeT1, meta, formato: form.formato, natureza: form.natureza, pontos, fonte: 'manual', fonte_chave: null, meta_fixa: null }
+      payload = { setor, ano: Number(ano), nome, nome_t1: nomeT1, meta, formato: form.formato, formato_t1: null, natureza: form.natureza, pontos, fonte: 'manual', fonte_chave: null, meta_fixa: null }
     } else if (form.fonte === 'importado') {
-      // Meta/resultado/pontos vêm prontos da planilha (por unidade/mês) — só formato/natureza ficam a critério de quem cadastra, iguais ao manual, só pra exibição.
-      payload = { setor, ano: Number(ano), nome, nome_t1: nomeT1, meta: null, formato: form.formato, natureza: form.natureza, pontos, fonte: 'importado', fonte_chave: null, meta_fixa: null }
+      // Meta/resultado/pontos vêm prontos da planilha (por unidade/mês) — só formato/natureza ficam a critério de quem cadastra, iguais ao manual, só pra exibição. formatoT1 só faz sentido com nome_t1 preenchido — o texto da coluna Indicador da planilha já diz qual lado cada linha é (ver ImportacaoIndicadoresTab).
+      const formatoT1 = nomeT1 && form.formatoT1 ? form.formatoT1 : null
+      payload = { setor, ano: Number(ano), nome, nome_t1: nomeT1, meta: null, formato: form.formato, formato_t1: formatoT1, natureza: form.natureza, pontos, fonte: 'importado', fonte_chave: null, meta_fixa: null }
     } else {
       if (form.fonte !== 'rotinas' && form.fonte !== 'termometro' && !form.fonteChave) {
         toast({ title: 'Selecione o indicador/pacote de origem', variant: 'destructive' })
@@ -156,7 +158,7 @@ export function CadastroIndicadoresTab({ setor }: CadastroIndicadoresTabProps) {
         toast({ title: 'Não consegui identificar a fonte selecionada', variant: 'destructive' })
         return
       }
-      payload = { setor, ano: Number(ano), nome, nome_t1: nomeT1, meta: null, formato: auto.formato, natureza: auto.natureza, pontos, fonte: form.fonte, fonte_chave: fonteChave, meta_fixa: metaFixa }
+      payload = { setor, ano: Number(ano), nome, nome_t1: nomeT1, meta: null, formato: auto.formato, formato_t1: null, natureza: auto.natureza, pontos, fonte: form.fonte, fonte_chave: fonteChave, meta_fixa: metaFixa }
     }
 
     setSalvando(true)
@@ -196,6 +198,27 @@ export function CadastroIndicadoresTab({ setor }: CadastroIndicadoresTabProps) {
   const [participantesDe, setParticipantesDe] = useState<ReuniaoIndicador | null>(null)
   const [participantesSel, setParticipantesSel] = useState<Set<string>>(new Set())
   const [carregandoParticipantes, setCarregandoParticipantes] = useState(false)
+
+  /**
+   * Lista de opções do diálogo de Participantes = `linhasParticipaveis`
+   * (regra padrão do setor) + qualquer combo unidade|negócio que já estava
+   * marcado no banco mas não está mais na lista padrão (ex: Camaçari ·
+   * Armazém ou Carambeí, removidos de Distribuição — ver
+   * `unidadesParticipaveis`). Sem isso, quem já tinha marcado um desses
+   * ficaria com o checkbox invisível e travado marcado pra sempre, sem
+   * conseguir desmarcar pela tela.
+   */
+  const linhasParticipaveisDialog = useMemo(() => {
+    const chavesPadrao = new Set(linhasParticipaveis.map(p => `${p.unidade}|${p.negocio}`))
+    const extras: ReuniaoParticipavel[] = []
+    for (const chave of participantesSel) {
+      if (chavesPadrao.has(chave)) continue
+      const [unidadeCodigo, negocio] = chave.split('|')
+      const nomeUnidade = unidades.find(u => u.codigo === unidadeCodigo)?.nome ?? unidadeCodigo
+      extras.push({ unidade: unidadeCodigo, negocio, nome: `${nomeUnidade} · ${negocio} (fora da lista padrão — desmarque pra remover)` })
+    }
+    return [...linhasParticipaveis, ...extras]
+  }, [linhasParticipaveis, participantesSel, unidades])
 
   async function abrirParticipantes(i: ReuniaoIndicador) {
     setParticipantesDe(i)
@@ -422,14 +445,28 @@ export function CadastroIndicadoresTab({ setor }: CadastroIndicadoresTabProps) {
               </p>
             ) : (
               <>
-                <div className="space-y-1.5">
-                  <Label>Formato</Label>
-                  <Select value={form.formato} onValueChange={v => setForm(f => ({ ...f, formato: v as ReuniaoFormato }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {FORMATOS.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Formato</Label>
+                    <Select value={form.formato} onValueChange={v => setForm(f => ({ ...f, formato: v as ReuniaoFormato }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {FORMATOS.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {form.nomeT1.trim() !== '' && (
+                    <div className="space-y-1.5">
+                      <Label>Formato no T1 (se diferente)</Label>
+                      <Select value={form.formatoT1 || '__igual__'} onValueChange={v => setForm(f => ({ ...f, formatoT1: v === '__igual__' ? '' : v as ReuniaoFormato }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__igual__">Igual ao Formato acima</SelectItem>
+                          {FORMATOS.map(f => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label>Natureza</Label>
@@ -443,10 +480,12 @@ export function CadastroIndicadoresTab({ setor }: CadastroIndicadoresTabProps) {
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Sem meta — meta, resultado e pontos vêm prontos da planilha padrão (aba Importação), por unidade/mês.
-                  Formato/natureza são só pra exibição (a pontuação nunca é calculada a partir deles) — se o "Nome no T1"
-                  for diferente e a direção mudar entre T2/T1 (ex: ON TIME quanto maior melhor, TMV quanto menor melhor),
-                  pode escolher qualquer uma das duas aqui: não afeta a pontuação, e a tela para de afirmar uma direção
-                  única sempre que houver Nome no T1 cadastrado.
+                  Natureza é só pra exibição (a pontuação nunca é calculada a partir dela) — se o "Nome no T1" for
+                  diferente e a direção mudar entre T2/T1 (ex: ON TIME quanto maior melhor, TMV quanto menor melhor),
+                  pode escolher qualquer uma das duas aqui: não afeta a pontuação. Já o Formato afeta como o número
+                  aparece na tela — se o T1 usa um TIPO de valor diferente do T2 (ex: ON TIME é % e TMV é duração
+                  HH:MM:SS), preencha "Formato no T1": a planilha importada já diz, linha a linha, qual dos dois nomes é
+                  aquele resultado, então cada lado é exibido certo mesmo vindo do mesmo indicador cadastrado.
                 </p>
               </>
             )}
@@ -480,7 +519,7 @@ export function CadastroIndicadoresTab({ setor }: CadastroIndicadoresTabProps) {
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 max-h-80 overflow-y-auto sm:grid-cols-3">
-              {linhasParticipaveis.map(p => {
+              {linhasParticipaveisDialog.map(p => {
                 const chave = `${p.unidade}|${p.negocio}`
                 return (
                   <div key={chave} className="flex items-center gap-1.5">

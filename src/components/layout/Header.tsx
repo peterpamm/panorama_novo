@@ -1,4 +1,4 @@
-import { Building2, LogOut, MonitorPlay, Moon, Sun } from 'lucide-react'
+import { Building2, LogOut, MonitorPlay, Moon, Sun, Truck } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { Button } from '@/components/ui/button'
@@ -73,6 +73,12 @@ export function Header({ title, isDark, onToggleTheme }: HeaderProps) {
               <DropdownMenuItem onClick={() => navigate('/sdg-corporativo')} className="cursor-pointer">
                 <Building2 className="mr-2 h-4 w-4" />
                 SDG Corporativo
+              </DropdownMenuItem>
+            )}
+            {role === 'admin' && (
+              <DropdownMenuItem onClick={() => navigate('/sdg-corporativo-frota')} className="cursor-pointer">
+                <Truck className="mr-2 h-4 w-4" />
+                SDG Corporativo de Frota
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />

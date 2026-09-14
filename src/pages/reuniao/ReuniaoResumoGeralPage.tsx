@@ -70,7 +70,7 @@ export function ReuniaoResumoGeralPage() {
   const { unidades } = useUnidades()
   const { rows: rowsDre } = useDreLongoTodasUnidades()
   const { orcamentos: orcamentoRows } = useOrcamentoTodasUnidades()
-  const { rankingAmbev, carregando: carregandoRanking, posicoesAmbev, historicoDoAno, salvarPosicaoAmbev } = useResumoGeralRanking(ano)
+  const { rankingAmbev, carregando: carregandoRanking, posicoesAmbev, historicoDoAno } = useResumoGeralRanking(ano)
 
   const financeiro = useReuniaoDados('financeiro', ano)
   const gente = useReuniaoDados('gente', ano)
@@ -175,7 +175,7 @@ export function ReuniaoResumoGeralPage() {
             <ResumoGeralTab
               ano={ano} setAno={setAno} mes={mes} setMes={setMes}
               linhas={linhas} resumoPorLinhaMes={resumoPorLinhaMes}
-              carregando={carregando} salvarPosicaoAmbev={salvarPosicaoAmbev}
+              carregando={carregando}
             />
           </TabsContent>
 

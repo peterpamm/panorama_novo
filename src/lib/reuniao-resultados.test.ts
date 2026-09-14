@@ -5,6 +5,7 @@ import type { Unidade } from '@/types'
 const CAMACARI: Unidade = { id: '1', codigo: 'CAMACARI', nome: 'Camaçari', nome_ginfo: null, data_entrada: null, apelidos: ['CDL CAMAÇARI', 'CDR BAHIA'] }
 const CASCAVEL: Unidade = { id: '2', codigo: 'CASCAVEL', nome: 'Cascavel', nome_ginfo: null, data_entrada: null, apelidos: null }
 const PONTA_GROSSA: Unidade = { id: '3', codigo: 'PG', nome: 'Ponta Grossa', nome_ginfo: null, data_entrada: null, apelidos: null }
+const CARAMBEI: Unidade = { id: '4', codigo: 'CARAMBEI', nome: 'Carambeí', nome_ginfo: null, data_entrada: null, apelidos: null }
 
 describe('unidadesParticipaveis', () => {
   it('financeiro: toda unidade é 1 linha só (negocio CONS), inclusive Camaçari', () => {
@@ -25,6 +26,19 @@ describe('unidadesParticipaveis', () => {
   it('Ponta Grossa não abre (diferente da RV) — continua 1 linha só, mesmo fora do Financeiro', () => {
     expect(unidadesParticipaveis([PONTA_GROSSA], 'frota')).toEqual([
       { unidade: 'PG', negocio: 'CONS', nome: 'Ponta Grossa' },
+    ])
+  })
+
+  it('distribuicao: Camaçari só entra pelo lado Rota (Armazém/CDR não tem Distribuição), Carambeí (só armazém) fica de fora inteiramente', () => {
+    expect(unidadesParticipaveis([CAMACARI, CASCAVEL, CARAMBEI], 'distribuicao')).toEqual([
+      { unidade: 'CAMACARI', negocio: 'ROTA', nome: 'Camaçari · Rota' },
+      { unidade: 'CASCAVEL', negocio: 'CONS', nome: 'Cascavel' },
+    ])
+  })
+
+  it('fora de distribuicao, Carambeí continua participando normal (ex: armazém, onde é a operação inteira dela)', () => {
+    expect(unidadesParticipaveis([CARAMBEI], 'armazem')).toEqual([
+      { unidade: 'CARAMBEI', negocio: 'CONS', nome: 'Carambeí' },
     ])
   })
 })

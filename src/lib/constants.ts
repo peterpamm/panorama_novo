@@ -28,6 +28,11 @@ export const PACOTES: Record<string, PacoteInfo> = {
   '118': { nome: 'Manutenção',                  natureza: 'custo',       prefixos: ['118'] },
   '132': { nome: 'Pneus',                       natureza: 'custo',       prefixos: ['132'] },
   '116': { nome: 'Combustíveis',                natureza: 'custo',       prefixos: ['116'] },
+  // Os 3 grupos que formam o Pacote de Frota (114) — adicionados pro SDG
+  // Corporativo de Frota (Tela 1: abertura de 114 em Variáveis/Fixos/Outros).
+  '115': { nome: 'Custos Variáveis Frota',      natureza: 'custo',       prefixos: ['115'] },
+  '140': { nome: 'Custo Fixos',                 natureza: 'custo',       prefixos: ['140'] },
+  '144': { nome: 'Outros Custos Operacionais',  natureza: 'custo',       prefixos: ['144'] },
   '158': { nome: 'Despesa Administrativa',      natureza: 'custo',       prefixos: ['158'] },
   '074': { nome: 'Pacote Segurança',            natureza: 'custo',       prefixos: ['074'] },
   '075': { nome: "EPI's",                       natureza: 'custo',       prefixos: ['075'] },
@@ -100,10 +105,13 @@ export const PACOTE_CONTA_ORCAMENTO: Record<string, string[]> = {
   '033': ['020'], // Custo com Pessoal
   '159': ['078'], // Despesas com Pessoal Administrativo
   '113': ['052'], // Custos Gerais com Frota
+  '114': ['053'], // Custos Variáveis Frota
   '073': ['046'], // Gastos com Uniformes e EPI's
   '117': ['056'], // Manutenção de Veículos Próprios
   '131': ['058'], // Pneus
   '115': ['054'], // Óleo Diesel
+  '139': ['063'], // Custo Fixos
+  '143': ['067'], // Outros Custos Operacionais
   '074': ['047'], // EPI's
   '075': ['048'], // Uniformes
   '190': ['096'], // Despesas Administrativas Gerais

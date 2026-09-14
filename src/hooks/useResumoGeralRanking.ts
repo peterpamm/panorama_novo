@@ -2,15 +2,20 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useToast } from '@/components/ui/use-toast'
 import { POSICOES_AMBEV_VAZIAS, type PosicoesAmbev } from '@/lib/resumo-geral-calculations'
-import type { ResumoGeralAmbevSetor, ResumoGeralHistorico, ResumoGeralRankingAmbev } from '@/types'
+import type { ResumoGeralHistorico, ResumoGeralRankingAmbev } from '@/types'
 
 /**
- * Dados exclusivos do Resumo Geral que `useReuniaoDados` não tem: posição
- * manual da unidade em cada um dos 3 Rankings Ambev (Gente/Frota/Segurança
- * — independentes entre si, bônus calculado em
- * `resumo-geral-calculations.ts`) e a pontuação final já fechada de meses
- * anteriores ao início oficial do sistema (Importação de Histórico) — ambos
- * por ano, igual `metas_perdas_indicadores` (sem filtro de unidade).
+ * Dados exclusivos do Resumo Geral que `useReuniaoDados` não tem: posição da
+ * unidade em cada um dos 3 Rankings Ambev (Gente/Frota/Segurança —
+ * independentes entre si, bônus calculado em `resumo-geral-calculations.ts`)
+ * e a pontuação final já fechada de meses anteriores ao início oficial do
+ * sistema (Importação de Histórico) — ambos por ano, igual
+ * `metas_perdas_indicadores` (sem filtro de unidade).
+ *
+ * A posição no Ranking Ambev só entra por importação hoje (Reunião
+ * Resultados > Gente/Frota/Segurança > Importação, aba Termômetro — ver
+ * `reuniao-termometro-parser.ts`), não tem mais lançamento manual — por
+ * isso esse hook só lê `resumo_geral_ranking_ambev`, não escreve.
  */
 export function useResumoGeralRanking(ano: string) {
   const { toast } = useToast()
@@ -49,20 +54,5 @@ export function useResumoGeralRanking(ano: string) {
     return historico.find(h => h.unidade === unidade) ?? null
   }
 
-  /** Salva (ou remove, se `posicao` for null) a posição da unidade+negócio num dos 3 Rankings Ambev daquele mês. */
-  async function salvarPosicaoAmbev(unidade: string, negocio: string, mes: number, setor: ResumoGeralAmbevSetor, posicao: number | null) {
-    if (posicao === null) {
-      const { error } = await supabase.from('resumo_geral_ranking_ambev')
-        .delete().eq('unidade', unidade).eq('negocio', negocio).eq('ano', Number(ano)).eq('mes', mes).eq('setor', setor)
-      if (error) { toast({ title: 'Erro ao salvar posição', description: error.message, variant: 'destructive' }); return }
-      setRankingAmbev(prev => prev.filter(r => !(r.unidade === unidade && r.negocio === negocio && r.mes === mes && r.setor === setor)))
-      return
-    }
-    const { error } = await supabase.from('resumo_geral_ranking_ambev')
-      .upsert({ unidade, negocio, ano: Number(ano), mes, setor, posicao }, { onConflict: 'unidade,negocio,ano,mes,setor' })
-    if (error) { toast({ title: 'Erro ao salvar posição', description: error.message, variant: 'destructive' }); return }
-    setRankingAmbev(prev => [...prev.filter(r => !(r.unidade === unidade && r.negocio === negocio && r.mes === mes && r.setor === setor)), { unidade, negocio, ano: Number(ano), mes, setor, posicao }])
-  }
-
-  return { rankingAmbev, historico, carregando, posicoesAmbev, historicoDoAno, salvarPosicaoAmbev, recarregar: carregar }
+  return { rankingAmbev, historico, carregando, posicoesAmbev, historicoDoAno, recarregar: carregar }
 }

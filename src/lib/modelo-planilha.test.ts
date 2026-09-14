@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import * as XLSX from 'xlsx'
 import { montarWorkbookModelo } from './modelo-planilha'
-import { MODELO_METAS_ARMAZEM, MODELO_META_PRESENTEISMO_DU, MODELO_RESULTADOS_ARMAZEM } from './modelos-importacao'
+import { MODELO_ENCONTRO_CONTAS, MODELO_INDICADORES_ARMAZEM, MODELO_INDICADORES_DU, MODELO_METAS_ARMAZEM, MODELO_META_PRESENTEISMO_DU, MODELO_RESULTADOS_ARMAZEM, MODELO_TERMOMETRO } from './modelos-importacao'
 import { parseArmazemT1MetaXlsx } from './armazem-t1-meta-parser'
 import { parseArmazemResultadosXlsx } from './armazem-resultado-parser'
 import { parsePresenteismoDuMetaXlsx } from './presenteismo-du-meta-parser'
+import { parseEncontroContasFile } from './encontro-contas-parser'
+import { parseTermometroFile } from './reuniao-termometro-parser'
+import { parsePlanilhaReuniaoXlsx } from './reuniao-planilha-parser'
 
 function comoArquivo(wb: XLSX.WorkBook, nome = 'modelo.xlsx'): File {
   return new File([XLSX.write(wb, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer], nome)
@@ -63,5 +66,49 @@ describe('modelos são lidos pelos parsers das telas', () => {
     const historico = await parsePresenteismoDuMetaXlsx(arquivo, 'Histórico (vários meses)')
     expect(historico.erros).toEqual([])
     expect(new Set(historico.linhas.map(l => l.mes))).toEqual(new Set([1, 2, 3]))
+  })
+
+  it('Encontro de Contas: descrição no padrão "EC - <chamado> - <nome>" já sai pronta pro parser', async () => {
+    const arquivo = comoArquivo(montarWorkbookModelo(MODELO_ENCONTRO_CONTAS))
+    const { linhas, erros } = await parseEncontroContasFile(arquivo)
+    expect(erros).toEqual([])
+    expect(linhas).toEqual([
+      { data: '2026-01-15', descricaoOriginal: 'EC - R14602322 - Vinicius Etges Silveira', numeroChamado: 'R14602322', solicitante: 'Vinicius Etges Silveira', valor: 1234.56 },
+      { data: '2026-01-22', descricaoOriginal: 'EC - R14611087 - Ana Paula Ferreira', numeroChamado: 'R14611087', solicitante: 'Ana Paula Ferreira', valor: 850 },
+    ])
+  })
+
+  it('Termômetro: pontuação de todas as unidades + Posição nas que já têm colocação lançada', async () => {
+    const arquivo = comoArquivo(montarWorkbookModelo(MODELO_TERMOMETRO))
+    const { linhas, erros } = await parseTermometroFile(arquivo)
+    expect(erros).toEqual([])
+    expect(linhas).toEqual([
+      { unidade: 'ESTÂNCIA', valor: 92.5, posicao: 1 },
+      { unidade: 'CDR BAHIA', valor: 88, posicao: 2 },
+      { unidade: 'CD CASCAVEL', valor: 81.3, posicao: 3 },
+      { unidade: 'CD FOZ DO IGUAÇU', valor: 75 },
+    ])
+  })
+
+  it('Importação Reunião Resultados — Armazém: acha a linha de título acima do cabeçalho e lê as 3 linhas de exemplo', async () => {
+    const arquivo = comoArquivo(montarWorkbookModelo(MODELO_INDICADORES_ARMAZEM))
+    const { linhas, erros } = await parsePlanilhaReuniaoXlsx(arquivo, 'Import RR_ARM')
+    expect(erros).toEqual([])
+    expect(linhas).toEqual([
+      { unidade: 'ESTÂNCIA', indicador: 'TMA', meta: '01:40', resultado: '01:38', pontos: 20 },
+      { unidade: 'ESTÂNCIA', indicador: 'DISPONIBILIDADE DE GENTE', meta: '95,9%', resultado: '96,4%', pontos: 20 },
+      { unidade: 'CD CASCAVEL', indicador: 'PRESENTEISMO AL', meta: '1,14%', resultado: '1,20%', pontos: 0 },
+    ])
+  })
+
+  it('Importação Reunião Resultados — Distribuição: mesma estrutura, aba e indicadores do setor DU', async () => {
+    const arquivo = comoArquivo(montarWorkbookModelo(MODELO_INDICADORES_DU))
+    const { linhas, erros } = await parsePlanilhaReuniaoXlsx(arquivo, 'Import RR_DU')
+    expect(erros).toEqual([])
+    expect(linhas).toEqual([
+      { unidade: 'CD CASCAVEL', indicador: 'GTY', meta: '95%', resultado: '96,2%', pontos: 20 },
+      { unidade: 'CD CASCAVEL', indicador: 'TMV', meta: '00:45', resultado: '00:42', pontos: 20 },
+      { unidade: 'CD FOZ DO IGUAÇU', indicador: 'TEMPO DE RENDIÇÃO', meta: '00:15', resultado: '00:18', pontos: 0 },
+    ])
   })
 })

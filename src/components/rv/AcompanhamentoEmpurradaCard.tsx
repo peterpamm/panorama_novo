@@ -161,7 +161,12 @@ export function AcompanhamentoEmpurradaCard() {
       const mes = i + 1
       const linha = resultadosImportados.find(r => r.indicador_id === indConfig.id && r.unidade === estanciaCodigo && r.negocio === 'CONS' && r.mes === mes)
       if (!linha || linha.resultado === null) return null
-      return { resultado: linha.resultado, meta: linha.meta, formato: indConfig.formato, natureza: indConfig.natureza }
+      // `linha.formato` é o que foi resolvido na importação (ver migration
+      // 112/ImportacaoIndicadoresTab.tsx) — sabe se essa linha é do lado nome
+      // ou nome_t1 do indicador combinado (ex: ON TIME × TMV), cada um podendo
+      // ter um tipo de valor diferente (% × duração). null (linha importada
+      // antes da migration) cai no formato único cadastrado, igual sempre foi.
+      return { resultado: linha.resultado, meta: linha.meta, formato: linha.formato ?? indConfig.formato, natureza: indConfig.natureza }
     })
   }, [indId, ano, estanciaCodigo, indicadoresImportados, resultadosImportados])
 

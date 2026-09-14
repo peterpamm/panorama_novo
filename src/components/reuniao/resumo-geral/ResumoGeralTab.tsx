@@ -1,7 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -30,14 +29,19 @@ interface ResumoGeralTabProps {
   linhas: ReuniaoParticipavel[]
   resumoPorLinhaMes: Record<string, ResumoMesUnidade>
   carregando: boolean
-  salvarPosicaoAmbev: (unidade: string, negocio: string, mes: number, setor: ResumoGeralAmbevSetor, posicao: number | null) => Promise<void>
 }
 
-/** Resumo Geral: tabela consolidada (Etapas 1-3) — pontuação dos 6 setores + bonificações + colocação, com input inline pra lançar a posição em cada um dos 3 Rankings Ambev (Gente/Frota/Segurança). */
-export function ResumoGeralTab({ ano, setAno, mes, setMes, linhas, resumoPorLinhaMes, carregando, salvarPosicaoAmbev }: ResumoGeralTabProps) {
+/**
+ * Resumo Geral: tabela consolidada (Etapas 1-3) — pontuação dos 6 setores +
+ * bonificações + colocação, com a posição em cada um dos 3 Rankings Ambev
+ * (Gente/Frota/Segurança). A posição só entra por importação (Reunião
+ * Resultados > Gente/Frota/Segurança > Importação, aba Termômetro) — aqui é
+ * só leitura, sem lançamento manual (existia um input antes, tirado depois
+ * que a importação passou a trazer a posição pronta, pra não ter dois
+ * caminhos divergentes pro mesmo dado).
+ */
+export function ResumoGeralTab({ ano, setAno, mes, setMes, linhas, resumoPorLinhaMes, carregando }: ResumoGeralTabProps) {
   const mesNum = Number(mes)
-  const [edicoes, setEdicoes] = useState<Record<string, string>>({})
-  const [salvandoChave, setSalvandoChave] = useState<string | null>(null)
   const { rows: rowsDre } = useDreLongoTodasUnidades()
   const { orcamentos } = useOrcamentoTodasUnidades()
 
@@ -65,17 +69,6 @@ export function ResumoGeralTab({ ano, setAno, mes, setMes, linhas, resumoPorLinh
   const nomesLinha = useMemo(() => new Map(linhas.map(l => [chaveLinha(l), l.nome])), [linhas])
 
   const liderDoMes = ranking.find(r => r.rank === 1)
-
-  async function salvarPosicao(unidade: string, negocio: string, setor: ResumoGeralAmbevSetor) {
-    const chave = `${unidade}|${negocio}|${setor}`
-    const texto = (edicoes[chave] ?? '').trim()
-    const posicao = texto === '' ? null : Number(texto)
-    if (posicao !== null && (Number.isNaN(posicao) || posicao <= 0)) return
-    setSalvandoChave(chave)
-    await salvarPosicaoAmbev(unidade, negocio, mesNum, setor, posicao)
-    setSalvandoChave(null)
-    setEdicoes(prev => { const novo = { ...prev }; delete novo[chave]; return novo })
-  }
 
   return (
     <div className="space-y-6">
@@ -161,18 +154,10 @@ export function ResumoGeralTab({ ano, setAno, mes, setMes, linhas, resumoPorLinh
                           </span>
                         </TableCell>
                         {COLUNAS_AMBEV.map(({ setor }) => {
-                          const chave = `${linha.unidade}|${linha.negocio}|${setor}`
+                          const posicao = resumo.posicoesAmbev[setor]
                           return (
-                            <TableCell key={setor} className="text-center">
-                              <Input
-                                className="mx-auto w-16 text-center"
-                                inputMode="numeric"
-                                placeholder="—"
-                                value={edicoes[chave] ?? (resumo.posicoesAmbev[setor] !== null ? String(resumo.posicoesAmbev[setor]) : '')}
-                                onChange={e => setEdicoes(prev => ({ ...prev, [chave]: e.target.value }))}
-                                onBlur={() => salvarPosicao(linha.unidade, linha.negocio, setor)}
-                                disabled={salvandoChave === chave}
-                              />
+                            <TableCell key={setor} className="text-center text-sm tabular-nums">
+                              {posicao !== null ? `${posicao}º` : <span className="text-muted-foreground">—</span>}
                             </TableCell>
                           )
                         })}

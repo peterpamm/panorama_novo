@@ -49,10 +49,22 @@ function parseValor(raw: unknown): number | null {
  * `parseDuracaoParaMinutos` (célula Excel de duração vem como fração do dia,
  * ex: 0,0625 = 1h30; ou texto "01:30"), os demais formatos usam o parser
  * numérico genérico. Retorna null pra valor vazio/inválido.
+ *
+ * "percentual" tem a mesma ambiguidade de "duracao": a maioria das planilhas
+ * de RR traz o Result/Meta já em escala 0–100 (ex: 95 = 95%, célula sem
+ * formatação especial de Excel), mas algumas colunas vêm de uma célula
+ * formatada como % de verdade no Excel — aí o valor por trás é a fração
+ * (ex: 0,9727 = 97,27%), e sem essa conversão o app mostra "0,97%" gritantemente
+ * errado. Nenhum indicador dessa planilha (ON TIME, DEV PDV/GTY, DEV HL,
+ * JORNADA) é realisticamente < 1% de resultado, então qualquer valor ≤ 1 só
+ * pode ser essa fração — mesmo raciocínio/risco já aceito em
+ * `parseDuracaoParaMinutos` (duracao.ts) pro caso análogo de duração.
  */
 export function resolverValorImportado(raw: unknown, formato: ReuniaoFormato): number | null {
   if (formato === 'duracao') return parseDuracaoParaMinutos(raw)
-  return parseValor(raw)
+  const valor = parseValor(raw)
+  if (formato === 'percentual' && valor !== null && valor > 0 && valor <= 1) return Math.round(valor * 100 * 100) / 100
+  return valor
 }
 
 /**

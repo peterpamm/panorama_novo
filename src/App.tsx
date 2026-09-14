@@ -30,6 +30,7 @@ import { SdgFinanceiroGestaoPage } from '@/pages/financeira/SdgFinanceiroGestaoP
 import { SdgCorpFinGestaoPage } from '@/pages/financeira/SdgCorpFinGestaoPage'
 import { SdgFinanceiroPage } from '@/pages/SdgFinanceiroPage'
 import { SdgCorporativoPage } from '@/pages/SdgCorporativoPage'
+import { SdgCorporativoFrotaPage } from '@/pages/SdgCorporativoFrotaPage'
 import { MetasGeraisPage } from '@/pages/metas/MetasGeraisPage'
 import { MetasPerdasPage } from '@/pages/metas/MetasPerdasPage'
 import { MetasGentePage } from '@/pages/metas/MetasGentePage'
@@ -73,6 +74,20 @@ export default function App() {
               <ProtectedRoute donoApenas>
                 <DataProvider>
                   <SdgCorporativoPage />
+                </DataProvider>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* SDG Corporativo de Frota — mesmo molde do SDG Corporativo, mas só a
+              estrutura de custos de Frota (conta 114). Qualquer admin acessa
+              (não só o dono — pedido do corporativo de Frota). */}
+          <Route
+            path="sdg-corporativo-frota"
+            element={
+              <ProtectedRoute adminOnly>
+                <DataProvider>
+                  <SdgCorporativoFrotaPage />
                 </DataProvider>
               </ProtectedRoute>
             }

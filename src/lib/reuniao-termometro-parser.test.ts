@@ -45,4 +45,43 @@ describe('parseTermometroCsv', () => {
     expect(linhas).toEqual([{ unidade: 'CD FOZ', valor: 60 }])
     expect(erros).toHaveLength(1)
   })
+
+  it('lê a coluna opcional Posição, em qualquer ordem', () => {
+    const texto = [
+      'Unidade;Junho;Posição',
+      'ESTÂNCIA;92,5;1',
+      'CDR BAHIA;88;2',
+    ].join('\n')
+    const { linhas, erros } = parseTermometroCsv(texto)
+    expect(erros).toEqual([])
+    expect(linhas).toEqual([
+      { unidade: 'ESTÂNCIA', valor: 92.5, posicao: 1 },
+      { unidade: 'CDR BAHIA', valor: 88, posicao: 2 },
+    ])
+  })
+
+  it('unidade sem Posição lançada fica sem posição, sem gerar erro (pontuação continua entrando)', () => {
+    const texto = ['Unidade;Julho;Posição', 'CD CASCAVEL;81,3;3', 'CD FOZ;75;'].join('\n')
+    const { linhas, erros } = parseTermometroCsv(texto)
+    expect(erros).toEqual([])
+    expect(linhas).toEqual([
+      { unidade: 'CD CASCAVEL', valor: 81.3, posicao: 3 },
+      { unidade: 'CD FOZ', valor: 75 },
+    ])
+  })
+
+  it('arquivo sem a coluna Posição continua funcionando igual antes (compatibilidade)', () => {
+    const texto = ['Unidade;Agosto', 'CD CASCAVEL;70'].join('\n')
+    const { linhas, erros } = parseTermometroCsv(texto)
+    expect(erros).toEqual([])
+    expect(linhas).toEqual([{ unidade: 'CD CASCAVEL', valor: 70 }])
+    expect(linhas[0].posicao).toBeUndefined()
+  })
+
+  it('marca erro de posição inválida (não inteiro ou <= 0) sem descartar a pontuação da linha', () => {
+    const texto = ['Unidade;Setembro;Posição', 'CD CASCAVEL;65;0', 'CD FOZ;70;1,5'].join('\n')
+    const { linhas, erros } = parseTermometroCsv(texto)
+    expect(linhas).toEqual([])
+    expect(erros).toHaveLength(2)
+  })
 })

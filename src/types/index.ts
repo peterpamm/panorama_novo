@@ -721,6 +721,8 @@ export interface ReuniaoIndicador {
   nome: string
   /** Rótulo alternativo pra unidades T1 (ex: nome="DEV PDV", nome_t1="GTY") — qualquer setor/fonte pode usar, opcional. null = mesmo nome pros dois. */
   nome_t1: string | null
+  /** Formato do lado `nome_t1`, se for diferente de `formato` (ex: nome="ON TIME" formato='percentual', nome_t1="TMV" formato_t1='duracao'). null = usa `formato` pros dois lados (caso comum — a maioria dos pares T1 é só rótulo diferente, mesmo tipo de valor). */
+  formato_t1: ReuniaoFormato | null
   meta: number | null
   /** Só pra fonte 'perdas': quando preenchida, substitui a meta do Painel de Perdas (metas_perdas_indicadores/12) na apuração da Reunião — ex: meta combinada de 0 pra uma indicador que tem orçamento > 0. null = mantém a meta do Painel de Perdas. */
   meta_fixa: number | null
@@ -750,6 +752,15 @@ export interface ReuniaoResultadoMensal {
   resultado: number | null
   meta: number | null
   pontos: number | null
+  /**
+   * Formato EFETIVO desse resultado, só pra fonte 'importado' com indicador
+   * combinado (`nome_t1` preenchido) — a planilha diz por linha se aquele
+   * valor é do lado `nome` ou `nome_t1` (coluna Indicador), e cada lado pode
+   * ter um `formato`/`formato_t1` diferente (ex: ON TIME=% × TMV=duração);
+   * gravado aqui na importação pra exibição não precisar re-adivinhar o lado
+   * depois. null = usa o `formato` do indicador (todo o resto dos casos).
+   */
+  formato: ReuniaoFormato | null
 }
 
 /**

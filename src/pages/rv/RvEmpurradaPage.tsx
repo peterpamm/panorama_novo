@@ -41,6 +41,10 @@ export function RvEmpurradaPage() {
         <PillToggle opcoes={ABAS} value={aba} onChange={setAba} />
       </div>
 
+      <div className="rounded-lg border border-blue-300/50 bg-blue-50 p-3 text-xs text-blue-700 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400">
+        GTY, TMV e Tempo de Rendição vêm da importação de <strong>Reunião Resultados &gt; Distribuição &gt; Importação</strong> — não tem importação própria aqui, só o peso de cada indicador.
+      </div>
+
       {aba === 'acompanhamento' ? (
         <AcompanhamentoEmpurradaCard />
       ) : (
