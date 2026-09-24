@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
-import { useAuth } from '@/context/AuthContext'
 import { useFinanceiroDreAjustes } from '@/hooks/useFinanceiroDreAjustes'
 import { Toaster } from '@/components/ui/toaster'
 import { PillToggle } from '@/components/ui/pill-toggle'
@@ -24,10 +23,12 @@ const ABAS = [
  * Vales, não mais dispersão ≥ 0).
  */
 export function RvFinanceiroPage() {
-  const { souDono } = useAuth()
   const [aba, setAba] = useState<AbaRvFinanceiro>('acompanhamento')
-  // Ajuste manual TEMPORÁRIO de Multas/Vales (bug do DRE) — só busca pro dono, RLS bloqueia o resto de qualquer forma.
-  const { ajustes: ajustesFinanceiro, salvar: salvarAjusteFinanceiro, remover: removerAjusteFinanceiro } = useFinanceiroDreAjustes(souDono)
+  // Ajuste manual TEMPORÁRIO de Multas/Vales (bug do DRE) — qualquer admin lê
+  // (RLS de `financeiro_dre_ajustes_manuais`, migration 113), pra refletir
+  // pra todo mundo que acessa essa tela; editar continua só o dono (botão de
+  // edição do ajuste é `souDono &&`, ver AcompanhamentoReuniaoTab.tsx/RvApuracao.tsx).
+  const { ajustes: ajustesFinanceiro, salvar: salvarAjusteFinanceiro, remover: removerAjusteFinanceiro } = useFinanceiroDreAjustes(true)
 
   return (
     <div className="space-y-6">

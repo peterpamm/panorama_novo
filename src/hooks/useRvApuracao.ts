@@ -1415,12 +1415,25 @@ export function useRvApuracao({
         // Meta de Perdas de Vales do mês (metas_perdas_indicadores, anual
         // dividida pelos meses ativos da unidade — ver mesesAtivosNoAno) —
         // a liderança tem que gastar no máximo esse % do que a
-        // Meta de Perdas permite. Independente do negócio. Peso: por função
-        // na Distribuição (só conta pra SUPERVISOR DU — sem peso cadastrado
-        // pra COORD. DU), único no Financeiro (cada um com sua própria tabela).
+        // Meta de Perdas permite. Peso: por função na Distribuição (só conta
+        // pra SUPERVISOR DU — sem peso cadastrado pra COORD. DU), único no
+        // Financeiro (cada um com sua própria tabela).
+        //
+        // Na Distribuição (DU), a liderança só responde pela Rota — não tem
+        // ação nenhuma sobre o que acontece no Armazém (outra liderança, outra
+        // operação). Em unidade com split de verdade (Camaçari — ver
+        // `unidadeSplitNegocio`), usa sempre o DRE de ROTA aqui, direto,
+        // independente de `pessoa.negocio`/`rowsMes` (que dependeria do
+        // cadastro da liderança estar com o negócio certo) — assim um vale
+        // lançado no Armazém nunca conta pra meta da Rota. Fora da
+        // Distribuição (Financeiro) ou em unidade sem split, segue `rowsMes`
+        // normal (CONS — não tem como separar Rota/Armazém de verdade).
         if (valesPerdasTabela && valesMeta) {
           const peso = valesPerdasTabela === 'rv_vales_distribuicao_meta' ? pesoDistribuicao('vales') : valesMeta.peso
           if (peso && peso > 0) {
+            const rowsMesVales = valesPerdasTabela === 'rv_vales_distribuicao_meta' && unidadeSplitNegocio(unidade.codigo, unidade.nome)
+              ? rowsUnidade.filter(r => r.negocio === 'ROTA' && r.mes === mes)
+              : rowsMes
             const metaPerdasVales = metasPerdasVales.find(mp => mp.unidade === unidade.codigo && mp.ano === ano)
             // Ajuste manual só existe pro Vales do Financeiro (bug do DRE) —
             // nunca pro Vales da Distribuição, que usa a tabela de meta
@@ -1432,14 +1445,14 @@ export function useRvApuracao({
             let metaFmt: string | null = null
             let resultadoFmt: string | null = null
             let valorDreVales: number | null = null
-            if (rowsMes.length === 0 && !ajusteVales) {
+            if (rowsMesVales.length === 0 && !ajusteVales) {
               status = 'pendente'
               detalhe = 'Sem DRE importado pro mês'
             } else if (!metaPerdasVales) {
               status = 'pendente'
               detalhe = 'Sem Meta de Perdas de Vales cadastrada pro ano'
             } else {
-              valorDreVales = rowsMes
+              valorDreVales = rowsMesVales
                 .filter(r => r.conta_codigo.startsWith('052') || r.conta_codigo.startsWith('053'))
                 .reduce((acc, r) => acc + (r.diferenca ?? 0), 0)
               const resultado = ajusteVales ? ajusteVales.valor : valorDreVales

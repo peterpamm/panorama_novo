@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { TableCard, tableCardActionClass } from '@/components/ui/table-card'
 import { cn } from '@/lib/utils'
 import { useUnidades } from '@/hooks/useUnidades'
+import { useFinanceiroDreAjustes } from '@/hooks/useFinanceiroDreAjustes'
 import { useRvApuracao, MESES_NOMES, fmtValor } from '@/hooks/useRvApuracao'
 import { RV_GENTE_DRE, RV_FINANCEIRO_DRE, RV_FROTA_DRE, RV_SEGURANCA_DRE } from '@/lib/constants'
 import { ehSetorRh, ehSetorFinanceiro, ehSetorFrota, ehSetorSeguranca, ehSetorDistribuicao, ehSetorArmazem, ehSetorEmpurrada } from '@/lib/rv-gente'
@@ -60,12 +61,18 @@ export function MatrizRvPage() {
   const [verAno, setVerAno] = useState('')
   const [verMes, setVerMes] = useState(String(new Date().getMonth() + 1))
 
+  // Ajuste manual TEMPORÁRIO de Multas/Vales do Financeiro (bug do DRE) —
+  // igual PainelGeralRvPage.tsx, só pra manter o total batendo com a
+  // Apuração da RvFinanceiroPage (edita lá, não aqui).
+  const { ajustes: ajustesFinanceiro } = useFinanceiroDreAjustes(true)
+
   const gente = useRvApuracao({
     setorLabel: 'RH', ehDoSetor: ehSetorRh, indicadoresDre: RV_GENTE_DRE, tabelaPesos: 'rv_gente_pesos_dre', incluirIndicadoresBi: true,
     anoForcado: verAno || undefined, mesForcado: verMes || undefined,
   })
   const financeiro = useRvApuracao({
     setorLabel: 'FINANCEIRO', ehDoSetor: ehSetorFinanceiro, indicadoresDre: RV_FINANCEIRO_DRE, tabelaPesos: 'rv_financeiro_pesos_dre', valesPerdasTabela: 'rv_vales_financeiro_meta',
+    ajustesFinanceiro,
     anoForcado: verAno || undefined, mesForcado: verMes || undefined,
   })
   const frota = useRvApuracao({

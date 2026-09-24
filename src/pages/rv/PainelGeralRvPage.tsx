@@ -161,13 +161,14 @@ const TabelaApuracao = forwardRef<HTMLDivElement, {
  * unidade; usuário de unidade fica travado na própria.
  */
 export function PainelGeralRvPage() {
-  const { role, unidade: minhaUnidade, rvNegocio, souDono } = useAuth()
+  const { role, unidade: minhaUnidade, rvNegocio } = useAuth()
   const { unidades } = useUnidades()
   const [aba, setAba] = useState<AbaPainelGeral>('setor')
   // Ajuste manual TEMPORÁRIO de Multas/Vales do Financeiro (bug do DRE) —
-  // aqui só pra manter o total batendo com a Apuração da RvFinanceiroPage,
-  // sem UI de edição (edita lá, não aqui).
-  const { ajustes: ajustesFinanceiro } = useFinanceiroDreAjustes(souDono)
+  // qualquer admin lê (RLS de `financeiro_dre_ajustes_manuais`, migration
+  // 113), aqui só pra manter o total batendo com a Apuração da
+  // RvFinanceiroPage, sem UI de edição (edita lá, não aqui).
+  const { ajustes: ajustesFinanceiro } = useFinanceiroDreAjustes(true)
 
   const unidadesDisponiveis = useMemo(
     () => role === 'admin'

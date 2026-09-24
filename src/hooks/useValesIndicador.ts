@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { useUnidades } from '@/hooks/useUnidades'
 import { useDreLongoTodasUnidades } from '@/hooks/useDreLongoTodasUnidades'
 import { mesesAtivosNoAno } from '@/lib/farol-calculations'
+import { unidadeSplitNegocio } from '@/lib/rv-gente'
 import type { CelulaIndicador, LinhaIndicador } from '@/components/rv/TabelaIndicadorGenerica'
 import type { MetaPerdaIndicador } from '@/types'
 
@@ -18,12 +19,20 @@ function fmtValor(v: number): string {
 }
 
 /**
- * Indicador Vales — dispersão do DRE consolidado (contas 052/053, mesma conta
- * do indicador Vales do Painel de Perdas) vs % da Meta de Perdas de Vales
+ * Indicador Vales — dispersão do DRE (contas 052/053, mesma conta do
+ * indicador Vales do Painel de Perdas) vs % da Meta de Perdas de Vales
  * (metas_perdas_indicadores, anual/12) — mesma regra e mesmos números usados
- * na apuração da RV (RvApuracao, prop valesPerdasTabela). Reaproveitado pelo
- * seletor único de RV de Distribuição e do Financeiro, cada uma com sua
- * própria tabela de peso/% (`tabelaMeta`).
+ * na apuração da RV (`useRvApuracao.ts`, prop `valesPerdasTabela`).
+ * Reaproveitado pelo seletor único de RV de Distribuição e do Financeiro,
+ * cada uma com sua própria tabela de peso/% (`tabelaMeta`).
+ *
+ * Distribuição (DU) só responde pela Rota — nunca pelo Armazém (outra
+ * liderança, sem ação sobre isso). Em unidade com split de verdade
+ * (Camaçari: CDL = Rota, CDR = Armazém — ver `unidadeSplitNegocio`), usa
+ * direto o DRE de ROTA quando `tabelaMeta` é Distribuição; Financeiro (e
+ * unidade sem split) continua no consolidado (CONS) normal — mesma regra do
+ * cálculo de pagamento, só que aqui é exibição (`AcompanhamentoFinanceiroTab`/
+ * `AcompanhamentoDistribuicaoTab`, sem afetar quanto a liderança recebe).
  */
 export function useValesIndicador(tabelaMeta: 'rv_vales_distribuicao_meta' | 'rv_vales_financeiro_meta', ano: number | null) {
   const { unidades } = useUnidades()
@@ -56,11 +65,13 @@ export function useValesIndicador(tabelaMeta: 'rv_vales_distribuicao_meta' | 'rv
 
   const linhas = useMemo<LinhaIndicador[]>(() => {
     if (ano === null) return []
-    // Consolidado (CONS) — igual ao indicador Vales do Painel de Perdas, vale pra todas as lideranças.
-    const mensal = rowsDre.filter(r => r.tipo_periodo === 'MENSAL' && r.ano === ano && r.negocio === 'CONS')
-    if (mensal.length === 0) return []
+    const mensalTodos = rowsDre.filter(r => r.tipo_periodo === 'MENSAL' && r.ano === ano)
+    if (mensalTodos.length === 0) return []
 
-    const codigosUnidades = Array.from(new Set(mensal.map(r => r.unidade)))
+    // Enumera as unidades pelo CONS (toda unidade tem uma linha consolidada
+    // importada, split ou não) — a escolha de qual negócio usar pra cada uma
+    // vem depois, por unidade.
+    const codigosUnidades = Array.from(new Set(mensalTodos.filter(r => r.negocio === 'CONS').map(r => r.unidade)))
       .sort((a, b) => {
         if (a === 'AMBEV') return 1
         if (b === 'AMBEV') return -1
@@ -68,7 +79,9 @@ export function useValesIndicador(tabelaMeta: 'rv_vales_distribuicao_meta' | 'rv
       })
 
     return codigosUnidades.map(unidade => {
-      const rowsUnidade = mensal.filter(r => r.unidade === unidade)
+      const nome = nomesUnidades.get(unidade) ?? unidade
+      const negocioAlvo = tabelaMeta === 'rv_vales_distribuicao_meta' && unidadeSplitNegocio(unidade, nome) ? 'ROTA' : 'CONS'
+      const rowsUnidade = mensalTodos.filter(r => r.unidade === unidade && r.negocio === negocioAlvo)
       const metaPerdas = metasPerdasVales.find(m => m.unidade === unidade && m.ano === ano)
       const mesesAtivos = mesesAtivosNoAno(dataEntradaPorUnidade.get(unidade) ?? null, ano)
       const meses: (CelulaIndicador | null)[] = Array.from({ length: 12 }, (_, i) => {
@@ -85,9 +98,9 @@ export function useValesIndicador(tabelaMeta: 'rv_vales_distribuicao_meta' | 'rv
           bateu: meta !== null ? resultado >= meta : null,
         }
       })
-      return { key: unidade, nome: nomesUnidades.get(unidade) ?? unidade, destaque: unidade === 'AMBEV', meses }
+      return { key: unidade, nome, destaque: unidade === 'AMBEV', meses }
     })
-  }, [rowsDre, metasPerdasVales, valesMeta, ano, nomesUnidades, dataEntradaPorUnidade])
+  }, [rowsDre, metasPerdasVales, valesMeta, ano, nomesUnidades, dataEntradaPorUnidade, tabelaMeta])
 
   return { linhas, carregando: loadingDre || carregandoMeta, anosDisponiveis }
 }

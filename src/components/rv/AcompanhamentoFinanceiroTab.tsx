@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { RV_FINANCEIRO_DRE } from '@/lib/constants'
 import { useIndicadorDreMatriz, linhasDreParaIndicador } from '@/hooks/useIndicadorDreMatriz'
 import { useValesIndicador } from '@/hooks/useValesIndicador'
+import { useFinanceiroDreAjustes } from '@/hooks/useFinanceiroDreAjustes'
+import { aplicarAjusteFinanceiro } from '@/lib/financeiro-dre-ajustes'
 import { TabelaIndicadorGenerica } from '@/components/rv/TabelaIndicadorGenerica'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -11,6 +13,10 @@ import { cn } from '@/lib/utils'
 const PREFIXO_DRE = 'dre:'
 const PREFIXO_VALES = 'vales'
 const chaveDre = (id: string) => `${PREFIXO_DRE}${id}`
+
+/** Mesma formatação de `fmtInt`/`fmtValor` privados de `useIndicadorDreMatriz.ts`/`useValesIndicador.ts` — usada só pra reformatar a célula quando um ajuste manual substitui o valor automático. */
+const fmtDispersaoDre = (v: number) => Math.round(v).toLocaleString('pt-BR')
+const fmtValesReais = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 /**
  * Acompanhamento da RV do Financeiro — seletor único combinando os
@@ -39,9 +45,24 @@ export function AcompanhamentoFinanceiroTab() {
     if (anosDisponiveis.length > 0 && !anosDisponiveis.includes(Number(verAno))) setVerAno(String(anosDisponiveis[0]))
   }, [anosDisponiveis, verAno])
 
-  const linhasDre = useMemo(() => linhasDreParaIndicador(matriz), [matriz])
+  const linhasDreBase = useMemo(() => linhasDreParaIndicador(matriz), [matriz])
 
-  const linhas = fonte === 'dre' ? linhasDre : linhasVales
+  // Ajuste manual TEMPORÁRIO de Multas/Vales (bug do DRE) — qualquer admin lê
+  // (RLS de `financeiro_dre_ajustes_manuais`, migration 113); sem UI de
+  // edição aqui (edita em RV > Financeiro > Apuração ou Reunião Resultados >
+  // Financeiro > Acompanhamento, os dois já `souDono &&`).
+  const { ajustes: ajustesFinanceiro } = useFinanceiroDreAjustes(true)
+  const anoNum = verAno ? Number(verAno) : null
+  const linhasDre = useMemo(
+    () => idDre === 'MULTAS' ? aplicarAjusteFinanceiro(linhasDreBase, ajustesFinanceiro, anoNum, 'multas', fmtDispersaoDre) : linhasDreBase,
+    [linhasDreBase, ajustesFinanceiro, anoNum, idDre],
+  )
+  const linhasValesAjustadas = useMemo(
+    () => aplicarAjusteFinanceiro(linhasVales, ajustesFinanceiro, anoNum, 'vales', fmtValesReais),
+    [linhasVales, ajustesFinanceiro, anoNum],
+  )
+
+  const linhas = fonte === 'dre' ? linhasDre : linhasValesAjustadas
   const carregando = fonte === 'dre' ? carregandoDre : carregandoVales
   const titulo = fonte === 'dre' ? ind.nome : 'Vales'
   const subtitulo = fonte === 'dre'
