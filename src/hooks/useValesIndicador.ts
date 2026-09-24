@@ -3,7 +3,6 @@ import { supabase } from '@/lib/supabase'
 import { useUnidades } from '@/hooks/useUnidades'
 import { useDreLongoTodasUnidades } from '@/hooks/useDreLongoTodasUnidades'
 import { mesesAtivosNoAno } from '@/lib/farol-calculations'
-import { unidadeSplitNegocio } from '@/lib/rv-gente'
 import type { CelulaIndicador, LinhaIndicador } from '@/components/rv/TabelaIndicadorGenerica'
 import type { MetaPerdaIndicador } from '@/types'
 
@@ -27,12 +26,14 @@ function fmtValor(v: number): string {
  * cada uma com sua própria tabela de peso/% (`tabelaMeta`).
  *
  * Distribuição (DU) só responde pela Rota — nunca pelo Armazém (outra
- * liderança, sem ação sobre isso). Em unidade com split de verdade
- * (Camaçari: CDL = Rota, CDR = Armazém — ver `unidadeSplitNegocio`), usa
- * direto o DRE de ROTA quando `tabelaMeta` é Distribuição; Financeiro (e
- * unidade sem split) continua no consolidado (CONS) normal — mesma regra do
- * cálculo de pagamento, só que aqui é exibição (`AcompanhamentoFinanceiroTab`/
- * `AcompanhamentoDistribuicaoTab`, sem afetar quanto a liderança recebe).
+ * liderança, sem ação sobre isso). Quando `tabelaMeta` é Distribuição e a
+ * unidade tem alguma linha de ROTA importada no ano, usa direto o DRE de
+ * ROTA — checa os dados de verdade, não uma lista fixa de unidades (Camaçari
+ * não é a única com Rota/Armazém separados; ex: Foz também importa assim).
+ * Financeiro (e unidade sem negócio separado) continua no consolidado (CONS)
+ * normal — mesma regra do cálculo de pagamento (`useRvApuracao.ts`), só que
+ * aqui é exibição (`AcompanhamentoFinanceiroTab`/`AcompanhamentoDistribuicaoTab`,
+ * sem afetar quanto a liderança recebe).
  */
 export function useValesIndicador(tabelaMeta: 'rv_vales_distribuicao_meta' | 'rv_vales_financeiro_meta', ano: number | null) {
   const { unidades } = useUnidades()
@@ -80,7 +81,8 @@ export function useValesIndicador(tabelaMeta: 'rv_vales_distribuicao_meta' | 'rv
 
     return codigosUnidades.map(unidade => {
       const nome = nomesUnidades.get(unidade) ?? unidade
-      const negocioAlvo = tabelaMeta === 'rv_vales_distribuicao_meta' && unidadeSplitNegocio(unidade, nome) ? 'ROTA' : 'CONS'
+      const temRota = mensalTodos.some(r => r.unidade === unidade && r.negocio === 'ROTA')
+      const negocioAlvo = tabelaMeta === 'rv_vales_distribuicao_meta' && temRota ? 'ROTA' : 'CONS'
       const rowsUnidade = mensalTodos.filter(r => r.unidade === unidade && r.negocio === negocioAlvo)
       const metaPerdas = metasPerdasVales.find(m => m.unidade === unidade && m.ano === ano)
       const mesesAtivos = mesesAtivosNoAno(dataEntradaPorUnidade.get(unidade) ?? null, ano)

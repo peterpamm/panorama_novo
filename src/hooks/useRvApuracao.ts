@@ -1421,18 +1421,21 @@ export function useRvApuracao({
         //
         // Na Distribuição (DU), a liderança só responde pela Rota — não tem
         // ação nenhuma sobre o que acontece no Armazém (outra liderança, outra
-        // operação). Em unidade com split de verdade (Camaçari — ver
-        // `unidadeSplitNegocio`), usa sempre o DRE de ROTA aqui, direto,
-        // independente de `pessoa.negocio`/`rowsMes` (que dependeria do
-        // cadastro da liderança estar com o negócio certo) — assim um vale
-        // lançado no Armazém nunca conta pra meta da Rota. Fora da
-        // Distribuição (Financeiro) ou em unidade sem split, segue `rowsMes`
-        // normal (CONS — não tem como separar Rota/Armazém de verdade).
+        // operação). Usa sempre o DRE de ROTA aqui, direto, quando o mês tem
+        // uma linha de ROTA importada — não depende de `unidadeSplitNegocio`
+        // (lista fixa Camaçari/Ponta Grossa, incompleta: várias outras
+        // unidades — ex: Foz — também importam Rota/Armazém separados) nem de
+        // `pessoa.negocio`/`rowsMes` (que dependeria do cadastro da liderança
+        // estar com o negócio certo) — checa direto se existe ROTA nos dados
+        // do mês. Assim um vale lançado no Armazém nunca conta pra meta da
+        // Rota. Fora da Distribuição (Financeiro) ou em mês/unidade sem
+        // negócio separado, segue `rowsMes` normal (CONS).
         if (valesPerdasTabela && valesMeta) {
           const peso = valesPerdasTabela === 'rv_vales_distribuicao_meta' ? pesoDistribuicao('vales') : valesMeta.peso
           if (peso && peso > 0) {
-            const rowsMesVales = valesPerdasTabela === 'rv_vales_distribuicao_meta' && unidadeSplitNegocio(unidade.codigo, unidade.nome)
-              ? rowsUnidade.filter(r => r.negocio === 'ROTA' && r.mes === mes)
+            const rowsRotaVales = rowsUnidade.filter(r => r.negocio === 'ROTA' && r.mes === mes)
+            const rowsMesVales = valesPerdasTabela === 'rv_vales_distribuicao_meta' && rowsRotaVales.length > 0
+              ? rowsRotaVales
               : rowsMes
             const metaPerdasVales = metasPerdasVales.find(mp => mp.unidade === unidade.codigo && mp.ano === ano)
             // Ajuste manual só existe pro Vales do Financeiro (bug do DRE) —
