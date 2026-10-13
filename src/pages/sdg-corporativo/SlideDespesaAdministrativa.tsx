@@ -57,7 +57,7 @@ function TooltipDespesas({ active, payload, label }: { active?: boolean; payload
  * (`CONTAS_TOTALIZADORAS_ADM`), que só repetiriam a soma das subcontas.
  */
 export function SlideDespesaAdministrativa({ rowsAno, orcamentoAno, unidades, negocio, ano, mes }: Props) {
-  const { axis, legend } = getChartColors()
+  const { axis, legend, cursor } = getChartColors()
   const { contas } = useContas()
   const nomesUnidade = useMemo(() => new Map(unidades.map(u => [u.codigo, u.nome])), [unidades])
   const nomesPorCodigo = useMemo(() => new Map(contas.map(c => [c.codigo, c.descricao])), [contas])
@@ -109,7 +109,7 @@ export function SlideDespesaAdministrativa({ rowsAno, orcamentoAno, unidades, ne
               <ComposedChart data={serieDespesas} margin={{ top: 24, right: 16, bottom: 0, left: 0 }}>
                 <XAxis dataKey="mes" tickFormatter={m => MES_ABREV[m] ?? m} tickLine={false} axisLine={false} tick={{ fill: axis, fontSize: 12, fontWeight: 500 }} />
                 <YAxis tickLine={false} axisLine={false} tick={{ fill: axis, fontSize: 11, fontWeight: 500 }} tickFormatter={v => `${v}%`} width={56} />
-                <Tooltip content={<TooltipDespesas />} />
+                <Tooltip content={<TooltipDespesas />} cursor={{ fill: cursor }} />
                 <Legend verticalAlign="top" align="right" iconType="plainline" wrapperStyle={{ fontSize: 12, color: legend }} />
                 <Bar dataKey="avr" name="Realizado" radius={[4, 4, 0, 0]} barSize={32}>
                   {serieDespesas.map(p => (

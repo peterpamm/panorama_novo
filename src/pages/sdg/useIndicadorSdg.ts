@@ -59,7 +59,7 @@ export function useIndicadorSdg({ codigo, rowsAno, orcamentoRows, unidade, negoc
 
   const serieCaptura = useMemo(() => {
     const metaAnual = buscarMetaOrcamento(orcamentoRows, { ...ctx, mes: 0 })
-    return calcularSerieCaptura(rowsAno, [], { ...ctx, prefixos: info.prefixos }, metaAnual)
+    return calcularSerieCaptura(rowsAno, [], orcamentoRows, { ...ctx, prefixos: info.prefixos, natureza: info.natureza }, metaAnual)
   }, [rowsAno, orcamentoRows])
 
   return { info, calcMensal, calcYtd, mensal, ytd, serieAnual, serieCaptura }

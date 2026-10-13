@@ -19,6 +19,24 @@ export const SDG_INDICADORES: { id: SdgIndicador; label: string }[] = [
   { id: 'multas', label: 'Multas' },
 ]
 
+/**
+ * Indicadores do SDG dos Gerentes — mesma ideia de `SDG_INDICADORES`, só que
+ * pra alimentar o slide final "Plano de Ação" daquela apresentação
+ * (`SlidePlanoAcaoGerentes.tsx`), agrupado por indicador, em vez de um slide
+ * de Justificativa por indicador (que o SDG Gerentes não tem). Mesma ordem
+ * dos slides em `SdgGerentesPage.tsx`.
+ */
+export const SDG_INDICADORES_GERENTES: { id: SdgIndicador; label: string }[] = [
+  { id: 'gerentes-receita', label: 'SDG Gerentes · Receita Líquida' },
+  { id: 'gerentes-ebitda', label: 'SDG Gerentes · EBITDA' },
+  { id: 'gerentes-gastos-totais', label: 'SDG Gerentes · Gastos Totais' },
+  { id: 'gerentes-pacote-de-gente', label: 'SDG Gerentes · Pacote de Gente' },
+  { id: 'gerentes-pacote-de-frota', label: 'SDG Gerentes · Pacote de Frota' },
+  { id: 'gerentes-despesa-adm', label: 'SDG Gerentes · Despesa Administrativa' },
+  { id: 'gerentes-custos-freteiros', label: 'SDG Gerentes · Custos com Freteiros' },
+  { id: 'gerentes-pacote-de-perdas', label: 'SDG Gerentes · Pacote de Perdas' },
+]
+
 export const SDG_INDICADOR_LABEL: Record<SdgIndicador, string> = Object.fromEntries(
-  SDG_INDICADORES.map(i => [i.id, i.label]),
+  [...SDG_INDICADORES, ...SDG_INDICADORES_GERENTES].map(i => [i.id, i.label]),
 ) as Record<SdgIndicador, string>

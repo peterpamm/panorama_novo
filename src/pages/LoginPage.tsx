@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { ChevronDown, Eye, EyeOff, Lock, Mail } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 
-type Modo = 'panorama' | 'sdg' | 'sdg-corporativo' | 'sdg-corporativo-frota'
+type Modo = 'panorama' | 'sdg' | 'sdg-gerentes' | 'sdg-corporativo' | 'sdg-corporativo-frota'
 
 const MODOS: { id: Modo; titulo: string; rota: string }[] = [
   { id: 'panorama',               titulo: 'Panorama Financeiro',      rota: '/' },
   { id: 'sdg',                    titulo: 'SDG Financeiro',           rota: '/sdg-financeiro' },
+  { id: 'sdg-gerentes',           titulo: 'SDG Gerentes',             rota: '/sdg-gerentes' },
   { id: 'sdg-corporativo',        titulo: 'SDG Corporativo',          rota: '/sdg-corporativo' },
   { id: 'sdg-corporativo-frota',  titulo: 'SDG Corporativo de Frota', rota: '/sdg-corporativo-frota' },
 ]

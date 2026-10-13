@@ -1,7 +1,7 @@
 import { ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { SeriePontoCaptura } from '@/lib/farol-calculations'
 import type { Natureza } from '@/types'
-import { COR_AVR, COR_META, COR_NECESSARIO, MES_ABREV, PontoDot, PontoLabel, getChartColors } from '@/components/farol/chart-shared'
+import { COR_AVR, COR_META, COR_NECESSARIO, MES_ABREV, PontoDot, PontoLabel, RotuloLinhaExtra, getChartColors } from '@/components/farol/chart-shared'
 import { formatPercent } from '@/lib/utils'
 
 function TooltipCaptura({
@@ -40,24 +40,6 @@ function TooltipCaptura({
         </p>
       )}
     </div>
-  )
-}
-
-interface NecessarioLabelProps {
-  x?: number
-  y?: number
-  index?: number
-  primeiroFuturoIndex: number
-  valor: number | null
-  formatter: (v: number) => string
-}
-
-function NecessarioLabel({ x, y, index, primeiroFuturoIndex, valor, formatter }: NecessarioLabelProps) {
-  if (x === undefined || y === undefined || index !== primeiroFuturoIndex || valor === null) return null
-  return (
-    <text x={x} y={y - 12} textAnchor="middle" fontSize={12} fontWeight={700} fill={COR_NECESSARIO}>
-      {`Necessário: ${formatter(valor)}`}
-    </text>
   )
 }
 
@@ -124,7 +106,7 @@ export function CapturaChart({ serie, natureza, nomeSerie = 'AVR Realizado', nom
             strokeDasharray="5 3"
             dot={false}
             isAnimationActive={false}
-            label={<NecessarioLabel primeiroFuturoIndex={primeiroFuturoIndex} valor={valorNecessario} formatter={formatter} />}
+            label={<RotuloLinhaExtra primeiroIndex={primeiroFuturoIndex} valor={valorNecessario} formatter={formatter} texto="Necessário" />}
           />
           <Line
             type="monotone"

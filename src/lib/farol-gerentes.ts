@@ -5,8 +5,8 @@ import { calcularRankingIndicador, type RankingLinhaIndicador } from '@/lib/rank
 import { calcularMatrizPerdas } from '@/lib/painel-perdas-calculations'
 import { formatPercent } from '@/lib/utils'
 import type {
-  DisponibilidadeArmazemAcumulada, DisponibilidadeRotaAcumulada, DreLongoRow, MetaPerdaIndicador, OrcamentoLinha,
-  PainelPerdasAux, ResultadoTri, ScorecardAcumulado, Unidade,
+  DisponibilidadeArmazemAcumulada, DisponibilidadeEmpurradaAcumulada, DisponibilidadeRotaAcumulada, DreLongoRow,
+  MetaPerdaIndicador, OrcamentoLinha, PainelPerdasAux, ResultadoTri, Unidade,
 } from '@/types'
 
 export type StatusFarolGerente = 'bateu' | 'perdeu' | 'pendente'
@@ -24,19 +24,6 @@ export function linhaPendente(indicador: string): LinhaFarolGerente {
 }
 
 export type DisponibilidadeTipo = 'ARM' | 'ROTA' | 'EMP'
-
-export const NOME_DISPONIBILIDADE: Record<DisponibilidadeTipo, string> = {
-  ARM: 'Armazém',
-  ROTA: 'Rota',
-  EMP: 'Empurrada',
-}
-
-/** Nome curto do negócio, usado nas linhas de Scorecard (uma por negócio) pra não estourar a largura do card. */
-export const NOME_NEGOCIO_CURTO: Record<DisponibilidadeTipo, string> = {
-  ARM: 'Arm.',
-  ROTA: 'Rota.',
-  EMP: 'Empur.',
-}
 
 /**
  * Quais linhas de Disponibilidade aparecem no Semestre de cada unidade —
@@ -248,22 +235,46 @@ export function linhaDisponibilidadeRota(item: DisponibilidadeRotaAcumulada | un
   }
 }
 
-/** Meta do Scorecard — fixa em 80% pra todo negócio/unidade, não vem da planilha nem de cadastro. */
-export const META_SCORECARD = 80
+/**
+ * Disp. Empurrada — snapshot único importado (Importação > Financeiro >
+ * Disponibilidade Empurrada Acumulada, ver
+ * `disponibilidade-empurrada-parser.ts`), já em escala de percentual.
+ * Quanto maior/mais próximo da meta, melhor. Na prática só Ponta Grossa e
+ * Estância têm esse indicador (únicas unidades com negócio Empurrada).
+ */
+export function linhaDisponibilidadeEmpurrada(item: DisponibilidadeEmpurradaAcumulada | undefined): LinhaFarolGerente {
+  if (!item) return linhaPendente('Disp. Empurrada')
+  return {
+    indicador: 'Disp. Empurrada',
+    meta: formatPercent(item.meta, 1),
+    real: formatPercent(item.real, 1),
+    status: item.real >= item.meta ? 'bateu' : 'perdeu',
+  }
+}
+
+/** Meta da Posição LOG20 — fixa em "top 5" (faixa 1-5), não vem de cadastro. */
+export const META_POSICAO_LOG20 = '1-5'
 
 /**
- * Scorecard de um negócio (Rota/Arm./Empur.) — snapshot único importado
- * (Importação > Financeiro > Scorecard, ver `scorecard-parser.ts`), já em
- * escala de percentual. Bate com 80% ou mais (`META_SCORECARD`).
+ * Posição da LOG20 (empresa toda, não por unidade) no ranking de operadores
+ * da Ambev — substitui o antigo Scorecard por unidade. Mesmo valor em todo
+ * card (como `linhaEbitdaGlobal`), preenchido manualmente em Importação >
+ * Financeiro > Dados auxiliares (1 por ano, ver `log20_posicao_ambev`,
+ * migration 127). `faixa` é texto livre (ex: "1-5", "6-10") — bate quando o
+ * PIOR número da faixa (o maior) ainda está dentro do top 5 (ex: "1-5" bate,
+ * "3-7" não, porque no pior caso a LOG20 ficaria em 7º). Sem número nenhum
+ * no texto, ou sem faixa cadastrada ainda, fica pendente.
  */
-export function linhaScorecard(negocio: DisponibilidadeTipo, item: ScorecardAcumulado | undefined): LinhaFarolGerente {
-  const indicador = `Scorecard ${NOME_NEGOCIO_CURTO[negocio]}`
-  if (!item) return linhaPendente(indicador)
+export function linhaPosicaoLog20(faixa: string | null): LinhaFarolGerente {
+  if (!faixa) return linhaPendente('Posição LOG20')
+  const numeros = faixa.match(/\d+/g)?.map(Number) ?? []
+  if (numeros.length === 0) return { indicador: 'Posição LOG20', meta: META_POSICAO_LOG20, real: faixa, status: 'pendente' }
+  const piorCaso = Math.max(...numeros)
   return {
-    indicador,
-    meta: formatPercent(META_SCORECARD, 1),
-    real: formatPercent(item.score, 1),
-    status: item.score >= META_SCORECARD ? 'bateu' : 'perdeu',
+    indicador: 'Posição LOG20',
+    meta: META_POSICAO_LOG20,
+    real: faixa,
+    status: piorCaso <= 5 ? 'bateu' : 'perdeu',
   }
 }
 
@@ -284,4 +295,78 @@ export function linhaDisponibilidadeArmazem(item: DisponibilidadeArmazemAcumulad
     real: formatPercent(item.real, 1),
     status: item.real >= item.meta ? 'bateu' : 'perdeu',
   }
+}
+
+export interface CardFarolGerenteComputado {
+  card: UnidadeCardFarol
+  semestre: LinhaFarolGerente[]
+  ano: LinhaFarolGerente[]
+}
+
+/**
+ * Monta as linhas Semestre/Ano de todos os cards do Farol Gerentes (um por
+ * unidade, ou 2 pras unidades com split de negócio — ver
+ * `unidadesCardsFarol`) — extraído de `FarolGerentesPage.tsx` (linhas
+ * ~53-111) pra reaproveitar no SDG Gerentes (slide "Metas Bônus"), sem
+ * duplicar a lógica de quais indicadores entram em cada seção. `ano` é o
+ * ano-calendário de referência das metas (Farol Gerentes usa sempre o ano
+ * atual; quem chama decide — no SDG Gerentes normalmente é o mesmo ano
+ * selecionado no cabeçalho da apresentação).
+ */
+export function montarCardsFarolGerentes(params: {
+  unidades: Unidade[]
+  rows: DreLongoRow[]
+  orcamentos: OrcamentoLinha[]
+  resultadosTri: ResultadoTri[]
+  rowsAux: PainelPerdasAux[]
+  metasPerdasIndicadores: MetaPerdaIndicador[]
+  disponibilidadeRota: DisponibilidadeRotaAcumulada[]
+  disponibilidadeArmazem: DisponibilidadeArmazemAcumulada[]
+  disponibilidadeEmpurrada: DisponibilidadeEmpurradaAcumulada[]
+  /** Faixa da Posição LOG20 pro `ano` de referência (ver `linhaPosicaoLog20`) — null sem registro ainda. */
+  posicaoLog20: string | null
+  ano: number
+}): { cards: CardFarolGerenteComputado[]; linhaEbitdaGlobal: LinhaFarolGerente } {
+  const {
+    unidades, rows, orcamentos, resultadosTri, rowsAux, metasPerdasIndicadores, disponibilidadeRota,
+    disponibilidadeArmazem, disponibilidadeEmpurrada, posicaoLog20, ano,
+  } = params
+  const dataEntradaPorUnidade = new Map(unidades.map(u => [u.codigo, u.data_entrada]))
+
+  const mapaGastos = calcularIndicadorPorNegocio(rows, orcamentos, '900', ano)
+  const mapaEbitda = calcularIndicadorPorNegocio(rows, orcamentos, '233', ano)
+  const mapaTri = calcularAcidentesTriPorUnidade(resultadosTri, ano, unidades.map(u => u.codigo))
+  const mapaPerdas = calcularPacotePerdasPorUnidade(rows, rowsAux, metasPerdasIndicadores, ano, dataEntradaPorUnidade)
+  const mapaDispRota = new Map(disponibilidadeRota.map(d => [d.unidade, d]))
+  const mapaDispArmazem = new Map(disponibilidadeArmazem.map(d => [d.unidade, d]))
+  const mapaDispEmpurrada = new Map(disponibilidadeEmpurrada.map(d => [d.unidade, d]))
+
+  const linhaEbitdaGlobal = linhaIndicadorDre('EBITDA Global', mapaEbitda.get('AMBEV|CONS'))
+  // Mesmo objeto em todo card, igual `linhaEbitdaGlobal` — a Posição LOG20 é
+  // da empresa toda, não calculada por unidade.
+  const linhaPosicaoLog20Global = linhaPosicaoLog20(posicaoLog20)
+
+  const cards = unidadesCardsFarol(unidades).map(card => {
+    const chaveNegocio = `${card.unidadeCodigo}|${card.negocio ?? 'CONS'}`
+    return {
+      card,
+      semestre: [
+        linhaIndicadorDre('Gastos Totais', mapaGastos.get(chaveNegocio)),
+        linhaAcidentesTri(mapaTri.get(card.unidadeCodigo)),
+        ...card.disponibilidades.map(d => {
+          if (d === 'ROTA') return linhaDisponibilidadeRota(mapaDispRota.get(card.unidadeCodigo))
+          if (d === 'ARM') return linhaDisponibilidadeArmazem(mapaDispArmazem.get(card.unidadeCodigo))
+          return linhaDisponibilidadeEmpurrada(mapaDispEmpurrada.get(card.unidadeCodigo))
+        }),
+      ],
+      ano: [
+        linhaPosicaoLog20Global,
+        linhaPacotePerdas(mapaPerdas.get(card.unidadeCodigo)),
+        linhaIndicadorDre('EBITDA Unidade', mapaEbitda.get(chaveNegocio)),
+        linhaEbitdaGlobal,
+      ],
+    }
+  })
+
+  return { cards, linhaEbitdaGlobal }
 }

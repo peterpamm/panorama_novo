@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { OrcamentoLinha } from '@/types'
-import { buscarMetaOrcamento } from './orcamento-farol'
+import { buscarMetaOrcamento, buscarOrcadoRs } from './orcamento-farol'
 
 function linha(overrides: Partial<OrcamentoLinha>): OrcamentoLinha {
   return {
@@ -85,5 +85,47 @@ describe('buscarMetaOrcamento', () => {
     const orcamentos = [linha({ unidade: 'ARA', negocio: 'CONS', conta_codigo: '133', av: 30, mes: 1, ano: 2026 })]
     const meta = buscarMetaOrcamento(orcamentos, { unidade: 'ARA', negocio: 'CONS', ano: 2026, codigo: '233', mes: 1 })
     expect(meta).toBeCloseTo(30)
+  })
+})
+
+describe('buscarOrcadoRs', () => {
+  it('unidade antiga (bespoke): soma as duas contas de Salários (022 operacional + 080 administrativo), sinal invertido (custo)', () => {
+    const orcamentos = [
+      linha({ conta_codigo: '022', orcado: -50000, mes: 1, ano: 2025 }),
+      linha({ conta_codigo: '080', orcado: -30000, mes: 1, ano: 2025 }),
+    ]
+    const orcado = buscarOrcadoRs(orcamentos, { unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '036', mes: 1 })
+    expect(orcado).toBeCloseTo(80000)
+  })
+
+  it('unidade antiga: indiceApenas restringe a uma única conta (0 = operacional, 1 = administrativo), não soma as duas', () => {
+    const orcamentos = [
+      linha({ conta_codigo: '022', orcado: -50000, mes: 1, ano: 2025 }),
+      linha({ conta_codigo: '080', orcado: -30000, mes: 1, ano: 2025 }),
+    ]
+    const operacional = buscarOrcadoRs(orcamentos, { unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '036', mes: 1 }, 0)
+    const administrativo = buscarOrcadoRs(orcamentos, { unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '036', mes: 1 }, 1)
+    expect(operacional).toBeCloseTo(50000)
+    expect(administrativo).toBeCloseTo(30000)
+  })
+
+  it('unidade nova (numeração nativa): soma/restringe pelos prefixos de PACOTES (036 operacional + 161 administrativo)', () => {
+    const orcamentos = [
+      linha({ unidade: 'ARA', conta_codigo: '283', orcado: 0, mes: 1, ano: 2026 }), // marca numeração nativa
+      linha({ unidade: 'ARA', conta_codigo: '036', orcado: -40000, mes: 1, ano: 2026 }),
+      linha({ unidade: 'ARA', conta_codigo: '161', orcado: -20000, mes: 1, ano: 2026 }),
+    ]
+    const consolidado = buscarOrcadoRs(orcamentos, { unidade: 'ARA', negocio: 'ROTA', ano: 2026, codigo: '036', mes: 1 })
+    const operacional = buscarOrcadoRs(orcamentos, { unidade: 'ARA', negocio: 'ROTA', ano: 2026, codigo: '036', mes: 1 }, 0)
+    const administrativo = buscarOrcadoRs(orcamentos, { unidade: 'ARA', negocio: 'ROTA', ano: 2026, codigo: '036', mes: 1 }, 1)
+    expect(consolidado).toBeCloseTo(60000)
+    expect(operacional).toBeCloseTo(40000)
+    expect(administrativo).toBeCloseTo(20000)
+  })
+
+  it('indiceApenas fora do range (pacote sem essa posição) retorna null', () => {
+    const orcamentos = [linha({ conta_codigo: '022', orcado: -50000, mes: 1, ano: 2025 })]
+    const orcado = buscarOrcadoRs(orcamentos, { unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '036', mes: 1 }, 5)
+    expect(orcado).toBeNull()
   })
 })

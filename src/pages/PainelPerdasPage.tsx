@@ -405,10 +405,16 @@ export function PainelPerdasPage() {
   // Atalhos do filtro de meses — evita ter que marcar/desmarcar um por um.
   // "Mês atual" pega o mês com dado mais recente (não o mês do calendário —
   // se ainda não fechou agosto, por exemplo, o último mês com resultado
-  // importado pode ser julho).
+  // importado pode ser julho). "1º/2º Semestre" só considera os meses que já
+  // têm dado importado (`mesesDisponiveis`) — se o 2º semestre ainda não
+  // começou, o botão fica desabilitado em vez de selecionar um conjunto vazio.
   const mesMaisRecente = mesesDisponiveis[mesesDisponiveis.length - 1] ?? null
   const soMesAtualAtivo = mesMaisRecente !== null && mesesAtivos.size === 1 && mesesAtivos.has(mesMaisRecente)
   const todosAtivos = mesesAtivos.size === mesesDisponiveis.length
+  const mesesSemestre1 = useMemo(() => mesesDisponiveis.filter(m => m <= 6), [mesesDisponiveis])
+  const mesesSemestre2 = useMemo(() => mesesDisponiveis.filter(m => m > 6), [mesesDisponiveis])
+  const semestre1Ativo = mesesSemestre1.length > 0 && mesesAtivos.size === mesesSemestre1.length && mesesSemestre1.every(m => mesesAtivos.has(m))
+  const semestre2Ativo = mesesSemestre2.length > 0 && mesesAtivos.size === mesesSemestre2.length && mesesSemestre2.every(m => mesesAtivos.has(m))
 
   // Metas de Perdas (Metas > Metas de Perdas, por indicador) pro ano do
   // Consolidado — todas as unidades (a tabela mostra todas como coluna).
@@ -704,6 +710,28 @@ export function PainelPerdasPage() {
                       )}
                     >
                       Todos
+                    </button>
+                    <button
+                      type="button"
+                      disabled={mesesSemestre1.length === 0}
+                      onClick={() => setSelMeses(new Set(mesesSemestre1))}
+                      className={cn(
+                        'rounded-md px-2 py-0.5 text-xs font-medium transition whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40',
+                        semestre1Ativo ? 'bg-white text-gray-900' : 'text-white/60 hover:text-white',
+                      )}
+                    >
+                      1º Semestre
+                    </button>
+                    <button
+                      type="button"
+                      disabled={mesesSemestre2.length === 0}
+                      onClick={() => setSelMeses(new Set(mesesSemestre2))}
+                      className={cn(
+                        'rounded-md px-2 py-0.5 text-xs font-medium transition whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-40',
+                        semestre2Ativo ? 'bg-white text-gray-900' : 'text-white/60 hover:text-white',
+                      )}
+                    >
+                      2º Semestre
                     </button>
                   </div>
                 </div>

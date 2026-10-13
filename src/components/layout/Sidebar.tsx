@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
   Gauge, LineChart, TrafficCone, Trophy, Upload,
-  Settings, AlertTriangle, HandCoins, Banknote, Award, ChevronDown, PanelLeftClose, PanelLeftOpen,
+  Settings, AlertTriangle, HandCoins, Banknote, Award, MonitorPlay, ChevronDown, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -28,7 +28,14 @@ interface NavItem {
 const navItems: NavItem[] = [
   { to: '/',              icon: Gauge,         label: 'Farol de Metas' },
   { to: '/farol-gerentes', icon: TrafficCone,   label: 'Farol Gerentes' },
-  { to: '/analise-conta', icon: LineChart,      label: 'Análise por Conta' },
+  {
+    to: '/analise-detalhada', icon: LineChart, label: 'Análise Detalhada',
+    children: [
+      { to: '/analise-detalhada/conta', label: 'Análise por Conta' },
+      { to: '/analise-detalhada/pacote-de-gente', label: 'Pacote de Gente' },
+      { to: '/analise-detalhada/pacote-de-frota', label: 'Pacote de Frota' },
+    ],
+  },
   { to: '/ranking',       icon: Trophy,         label: 'Ranking' },
   { to: '/painel-perdas', icon: AlertTriangle,  label: 'Painel de Perdas' },
   {
@@ -52,8 +59,15 @@ const navItems: NavItem[] = [
       { to: '/area-financeira/rotinas', label: 'Rotinas' },
       { to: '/area-financeira/plano-de-acao', label: 'Plano de Ação' },
       { to: '/area-financeira/encontro-de-contas', label: 'Encontro de Contas' },
-      { to: '/area-financeira/sdg-financeiro', label: 'SDG Financeiro' },
-      { to: '/area-financeira/sdg-corp-fin', label: 'SDG Corp Fin', donoApenas: true },
+      { to: '/area-financeira/limpa-pauta', label: 'Limpa Pauta' },
+    ],
+  },
+  {
+    to: '/sdg', icon: MonitorPlay, label: 'SDG',
+    children: [
+      { to: '/sdg/financeiro', label: 'SDG Financeiro' },
+      { to: '/sdg/corp-fin', label: 'SDG Corp Fin', donoApenas: true },
+      { to: '/sdg/gerentes', label: 'SDG Gerentes' },
     ],
   },
   {

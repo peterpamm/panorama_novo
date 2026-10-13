@@ -14,7 +14,8 @@ import { RelatorioAlteracoes } from '@/components/importacao/RelatorioAlteracoes
 import { ImportarPainelPerdasAuxDialog } from '@/components/importacao/ImportarPainelPerdasAuxDialog'
 import { ImportarDisponibilidadeRotaDialog } from '@/components/importacao/ImportarDisponibilidadeRotaDialog'
 import { ImportarDisponibilidadeArmazemDialog } from '@/components/importacao/ImportarDisponibilidadeArmazemDialog'
-import { ImportarScorecardDialog } from '@/components/importacao/ImportarScorecardDialog'
+import { ImportarDisponibilidadeEmpurradaDialog } from '@/components/importacao/ImportarDisponibilidadeEmpurradaDialog'
+import { PosicaoLog20Dialog } from '@/components/importacao/PosicaoLog20Dialog'
 import { ImportacaoGentePanel } from '@/components/importacao/ImportacaoGentePanel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -421,7 +422,8 @@ export function ImportacaoDrePage() {
                 <ImportarPainelPerdasAuxDialog unidades={unidadesState} onImportado={() => {}} />
                 <ImportarDisponibilidadeRotaDialog unidades={unidadesState} onImportado={() => {}} />
                 <ImportarDisponibilidadeArmazemDialog unidades={unidadesState} onImportado={() => {}} />
-                <ImportarScorecardDialog unidades={unidadesState} onImportado={() => {}} />
+                <ImportarDisponibilidadeEmpurradaDialog unidades={unidadesState} onImportado={() => {}} />
+                <PosicaoLog20Dialog />
               </div>
             </div>
           </div>

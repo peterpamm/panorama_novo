@@ -46,7 +46,7 @@ export function PlanoDeAcaoPage() {
   const { toast } = useToast()
   const { planos, loading, recarregar } = usePlanosAcao()
   const { unidades } = useUnidades()
-  const { tags } = usePlanoAcaoTags()
+  const { tags, recarregar: recarregarTags } = usePlanoAcaoTags()
 
   const nomesUnidades = useMemo(() => {
     const m: Record<string, string> = {}
@@ -336,6 +336,7 @@ export function PlanoDeAcaoPage() {
         unidades={unidades}
         tags={tagsAtivas}
         onSalvo={recarregar}
+        onTagCriada={recarregarTags}
       />
 
       <Dialog open={excluindo !== null} onOpenChange={v => { if (!v) setExcluindo(null) }}>

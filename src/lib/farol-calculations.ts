@@ -1,5 +1,6 @@
-import type { DreCalculoRow, DreLongoRow, Meta, Natureza } from '@/types'
+import type { DreCalculoRow, DreLongoRow, Meta, Natureza, OrcamentoLinha } from '@/types'
 import { CODIGOS_PERFORMANCE, CONTA_RECEITA, CORES_FAROL } from '@/lib/constants'
+import { buscarMetaOrcamento } from '@/lib/orcamento-farol'
 
 function toList(prefixos: string | string[]): string[] {
   return typeof prefixos === 'string' ? [prefixos] : prefixos
@@ -10,24 +11,60 @@ function startsWithAny(codigo: string, prefixos: string[]): boolean {
 }
 
 /**
+ * Último ano cujo DRE REALIZADO (`vw_dre_longo`/`dre_lancamentos`) ainda está
+ * gravado com a numeração ANTIGA de contas — diferente do Orçamento
+ * (`ULTIMO_ANO_ORCAMENTO_ESTRUTURA_ANTIGA` em orcamento-farol.ts, que vai até
+ * 2026 inclusive): o realizado de 2026 já foi reimportado direto na
+ * numeração nova (ver migration_110_dre_renumeracao_2026.sql), então só 2025
+ * pra trás ficou com o esquema antigo no banco.
+ */
+const ULTIMO_ANO_DRE_REALIZADO_ESTRUTURA_ANTIGA = 2025
+
+/**
+ * Traduz um `conta_codigo` do DRE realizado pra numeração ATUAL (a que
+ * `PACOTES`/`CODIGOS_PERFORMANCE`/todo o resto do Farol usa) — inverso de
+ * `paraCodigoPreCutover` (orcamento-farol.ts, que faz NOVO→ANTIGO só pro
+ * Orçamento). Pra linhas de até `ULTIMO_ANO_DRE_REALIZADO_ESTRUTURA_ANTIGA`,
+ * todo código ANTIGO ≥ 035 desloca +1 (035 virou 036, ..., 282 virou 283 —
+ * "GASTOS COM SALÁRIOS" entrou como a nova 035, empurrando o resto).
+ * 001-034 nunca mudou, fica como veio. Sem essa tradução, qualquer pacote do
+ * Farol com código ≥ 035 (EBITDA 233, Geração de Caixa 276, Despesa
+ * Administrativa 158 etc.) lê a conta errada pra 2025 pra trás.
+ */
+function codigoDreNumeracaoAtual(codigo: string, ano: number): string {
+  if (ano > ULTIMO_ANO_DRE_REALIZADO_ESTRUTURA_ANTIGA) return codigo
+  const n = Number(codigo)
+  if (!Number.isFinite(n) || n < 35 || n > 282) return codigo
+  return String(n + 1).padStart(3, '0')
+}
+
+/**
  * Converte linhas brutas de vw_dre_longo (espelho fiel do Excel do GInfo,
  * incluindo o sinal negativo nativo de REMUNERADO/REALIZADO/AVR para contas
  * de custo) para o formato que o Farol de Metas espera, replicando
  * tratar_dataframe() de scripts/tratar_dre_pro.py: REAL e REMUN tornam-se
  * magnitude (abs), DIF mantém o sinal original, e AVR é invertido para
- * qualquer conta que não seja EBITDA/Geração de Caixa.
+ * qualquer conta que não seja EBITDA/Geração de Caixa. `conta_codigo` já sai
+ * traduzido pra numeração atual (`codigoDreNumeracaoAtual`) — inclusive
+ * antes de checar `CODIGOS_PERFORMANCE`, senão o sinal do AVR de EBITDA/
+ * Geração de Caixa também saía invertido pra 2025 pra trás (o código antigo
+ * dessas contas não batia com a lista, que é sempre a numeração nova).
  */
 export function normalizarParaCalculo(rows: DreLongoRow[]): DreCalculoRow[] {
-  return rows.map(r => ({
-    conta_codigo: r.conta_codigo,
-    real: Math.abs(r.realizado ?? 0),
-    remun: Math.abs(r.remunerado ?? 0),
-    dif: r.diferenca ?? 0,
-    avr: CODIGOS_PERFORMANCE.includes(r.conta_codigo) ? (r.avr ?? 0) : -(r.avr ?? 0),
-    // avo vem do GInfo com o mesmo sinal bruto do avr (negativo p/ custo) — mesma inversão,
-    // mas preserva null (sem dado) em vez de 0, pra distinguir "meta zero" de "sem AVO no período".
-    avo: r.avo === null ? null : (CODIGOS_PERFORMANCE.includes(r.conta_codigo) ? r.avo : -r.avo),
-  }))
+  return rows.map(r => {
+    const conta_codigo = codigoDreNumeracaoAtual(r.conta_codigo, r.ano)
+    const ehPerformance = CODIGOS_PERFORMANCE.includes(conta_codigo)
+    return {
+      conta_codigo,
+      real: Math.abs(r.realizado ?? 0),
+      remun: Math.abs(r.remunerado ?? 0),
+      dif: r.diferenca ?? 0,
+      avr: ehPerformance ? (r.avr ?? 0) : -(r.avr ?? 0),
+      // avo vem do GInfo com o mesmo sinal bruto do avr (negativo p/ custo) — mesma inversão,
+      // mas preserva null (sem dado) em vez de 0, pra distinguir "meta zero" de "sem AVO no período".
+      avo: r.avo === null ? null : (ehPerformance ? r.avo : -r.avo),
+    }
+  })
 }
 
 export function somaReal(rows: DreCalculoRow[], prefixos: string[]): number {
@@ -225,23 +262,72 @@ export interface SeriePontoCaptura {
   receita?: number | null
 }
 
+/** Receita Orçada (R$) de um mês específico — soma de `orcado` na conta CONTA_RECEITA, mesmo código em qualquer esquema (bespoke ou nativo, ver CONTAS_ORCAMENTO_USADAS). null quando o Orçamento não tem linha pra esse mês. */
+function receitaOrcadaMes(
+  orcamentos: OrcamentoLinha[],
+  params: { unidade: string; negocio: string; ano: number; mes: number },
+): number | null {
+  const linhas = orcamentos.filter(o =>
+    o.unidade === params.unidade && o.negocio === params.negocio && o.ano === params.ano && o.mes === params.mes
+    && o.conta_codigo === CONTA_RECEITA,
+  )
+  if (linhas.length === 0) return null
+  return linhas.reduce((acc, o) => acc + o.orcado, 0)
+}
+
 /**
  * "Curva de captura": nos meses já realizados, mostra o AVR do próprio mês
  * (mesmo cálculo e mesmo valor de calcularSerieAnual — não é uma média
  * acumulada, senão os dois gráficos mostrariam números diferentes pro mesmo
- * mês). Nos meses futuros, mostra o ritmo médio necessário pros meses
- * restantes pra fechar o ano exatamente na meta anual (cadastro manual,
- * mes=0):
- *   ritmo = (meta_anual × 12 − soma do AVR mês a mês já realizado) / meses restantes
- * Sem meta anual cadastrada, não há o que projetar — retorna só os meses
- * já realizados (sem avrNecessario). `metaAnualOverride`, quando informado
- * (mesmo null), substitui a busca em `metasManual` — usado pra priorizar a
- * meta do orçamento sem duplicar essa lógica de ritmo em outro lugar.
+ * mês). Nos meses futuros, mostra o ritmo necessário pros meses restantes,
+ * calculado pela MASSA financeira ponderada pela receita de cada mês (não
+ * mais uma média/distribuição uniforme entre os meses — meses com mais
+ * receita pesam mais). Fórmula conferida célula a célula contra a planilha
+ * de referência do usuário (Graficos Padrao.xlsm, aba DESPESAS ADM) — bateu
+ * exato (14,7082%):
+ *   1. Massa de Meta do mês = Receita REALIZADA do mês × Meta % do mês (cada
+ *      mês já realizado, Meta % vindo do Orçamento via buscarMetaOrcamento —
+ *      é a única peça que vem do Orçamento aqui; a receita usada pra
+ *      ponderar é a que já aconteceu de fato, não a orçada, confirmado
+ *      contra a planilha: 'RL 2026' pondera, não 'RL Orçada')
+ *   2. Meta Acumulada Ponderada = Σ Massa de Meta ÷ Σ Receita Realizada (só
+ *      dos meses já realizados)
+ *   3. Massa Permitida = Receita Orçada ANUAL (12 meses) × Meta Acumulada
+ *      Ponderada
+ *   4. Massa Disponível = Massa Permitida − Despesa já realizada (acumulada,
+ *      direto do DRE)
+ *   5. Receita Restante = Receita Orçada Anual − Receita Realizada Acumulada
+ *      (não é a soma da receita orçada só dos meses futuros — é o quanto
+ *      ainda falta do total orçado pro ano inteiro, depois de descontar o
+ *      que já foi de fato faturado; a planilha de referência faz exatamente
+ *      assim, ver aba RECEITA LIQUIDA)
+ *   6. Curva de Captura (ritmo necessário) = Massa Disponível ÷ Receita
+ *      Restante
+ * Mês sem Meta % no Orçamento (não importado pra esse mês/pacote) fica de
+ * fora da Meta Acumulada Ponderada — não zera a média, só não entra nela.
+ * Sem Receita Orçada Anual completa (12 meses) ou sem Receita Restante, não
+ * há o que projetar — mesmo comportamento de "sem meta anual" de antes
+ * (retorna só os meses já realizados, sem avrNecessario). `metaAnualOverride`,
+ * quando informado (mesmo null), substitui a busca em `metasManual` — mas só
+ * alimenta a linha de referência "Meta Anual" do gráfico, não entra mais no
+ * cálculo do ritmo necessário (que agora vem só do Orçamento/DRE, ver acima).
+ *
+ * Travado pela própria meta anual (`metaAnualOverride`/`metasManual`), quando
+ * ela existe: economizar nos meses já realizados pode fazer a MASSA
+ * disponível sobrar tanto que o ritmo necessário pros meses restantes passe a
+ * pedir um % PIOR que a meta anual (ex: meta 12,38% virar "pode gastar 23%")
+ * — isso incentivaria a unidade a gastar mais só porque guardou antes. Em vez
+ * de deixar passar, o ritmo necessário fica travado na própria meta nesse
+ * caso (nunca pior que ela): conta de custo (menor % é melhor) não deixa o
+ * ritmo passar ACIMA da meta; conta de performance (maior % é melhor, ex:
+ * EBITDA) não deixa cair ABAIXO. Sem meta anual pra comparar, o ritmo fica
+ * como calculado, sem travar.
  */
 export function calcularSerieCaptura(
   rowsAno: DreLongoRow[],
   metasManual: Meta[],
-  params: { unidade: string; negocio: string; ano: number; codigo: string; prefixos: string | string[] },
+  orcamentos: OrcamentoLinha[],
+  params: { unidade: string; negocio: string; ano: number; codigo: string; prefixos: string | string[]; natureza: Natureza },
   metaAnualOverride?: number | null,
 ): SeriePontoCaptura[] {
   const mensal = rowsAno.filter(r => r.tipo_periodo === 'MENSAL')
@@ -252,17 +338,60 @@ export function calcularSerieCaptura(
     unidade: params.unidade, negocio: params.negocio, ano: params.ano, codigo: params.codigo, isYtd: true, mes: 0,
   })
 
+  const prefixosList = toList(params.prefixos)
   const porMes = new Map(mesesRealizados.map(mes => {
     const calc = normalizarParaCalculo(mensal.filter(r => r.mes === mes))
-    return [mes, { avr: avrPorPrefixo(calc, params.prefixos), receita: calcularReceita(calc) }] as const
+    return [mes, {
+      avr: avrPorPrefixo(calc, params.prefixos),
+      receita: calcularReceita(calc),
+      despesaRealizada: somaReal(calc, prefixosList),
+    }] as const
   }))
 
   const ultimoMes = mesesRealizados[mesesRealizados.length - 1]
   const mesesRestantes = 12 - ultimoMes
-  const somaAvrMensal = [...porMes.values()].reduce((acc, v) => acc + v.avr, 0)
-  const ritmoNecessario = metaAnual === null || mesesRestantes <= 0
+
+  // Passos 1-2: massa de meta ponderada pela receita REALIZADA de cada mês já fechado.
+  let somaMassaMeta = 0
+  let somaReceitaPonderacao = 0
+  for (const mes of mesesRealizados) {
+    const receitaRealMes = porMes.get(mes)!.receita
+    const metaMesPct = buscarMetaOrcamento(orcamentos, { unidade: params.unidade, negocio: params.negocio, ano: params.ano, codigo: params.codigo, mes })
+    if (metaMesPct === null) continue
+    somaMassaMeta += receitaRealMes * (metaMesPct / 100)
+    somaReceitaPonderacao += receitaRealMes
+  }
+  const metaAcumuladaPonderada = somaReceitaPonderacao === 0 ? null : somaMassaMeta / somaReceitaPonderacao
+
+  // Passo 3: receita orçada anual — só fecha com os 12 meses completos.
+  let receitaOrcadaAnual: number | null = 0
+  for (let mes = 1; mes <= 12 && receitaOrcadaAnual !== null; mes++) {
+    const v = receitaOrcadaMes(orcamentos, { unidade: params.unidade, negocio: params.negocio, ano: params.ano, mes })
+    receitaOrcadaAnual = v === null ? null : receitaOrcadaAnual + v
+  }
+  const massaPermitida = metaAcumuladaPonderada === null || receitaOrcadaAnual === null
     ? null
-    : (metaAnual * 12 - somaAvrMensal) / mesesRestantes
+    : receitaOrcadaAnual * metaAcumuladaPonderada
+
+  // Passo 4: despesa já realizada, acumulada — dado do DRE, independe do Orçamento.
+  const despesaJaRealizada = [...porMes.values()].reduce((acc, v) => acc + v.despesaRealizada, 0)
+  const massaDisponivel = massaPermitida === null ? null : massaPermitida - despesaJaRealizada
+
+  // Passo 5: receita orçada anual menos a receita já realizada até agora (não a soma da orçada só dos meses futuros).
+  const receitaRealizadaAcumulada = [...porMes.values()].reduce((acc, v) => acc + v.receita, 0)
+  const receitaRestante = receitaOrcadaAnual === null ? null : receitaOrcadaAnual - receitaRealizadaAcumulada
+
+  // Passo 6: curva de captura.
+  const ritmoNecessarioBruto = massaDisponivel === null || receitaRestante === null || mesesRestantes <= 0 || receitaRestante === 0
+    ? null
+    : (massaDisponivel / receitaRestante) * 100
+
+  // Trava: nunca pior que a própria meta anual (ver comentário da função).
+  const ritmoNecessario = ritmoNecessarioBruto === null || metaAnual === null
+    ? ritmoNecessarioBruto
+    : params.natureza === 'custo'
+      ? Math.min(ritmoNecessarioBruto, metaAnual)
+      : Math.max(ritmoNecessarioBruto, metaAnual)
 
   const pontos: SeriePontoCaptura[] = mesesRealizados.map(mes => ({
     mes,

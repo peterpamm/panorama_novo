@@ -7,6 +7,9 @@ import { LoginPage } from '@/pages/LoginPage'
 import { FarolDeMetasPage } from '@/pages/FarolDeMetasPage'
 import { FarolGerentesPage } from '@/pages/FarolGerentesPage'
 import { AnalisePorContaPage } from '@/pages/AnalisePorContaPage'
+import { AnaliseDetalhadaPage } from '@/pages/AnaliseDetalhadaPage'
+import { AnaliseDetalhadaPacoteDeGentePage } from '@/pages/AnaliseDetalhadaPacoteDeGentePage'
+import { AnaliseDetalhadaPacoteDeFrotaPage } from '@/pages/AnaliseDetalhadaPacoteDeFrotaPage'
 import { RankingPage } from '@/pages/RankingPage'
 import { MetasPage } from '@/pages/MetasPage'
 import { ImportacaoDrePage } from '@/pages/ImportacaoDrePage'
@@ -23,12 +26,16 @@ import { RvEmpurradaPage } from '@/pages/rv/RvEmpurradaPage'
 import { PainelGeralRvPage } from '@/pages/rv/PainelGeralRvPage'
 import { MatrizRvPage } from '@/pages/rv/MatrizRvPage'
 import { AreaFinanceiraPage } from '@/pages/AreaFinanceiraPage'
+import { SdgPage } from '@/pages/SdgPage'
 import { RotinasFinanceirasPage } from '@/pages/financeira/RotinasFinanceirasPage'
 import { PlanoDeAcaoPage } from '@/pages/financeira/PlanoDeAcaoPage'
 import { EncontroDeContasPage } from '@/pages/financeira/EncontroDeContasPage'
+import { LimpaPautaPage } from '@/pages/financeira/LimpaPautaPage'
 import { SdgFinanceiroGestaoPage } from '@/pages/financeira/SdgFinanceiroGestaoPage'
 import { SdgCorpFinGestaoPage } from '@/pages/financeira/SdgCorpFinGestaoPage'
+import { SdgGerentesGestaoPage } from '@/pages/financeira/SdgGerentesGestaoPage'
 import { SdgFinanceiroPage } from '@/pages/SdgFinanceiroPage'
+import { SdgGerentesPage } from '@/pages/SdgGerentesPage'
 import { SdgCorporativoPage } from '@/pages/SdgCorporativoPage'
 import { SdgCorporativoFrotaPage } from '@/pages/SdgCorporativoFrotaPage'
 import { MetasGeraisPage } from '@/pages/metas/MetasGeraisPage'
@@ -57,12 +64,35 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
 
-          {/* SDG Financeiro — tela cheia, sem AppShell/sidebar */}
+          {/* SDG Financeiro — tela cheia, sem AppShell/sidebar. Usa o
+              DataProvider (DRE/Orçamento/Painel de Perdas de todas as
+              unidades, cache de sessão) em vez de buscar a unidade
+              selecionada do zero a cada troca — antes eram N fetches
+              completos (um por troca de unidade), agora é 1 só por sessão
+              desse provider. Só a lista de unidades não precisa vir do
+              DataProvider à parte, já está incluída nele. */}
           <Route
             path="sdg-financeiro"
             element={
               <ProtectedRoute>
-                <SdgFinanceiroPage />
+                <DataProvider>
+                  <SdgFinanceiroPage />
+                </DataProvider>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* SDG Gerentes — tela cheia, mesmo molde do SDG Financeiro (ver
+              comentário acima: DataProvider próprio, dados de todas as
+              unidades em cache em vez de refazer a busca a cada troca).
+              Qualquer usuário acessa — os próprios gerentes apresentam. */}
+          <Route
+            path="sdg-gerentes"
+            element={
+              <ProtectedRoute>
+                <DataProvider>
+                  <SdgGerentesPage />
+                </DataProvider>
               </ProtectedRoute>
             }
           />
@@ -104,7 +134,20 @@ export default function App() {
           >
             <Route index element={<FarolDeMetasPage />} />
             <Route path="farol-gerentes" element={<FarolGerentesPage />} />
-            <Route path="analise-conta" element={<AnalisePorContaPage />} />
+            <Route path="analise-conta" element={<Navigate to="/analise-detalhada/conta" replace />} />
+            <Route
+              path="analise-detalhada"
+              element={
+                <ProtectedRoute>
+                  <Outlet />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<AnaliseDetalhadaPage />} />
+              <Route path="conta" element={<AnalisePorContaPage />} />
+              <Route path="pacote-de-gente" element={<AnaliseDetalhadaPacoteDeGentePage />} />
+              <Route path="pacote-de-frota" element={<AnaliseDetalhadaPacoteDeFrotaPage />} />
+            </Route>
             <Route path="ranking" element={<RankingPage />} />
             <Route path="painel-perdas" element={<PainelPerdasPage />} />
             <Route path="remuneracao-variavel">
@@ -150,8 +193,23 @@ export default function App() {
               <Route path="rotinas" element={<RotinasFinanceirasPage />} />
               <Route path="plano-de-acao" element={<PlanoDeAcaoPage />} />
               <Route path="encontro-de-contas" element={<EncontroDeContasPage />} />
-              <Route path="sdg-financeiro" element={<SdgFinanceiroGestaoPage />} />
-              <Route path="sdg-corp-fin" element={<ProtectedRoute donoApenas><SdgCorpFinGestaoPage /></ProtectedRoute>} />
+              <Route path="limpa-pauta" element={<LimpaPautaPage />} />
+              {/* Migradas pra /sdg — redirects abaixo pra quem tinha o link antigo salvo. */}
+              <Route path="sdg-financeiro" element={<Navigate to="/sdg/financeiro" replace />} />
+              <Route path="sdg-corp-fin" element={<Navigate to="/sdg/corp-fin" replace />} />
+            </Route>
+            <Route
+              path="sdg"
+              element={
+                <ProtectedRoute>
+                  <Outlet />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<SdgPage />} />
+              <Route path="financeiro" element={<SdgFinanceiroGestaoPage />} />
+              <Route path="corp-fin" element={<ProtectedRoute donoApenas><SdgCorpFinGestaoPage /></ProtectedRoute>} />
+              <Route path="gerentes" element={<SdgGerentesGestaoPage />} />
             </Route>
             <Route path="reuniao-resultados">
               <Route index element={<ReuniaoResultadosPage />} />

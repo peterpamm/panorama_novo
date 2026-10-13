@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
-import { supabase } from '@/lib/supabase'
 import { useUnidades } from '@/hooks/useUnidades'
-import { useDreLongo } from '@/hooks/useDreLongo'
 import { useDreLongoTodasUnidades } from '@/hooks/useDreLongoTodasUnidades'
+import { useOrcamentoTodasUnidades } from '@/hooks/useOrcamentoTodasUnidades'
 import { useMetas } from '@/hooks/useMetas'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -26,9 +25,8 @@ import {
 } from '@/lib/farol-calculations'
 import type { UnidadeIncremento } from '@/lib/farol-calculations'
 import { buscarMetaOrcamento } from '@/lib/orcamento-farol'
-import { fetchOrcamentoPaginado } from '@/lib/orcamento-fetch'
 import { formatCurrencyInteiro } from '@/lib/utils'
-import type { DreLongoRow, OrcamentoLinha } from '@/types'
+import type { DreLongoRow } from '@/types'
 
 function unicos<T>(valores: T[]): T[] {
   return Array.from(new Set(valores))
@@ -57,9 +55,16 @@ export function FarolDeMetasPage() {
     () => todasUnidades.filter(u => u.data_entrada && u.codigo !== 'AMBEV'),
     [todasUnidades],
   )
-  const { rows: rowsTodasUnidades } = useDreLongoTodasUnidades()
-
-  const { rows: rowsUnidade, loading: loadingDre } = useDreLongo(selUnidade || null)
+  // DRE/Orçamento de todas as unidades, do cache global (`DataContext`) —
+  // filtra pela unidade selecionada em memória, em vez de refazer a busca a
+  // cada troca de unidade (era `useDreLongo(selUnidade)` +
+  // `fetchOrcamentoPaginado` próprios, redundantes com esse mesmo cache que
+  // a página já carregava do lado pra calcular o incremento de unidades
+  // novas — essa é a página inicial do app, a mais visitada, então cada
+  // troca de unidade multiplicava egress do Supabase sem necessidade).
+  const { rows: rowsTodasUnidades, loading: loadingDre } = useDreLongoTodasUnidades()
+  const { orcamentos: orcamentosTodasUnidades } = useOrcamentoTodasUnidades()
+  const rowsUnidade = useMemo(() => rowsTodasUnidades.filter(r => r.unidade === selUnidade), [rowsTodasUnidades, selUnidade])
   const { metas } = useMetas(selUnidade || null)
 
   const negociosDisponiveis = useMemo(() => unicos(rowsUnidade.map(r => r.negocio)).sort(), [rowsUnidade])
@@ -148,20 +153,11 @@ export function FarolDeMetasPage() {
 
   // Meta mensal/anual/semestral direto do orçamento (pacotes mapeados em
   // PACOTE_CONTA_ORCAMENTO) em vez da tabela `metas` — ver src/lib/orcamento-farol.ts.
-  const [orcamentoRows, setOrcamentoRows] = useState<OrcamentoLinha[]>([])
-  useEffect(() => {
-    if (selUnidade === '' || selNegocio === '' || selAno === null) { setOrcamentoRows([]); return }
-    let cancelado = false
-    fetchOrcamentoPaginado((from, to) =>
-      supabase.from('orcamentos').select('*')
-        .eq('unidade', selUnidade).eq('negocio', selNegocio).eq('ano', selAno)
-        .order('id', { ascending: true })
-        .range(from, to),
-    )
-      .then(rows => { if (!cancelado) setOrcamentoRows(rows) })
-      .catch(() => { if (!cancelado) setOrcamentoRows([]) })
-    return () => { cancelado = true }
-  }, [selUnidade, selNegocio, selAno])
+  // Filtrado em memória do cache global (`orcamentosTodasUnidades`).
+  const orcamentoRows = useMemo(
+    () => orcamentosTodasUnidades.filter(o => o.unidade === selUnidade && o.negocio === selNegocio && o.ano === selAno),
+    [orcamentosTodasUnidades, selUnidade, selNegocio, selAno],
+  )
 
   function calcularIndicador(codigo: string) {
     const info = PACOTES[codigo]
@@ -195,7 +191,7 @@ export function FarolDeMetasPage() {
     const serieCaptura = selAno === null
       ? []
       : calcularSerieCaptura(
-          rowsAno, metas, { unidade: selUnidade, negocio: selNegocio, ano: selAno, codigo, prefixos: info.prefixos },
+          rowsAno, metas, orcamentoRows, { unidade: selUnidade, negocio: selNegocio, ano: selAno, codigo, prefixos: info.prefixos, natureza: info.natureza },
           metaOrcamentoAnual,
         )
     return { codigo, info, avr, meta, semaforo, impacto, serieAnual, serieCaptura }

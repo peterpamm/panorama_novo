@@ -109,6 +109,27 @@ export const MODELO_ENCONTRO_CONTAS: AbaModelo[] = [
 ]
 
 /**
+ * Limpa Pauta (Área Financeira) — mesmo formato da exportação completa do
+ * Freightech (EXPORTACAO_LIMPA_PAUTAS, sistema da Ambev), só com as colunas
+ * que o parser usa (ela vem com várias outras — Operador/Solicitante/
+ * Evidências/Obs. GOD etc — que ficam de fora de propósito, ver
+ * `limpa-pauta-parser.ts`). "Id" é a chave de deduplicação na reimportação
+ * — sem ela a linha sempre entra como nova. "Valor solicitado" fica em
+ * formato US (ponto decimal), como vem de lá, sem adaptar pro padrão pt-BR
+ * do resto do app.
+ */
+export const MODELO_LIMPA_PAUTA: AbaModelo[] = [
+  {
+    nome: 'Limpa Pauta',
+    linhas: [
+      ['Id', 'Segmentos', 'Unidades', 'Descrição', 'Status', 'Valor solicitado', 'Categoria'],
+      ['6ac78d1a01e3913b4ef1e765', 'AS', 'CDD ARACAJU', 'Lançamento de remuneração variável fora do período.', 'EM_ANALISE', '100.00', 'REMUNERAÇÃO VARIÁVEL'],
+      ['6ac7cea001e3913b4ef1f657', 'ARMAZEM', 'CDD ARACAJU', 'Turnover cobrado em duplicidade.', 'EM_ANALISE', '6756.77', 'Turnover'],
+    ],
+  },
+]
+
+/**
  * Termômetro (Reunião Resultados > Gente/Frota/Segurança > Importação) —
  * Unidade + a pontuação do mês (o cabeçalho da 2ª coluna é lido pela
  * posição, pode ser qualquer nome de mês) + a coluna opcional Posição (a
@@ -185,6 +206,47 @@ export const MODELO_INDICADORES_DU: AbaModelo[] = [
       ['CD CASCAVEL', 'GTY', '95%', 20, '96,2%', 20],
       ['CD CASCAVEL', 'TMV', '00:45', 20, '00:42', 20],
       ['CD FOZ DO IGUAÇU', 'TEMPO DE RENDIÇÃO', '00:15', 20, '00:18', 0],
+    ],
+  },
+]
+
+/**
+ * Disponibilidade Armazém — colunas "Filial", "Disp. Contratado" (realizado)
+ * e "META". A coluna META é opcional (se faltar, a importação preserva a
+ * meta já salva) — o modelo já traz as duas pra deixar claro o formato
+ * completo.
+ */
+export const MODELO_DISPONIBILIDADE_ARMAZEM: AbaModelo[] = [
+  {
+    nome: 'Disp Armazem',
+    linhas: [
+      ['Filial', 'Disp. Contratado', 'META'],
+      ['ESTÂNCIA', '96,5%', '95%'],
+      ['CD CASCAVEL', '94,2%', '95%'],
+    ],
+  },
+]
+
+/** Disponibilidade Rota Acumulada — colunas "Unidade", "% Disp" (realizado) e "Meta". */
+export const MODELO_DISPONIBILIDADE_ROTA: AbaModelo[] = [
+  {
+    nome: 'Disp Rota',
+    linhas: [
+      ['Unidade', '% Disp', 'Meta'],
+      ['DIADEMA', '92,4%', '90%'],
+      ['PETRÓPOLIS', '88,1%', '90%'],
+    ],
+  },
+]
+
+/** Disponibilidade Empurrada Acumulada — mesmo formato da Rota; na prática só Ponta Grossa e Estância usam. */
+export const MODELO_DISPONIBILIDADE_EMPURRADA: AbaModelo[] = [
+  {
+    nome: 'Disp Empurrada',
+    linhas: [
+      ['Unidade', '% Disp', 'Meta'],
+      ['PONTA GROSSA', '93,1%', '90%'],
+      ['ESTÂNCIA', '89,7%', '90%'],
     ],
   },
 ]

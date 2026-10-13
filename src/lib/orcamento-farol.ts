@@ -91,6 +91,65 @@ function paraCodigoTtDeslocado(codigo: string): string {
 }
 
 /**
+ * Núcleo comum de `buscarMetaOrcamento`/`buscarOrcadoRs` — acha as linhas do
+ * Orçamento certas pra esse pacote/unidade/negócio/ano/mês (resolvendo as
+ * duas fontes de código possíveis, ver `usaNumeracaoDreNativa`) e soma o
+ * campo pedido (`av` = %, `orcado` = R$ bruto da planilha), com o mesmo
+ * ajuste de sinal nos dois casos (custo sempre positivo, igual o resto do
+ * Farol — a planilha guarda os dois campos com o sinal negativo do GInfo
+ * pra conta de custo).
+ */
+/**
+ * `indiceApenas`, quando informado, restringe a busca a um ÚNICO código
+ * dentro do pacote (posição `indiceApenas` de `PACOTES[codigo].prefixos`
+ * nativo, ou da mesma posição em `PACOTE_CONTA_ORCAMENTO` bespoke — as duas
+ * listas são montadas na MESMA ordem de propósito, ex: Salários = ['036',
+ * '161'] nativo / ['022','080'] bespoke, sempre [operacional, administrativo]
+ * nessa ordem) — usado quando o pacote soma duas contas (operacional +
+ * administrativo) e o chamador quer só uma das duas, não a soma. Sem
+ * `indiceApenas` (default), soma todas as contas do pacote, igual sempre foi.
+ */
+function buscarCampoOrcamento(
+  orcamentos: OrcamentoLinha[],
+  params: { unidade: string; negocio: string; ano: number; codigo: string; mes: number },
+  campo: 'av' | 'orcado',
+  indiceApenas?: number,
+): number | null {
+  if (usaNumeracaoDreNativa(orcamentos, params.unidade, params.negocio, params.ano)) {
+    const prefixosDreBase = PACOTES[params.codigo]?.prefixos
+    if (!prefixosDreBase) return null
+    const prefixosDre = indiceApenas === undefined ? prefixosDreBase : prefixosDreBase[indiceApenas] !== undefined ? [prefixosDreBase[indiceApenas]] : []
+    if (prefixosDre.length === 0) return null
+    const linhasDre = orcamentos.filter(o =>
+      o.unidade === params.unidade && o.negocio === params.negocio && o.ano === params.ano && o.mes === params.mes
+      && prefixosDre.includes(o.conta_codigo),
+    )
+    if (linhasDre.length === 0) return null
+    return ajustarSinal(params.codigo, linhasDre.reduce((acc, l) => acc + l[campo], 0))
+  }
+
+  const codigoParaBusca = params.ano <= ULTIMO_ANO_ORCAMENTO_ESTRUTURA_ANTIGA
+    ? paraCodigoPreCutover(params.codigo)
+    : params.codigo
+  const codigosAlvoBase = PACOTE_CONTA_ORCAMENTO[codigoParaBusca]
+  if (!codigosAlvoBase) return null
+  const codigosAlvoCompletos = usaOrcamentoTtDeslocado(orcamentos, params.unidade, params.negocio, params.ano)
+    ? codigosAlvoBase.map(paraCodigoTtDeslocado)
+    : codigosAlvoBase
+  const codigosAlvo = indiceApenas === undefined
+    ? codigosAlvoCompletos
+    : codigosAlvoCompletos[indiceApenas] !== undefined ? [codigosAlvoCompletos[indiceApenas]] : []
+  if (codigosAlvo.length === 0) return null
+
+  const linhas = orcamentos.filter(o =>
+    o.unidade === params.unidade && o.negocio === params.negocio && o.ano === params.ano && o.mes === params.mes
+    && codigosAlvo.includes(o.conta_codigo),
+  )
+  if (linhas.length === 0) return null
+  return ajustarSinal(params.codigo, linhas.reduce((acc, l) => acc + l[campo], 0))
+}
+
+/**
  * Meta (%) direto do orçamento pra um pacote do Farol. `mes` é 0 pro anual
  * (bloco TOTAL da planilha), 1-12 pro mês, ou 13/14 pro 1º/2º semestre
  * (blocos recalculados — ver orcamento-semestre.ts, tela Administração >
@@ -106,35 +165,39 @@ function paraCodigoTtDeslocado(codigo: string): string {
  *    chaveado pelos códigos ANTIGOS de propósito — ver comentário lá): pra
  *    ano ≤ ULTIMO_ANO_ORCAMENTO_ESTRUTURA_ANTIGA traduzimos `params.codigo`
  *    (sempre o id novo, pós-cutover) de volta antes de indexar.
+ *
+ * Só o percentual (`av`) importa aqui — pra uma meta em R$ que acompanhe o
+ * mês REALIZADO (não o cenário de orçamento original), multiplique esse
+ * percentual pela receita REALIZADA do período (ver o cálculo da tabela de
+ * EBITDA no SDG Gerentes). Pra um orçamento em R$ "congelado" no cenário
+ * original da planilha (não re-escalado pela receita realizada), use
+ * `buscarOrcadoRs`.
+ * `indiceApenas` — ver `buscarCampoOrcamento`: restringe a só uma das contas
+ * do pacote (ex: só o código operacional, não o administrativo junto).
  */
 export function buscarMetaOrcamento(
   orcamentos: OrcamentoLinha[],
   params: { unidade: string; negocio: string; ano: number; codigo: string; mes: number },
+  indiceApenas?: number,
 ): number | null {
-  if (usaNumeracaoDreNativa(orcamentos, params.unidade, params.negocio, params.ano)) {
-    const prefixosDre = PACOTES[params.codigo]?.prefixos
-    if (!prefixosDre) return null
-    const linhasDre = orcamentos.filter(o =>
-      o.unidade === params.unidade && o.negocio === params.negocio && o.ano === params.ano && o.mes === params.mes
-      && prefixosDre.includes(o.conta_codigo),
-    )
-    if (linhasDre.length === 0) return null
-    return ajustarSinal(params.codigo, linhasDre.reduce((acc, l) => acc + l.av, 0))
-  }
+  return buscarCampoOrcamento(orcamentos, params, 'av', indiceApenas)
+}
 
-  const codigoParaBusca = params.ano <= ULTIMO_ANO_ORCAMENTO_ESTRUTURA_ANTIGA
-    ? paraCodigoPreCutover(params.codigo)
-    : params.codigo
-  const codigosAlvoBase = PACOTE_CONTA_ORCAMENTO[codigoParaBusca]
-  if (!codigosAlvoBase) return null
-  const codigosAlvo = usaOrcamentoTtDeslocado(orcamentos, params.unidade, params.negocio, params.ano)
-    ? codigosAlvoBase.map(paraCodigoTtDeslocado)
-    : codigosAlvoBase
-
-  const linhas = orcamentos.filter(o =>
-    o.unidade === params.unidade && o.negocio === params.negocio && o.ano === params.ano && o.mes === params.mes
-    && codigosAlvo.includes(o.conta_codigo),
-  )
-  if (linhas.length === 0) return null
-  return ajustarSinal(params.codigo, linhas.reduce((acc, l) => acc + l.av, 0))
+/**
+ * Orçamento em R$ "bruto" da planilha pra um pacote do Farol — mesma busca
+ * de `buscarMetaOrcamento` (dual-path unidade nova/antiga, mesmo ajuste de
+ * sinal), só que soma `orcado` em vez de `av`. Esse valor reflete o cenário
+ * de receita ORÇADA original (não a receita REALIZADA do período) — pra uma
+ * meta em R$ que acompanhe o realizado, use `buscarMetaOrcamento` (o
+ * percentual) multiplicado pela receita realizada em vez desta função.
+ * `indiceApenas` — ver `buscarCampoOrcamento`: restringe a só uma das contas
+ * do pacote (ex: só o código operacional de Salários, não o administrativo
+ * junto) em vez de somar todas.
+ */
+export function buscarOrcadoRs(
+  orcamentos: OrcamentoLinha[],
+  params: { unidade: string; negocio: string; ano: number; codigo: string; mes: number },
+  indiceApenas?: number,
+): number | null {
+  return buscarCampoOrcamento(orcamentos, params, 'orcado', indiceApenas)
 }

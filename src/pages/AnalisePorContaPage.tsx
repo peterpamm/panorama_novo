@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { useUnidades } from '@/hooks/useUnidades'
-import { useDreLongo } from '@/hooks/useDreLongo'
 import { useDreLongoTodasUnidades } from '@/hooks/useDreLongoTodasUnidades'
 import { useOrcamentoTodasUnidades } from '@/hooks/useOrcamentoTodasUnidades'
 import { useContas } from '@/hooks/useContas'
@@ -40,7 +39,12 @@ export function AnalisePorContaPage() {
     if (!selUnidade && unidadesDisponiveis.length > 0) setSelUnidade(unidadesDisponiveis[0].codigo)
   }, [unidadesDisponiveis, selUnidade])
 
-  const { rows: rowsUnidade, loading: loadingDre } = useDreLongo(selUnidade || null)
+  // Cache global (DataContext) — carregado uma vez por sessão do app, filtrado
+  // pela unidade selecionada em memória em vez de um `useDreLongo(selUnidade)`
+  // próprio (redundante: a aba "Por Unidade", bem abaixo, já usa esse mesmo
+  // cache cru, todas as unidades juntas).
+  const { rows: rowsTodasUnidades, loading: loadingDre } = useDreLongoTodasUnidades()
+  const rowsUnidade = useMemo(() => rowsTodasUnidades.filter(r => r.unidade === selUnidade), [rowsTodasUnidades, selUnidade])
 
   const negociosDisponiveis = useMemo(() => unicos(rowsUnidade.map(r => r.negocio)).sort(), [rowsUnidade])
   const [selNegocio, setSelNegocio] = useState('')
@@ -68,10 +72,9 @@ export function AnalisePorContaPage() {
   const [selContaPorUnidade, setSelContaPorUnidade] = useState(CONTA_RECEITA)
 
   // Aba "Por Unidade" — a mesma conta em todas as unidades, do cache global
-  // (`DataContext`), não do `useDreLongo` da unidade selecionada. Só faz
-  // sentido pra quem enxerga várias unidades (admin/corporativo); usuário de
-  // unidade nem vê a aba, e a RLS já limitaria o dado de qualquer jeito.
-  const { rows: rowsTodasUnidades } = useDreLongoTodasUnidades()
+  // (`rowsTodasUnidades`, já carregado acima). Só faz sentido pra quem
+  // enxerga várias unidades (admin/corporativo); usuário de unidade nem vê a
+  // aba, e a RLS já limitaria o dado de qualquer jeito.
   // Meta do modo AVR sai só daqui — o orçamento importado, mesma fonte do
   // Farol de Metas e do Ranking (nunca o AVO do DRE).
   const { orcamentos: orcamentosTodasUnidades } = useOrcamentoTodasUnidades()

@@ -64,7 +64,7 @@ export function Slide01Ebitda({ rowsAno, orcamentoRows, unidade, negocio, ano, m
 
   const serieCaptura = useMemo(() => {
     const metaAnual = buscarMetaOrcamento(orcamentoRows, { ...ctx, mes: 0 })
-    return calcularSerieCaptura(rowsAno, [], { ...ctx, prefixos: INFO.prefixos }, metaAnual)
+    return calcularSerieCaptura(rowsAno, [], orcamentoRows, { ...ctx, prefixos: INFO.prefixos, natureza: INFO.natureza }, metaAnual)
   }, [rowsAno, orcamentoRows])
 
   return (

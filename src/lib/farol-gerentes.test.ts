@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   calcularAcidentesTriPorUnidade, calcularPacotePerdasPorUnidade, disponibilidadesDaUnidade, linhaAcidentesTri,
-  linhaDisponibilidadeArmazem, linhaDisponibilidadeRota, linhaIndicadorDre, linhaPacotePerdas, linhaScorecard,
+  linhaDisponibilidadeArmazem, linhaDisponibilidadeRota, linhaIndicadorDre, linhaPacotePerdas, linhaPosicaoLog20,
   participaContagemEbitda, unidadesCardsFarol,
 } from './farol-gerentes'
 import type { RankingLinhaIndicador } from './ranking-calculations'
@@ -190,18 +190,23 @@ describe('linhaDisponibilidadeRota', () => {
   })
 })
 
-describe('linhaScorecard', () => {
-  it('sem registro importado fica pendente', () => {
-    expect(linhaScorecard('ROTA', undefined)).toMatchObject({ indicador: 'Scorecard Rota.', meta: '—', real: '—', status: 'pendente' })
+describe('linhaPosicaoLog20', () => {
+  it('sem faixa cadastrada ainda fica pendente', () => {
+    expect(linhaPosicaoLog20(null)).toMatchObject({ indicador: 'Posição LOG20', meta: '—', real: '—', status: 'pendente' })
   })
 
-  it('bate com 80% ou mais, perde abaixo disso', () => {
-    expect(linhaScorecard('ARM', { unidade: 'DIADEMA', negocio: 'ARM', score: 80 })).toMatchObject({
-      indicador: 'Scorecard Arm.', meta: '80.0%', real: '80.0%', status: 'bateu',
-    })
-    expect(linhaScorecard('EMP', { unidade: 'ESTANCIA', negocio: 'EMP', score: 79.9 })).toMatchObject({
-      indicador: 'Scorecard Empur.', real: '79.9%', status: 'perdeu',
-    })
+  it('bate quando o pior número da faixa está dentro do top 5', () => {
+    expect(linhaPosicaoLog20('1-5')).toMatchObject({ indicador: 'Posição LOG20', meta: '1-5', real: '1-5', status: 'bateu' })
+    expect(linhaPosicaoLog20('3')).toMatchObject({ real: '3', status: 'bateu' })
+  })
+
+  it('perde quando o pior número da faixa passa do top 5', () => {
+    expect(linhaPosicaoLog20('6-10')).toMatchObject({ real: '6-10', status: 'perdeu' })
+    expect(linhaPosicaoLog20('3-7')).toMatchObject({ status: 'perdeu' }) // pior caso seria 7º
+  })
+
+  it('texto sem número nenhum fica pendente, não quebra', () => {
+    expect(linhaPosicaoLog20('Não informado')).toMatchObject({ real: 'Não informado', status: 'pendente' })
   })
 })
 

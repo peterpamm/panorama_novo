@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { ChevronRight, ClipboardCheck, ListChecks, MonitorPlay, Presentation, Receipt } from 'lucide-react'
+import { ChevronRight, ClipboardCheck, ListChecks, Receipt, Sparkles } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { Toaster } from '@/components/ui/toaster'
 
@@ -36,19 +36,11 @@ const SUBPAGINAS: SubpaginaCard[] = [
     corIcone: 'bg-violet-500/10',
   },
   {
-    to: '/area-financeira/sdg-financeiro',
-    titulo: 'SDG Financeiro',
-    descricao: 'Justificativa do mês (Pontos Positivos/Negativos) por indicador — exibida no modo apresentação (SDG Financeiro).',
-    icone: <MonitorPlay className="h-6 w-6 text-amber-500" />,
+    to: '/area-financeira/limpa-pauta',
+    titulo: 'Limpa Pauta',
+    descricao: 'Descontos cobrados da Ambev, subidos pro Freightech — importação e acompanhamento por unidade.',
+    icone: <Sparkles className="h-6 w-6 text-amber-500" />,
     corIcone: 'bg-amber-500/10',
-  },
-  {
-    to: '/area-financeira/sdg-corp-fin',
-    titulo: 'SDG Corp Fin',
-    descricao: 'Assuntos Gerais e Lucro pra apresentação corporativa (SDG Corporativo, diretoria) — só o dono acessa.',
-    icone: <Presentation className="h-6 w-6 text-indigo-500" />,
-    corIcone: 'bg-indigo-500/10',
-    donoApenas: true,
   },
 ]
 

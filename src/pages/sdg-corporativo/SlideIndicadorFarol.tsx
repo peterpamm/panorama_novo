@@ -50,7 +50,7 @@ function TooltipIndicador({ active, payload, label }: { active?: boolean; payloa
  * subcontas (ex: Despesa Administrativa → Top Contas) têm slide próprio.
  */
 export function SlideIndicadorFarol({ titulo, codigo, rowsAno, orcamentoAno, unidades, negocio, ano, mes }: Props) {
-  const { axis, legend } = getChartColors()
+  const { axis, legend, cursor } = getChartColors()
   const info = PACOTES[codigo]
   const nomesUnidade = useMemo(() => new Map(unidades.map(u => [u.codigo, u.nome])), [unidades])
 
@@ -82,7 +82,7 @@ export function SlideIndicadorFarol({ titulo, codigo, rowsAno, orcamentoAno, uni
               <ComposedChart data={serie} margin={{ top: 24, right: 16, bottom: 0, left: 0 }}>
                 <XAxis dataKey="mes" tickFormatter={m => MES_ABREV[m] ?? m} tickLine={false} axisLine={false} tick={{ fill: axis, fontSize: 12, fontWeight: 500 }} />
                 <YAxis tickLine={false} axisLine={false} tick={{ fill: axis, fontSize: 11, fontWeight: 500 }} tickFormatter={v => `${v}%`} width={56} />
-                <Tooltip content={<TooltipIndicador />} />
+                <Tooltip content={<TooltipIndicador />} cursor={{ fill: cursor }} />
                 <Legend verticalAlign="top" align="right" iconType="plainline" wrapperStyle={{ fontSize: 12, color: legend }} />
                 <Bar dataKey="avr" name="Realizado" radius={[4, 4, 0, 0]} barSize={32}>
                   {serie.map(p => (

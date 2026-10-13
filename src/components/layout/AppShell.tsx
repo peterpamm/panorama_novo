@@ -7,7 +7,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 
 const PAGE_TITLES: Record<string, string> = {
   '/':              'Farol de Metas',
-  '/analise-conta': 'Análise por Conta',
+  '/analise-detalhada': 'Análise Detalhada',
   '/ranking':       'Ranking',
   '/painel-perdas': 'Painel de Perdas',
   '/remuneracao-variavel': 'Remuneração Variável',

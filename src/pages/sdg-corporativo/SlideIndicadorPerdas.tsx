@@ -58,7 +58,7 @@ function TooltipIndicador({ active, payload, label }: { active?: boolean; payloa
  * não da tabela `orcamentos`.
  */
 export function SlideIndicadorPerdas({ titulo, indicador, contas, rowsAnoTodosNegocios, unidades, ano, mes }: Props) {
-  const { axis, legend } = getChartColors()
+  const { axis, legend, cursor } = getChartColors()
   const nomesUnidade = useMemo(() => new Map(unidades.map(u => [u.codigo, u.nome])), [unidades])
 
   const rowsCons = useMemo(() => rowsAnoTodosNegocios.filter(r => r.negocio === 'CONS'), [rowsAnoTodosNegocios])
@@ -126,7 +126,7 @@ export function SlideIndicadorPerdas({ titulo, indicador, contas, rowsAnoTodosNe
               <ComposedChart data={serie} margin={{ top: 24, right: 16, bottom: 0, left: 0 }}>
                 <XAxis dataKey="mes" tickFormatter={m => MES_ABREV[m] ?? m} tickLine={false} axisLine={false} tick={{ fill: axis, fontSize: 12, fontWeight: 500 }} />
                 <YAxis tickLine={false} axisLine={false} tick={{ fill: axis, fontSize: 11, fontWeight: 500 }} tickFormatter={v => formatCurrencyCompact(v)} width={64} />
-                <Tooltip content={<TooltipIndicador />} />
+                <Tooltip content={<TooltipIndicador />} cursor={{ fill: cursor }} />
                 <Legend verticalAlign="top" align="right" iconType="plainline" wrapperStyle={{ fontSize: 12, color: legend }} />
                 <Bar dataKey="valor" name="Realizado" radius={[4, 4, 0, 0]} barSize={32}>
                   {serie.map(p => <Cell key={p.mes} fill={corBarra(p.valor)} />)}

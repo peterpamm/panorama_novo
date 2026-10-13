@@ -26,6 +26,44 @@ export function resolverUnidade(nome: string, unidades: Unidade[]): Unidade | un
   )
 }
 
+const PREFIXOS_BI_CONHECIDOS = ['CDD ', 'CDL ', 'CDR ', 'CD ']
+
+/** Remove um prefixo de BI conhecido (CDD/CDL/CDR/CD) do início do nome, se tiver — senão devolve o texto original. */
+function semPrefixoBiConhecido(nome: string): string {
+  const alvo = nome.toUpperCase()
+  for (const prefixo of PREFIXOS_BI_CONHECIDOS) {
+    if (alvo.startsWith(prefixo)) return nome.slice(prefixo.length)
+  }
+  return nome
+}
+
+/**
+ * Resolve um nome vindo de arquivo externo pra uma unidade, mais tolerante
+ * que `resolverUnidade`: tenta exato primeiro (apelido/nome/código/GInfo);
+ * se não bater, tira um prefixo de BI conhecido (CDD/CDL/CDR/CD, ex: "CDD
+ * ARACAJU") e tenta de novo; se ainda não bater, confere se o nome da
+ * unidade está contido no que sobrou (ou vice-versa) — cobre variações com
+ * palavra extra no meio que o apelido cadastrado não tem. Usado em
+ * importações cujo texto de unidade não é 100% previsível (ex: relatos de
+ * segurança, "CDD ARACAJU").
+ */
+export function resolverUnidadeFlexivel(nome: string, unidades: Unidade[]): Unidade | undefined {
+  const direto = resolverUnidade(nome, unidades)
+  if (direto) return direto
+
+  const semPrefixo = semPrefixoBiConhecido(nome)
+  if (semPrefixo === nome) return undefined
+
+  const exato = resolverUnidade(semPrefixo, unidades)
+  if (exato) return exato
+
+  const alvo = normalizarNomeUnidade(semPrefixo)
+  return unidades.find(un => {
+    const nomeNorm = normalizarNomeUnidade(un.nome)
+    return nomeNorm !== '' && (alvo.includes(nomeNorm) || nomeNorm.includes(alvo))
+  })
+}
+
 /**
  * Negócio sugerido pelo prefixo do nome vindo de arquivo externo — CDL
  * (rota) e CDR (armazém/empurrada) são operações separadas da mesma unidade

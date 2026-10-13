@@ -34,9 +34,20 @@ export const PACOTES: Record<string, PacoteInfo> = {
   '140': { nome: 'Custo Fixos',                 natureza: 'custo',       prefixos: ['140'] },
   '144': { nome: 'Outros Custos Operacionais',  natureza: 'custo',       prefixos: ['144'] },
   '158': { nome: 'Despesa Administrativa',      natureza: 'custo',       prefixos: ['158'] },
+  // Gastos com Benefícios — mesmo caso de Pacote de Gente (159): soma a
+  // conta-mãe do operacional (056) com a do administrativo (172), numeração
+  // nova do DRE — usado no SDG Gerentes (abertura do Pacote de Gente).
+  '056': { nome: 'Gastos com Benefícios',       natureza: 'custo',       prefixos: ['056', '172'] },
+  // Salários — mesmo caso: soma 036 (Salários e Ordenados, operacional) com
+  // 161 (Salários, administrativo).
+  '036': { nome: 'Salários',                    natureza: 'custo',       prefixos: ['036', '161'] },
   '074': { nome: 'Pacote Segurança',            natureza: 'custo',       prefixos: ['074'] },
   '075': { nome: "EPI's",                       natureza: 'custo',       prefixos: ['075'] },
   '076': { nome: 'Uniformes',                   natureza: 'custo',       prefixos: ['076'] },
+  '023': { nome: 'Custos com Freteiros',        natureza: 'custo',       prefixos: ['023'] },
+  // Gastos Contratação/Demissão — mesmo caso de Salários/Benefícios: soma a
+  // conta-mãe do operacional (069) com a do administrativo (184).
+  '069': { nome: 'Gastos Contratação/Demissão', natureza: 'custo',       prefixos: ['069', '184'] },
 }
 
 export const PACOTES_RESUMO    = ['233', '276', '900', '021', '159', '114', '158', '074']
@@ -117,6 +128,9 @@ export const PACOTE_CONTA_ORCAMENTO: Record<string, string[]> = {
   '190': ['096'], // Despesas Administrativas Gerais
   '217': ['121'], // Despesas Gerais Frota Leve
   '218': ['122'], // Manutenção Frota Leve
+  '055': ['033', '087'], // Gastos com Benefícios (operacional + ADM) — chave '055' = paraCodigoPreCutover('056')
+  '035': ['022', '080'], // Salários (operacional + ADM) — chave '035' = paraCodigoPreCutover('036')
+  '023': ['014'], // Custos com Freteiros (Frete Pago a Terceiros e Agregados) — código do DRE não mudou no cutover (< 035, paraCodigoPreCutover não desloca), só o do Orçamento difere
 }
 
 /**

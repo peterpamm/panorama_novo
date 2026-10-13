@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Moon, Sun, X } from 'lucide-react'
-import { supabase } from '@/lib/supabase'
-import { useDreLongo } from '@/hooks/useDreLongo'
 import { useAuth } from '@/context/AuthContext'
+import { useData } from '@/context/DataContext'
 import { useTheme } from '@/hooks/useTheme'
-import { fetchOrcamentoPaginado } from '@/lib/orcamento-fetch'
 import { useEncontroContas } from '@/hooks/useEncontroContas'
 import { usePlanosAcao, usePlanoAcaoTags } from '@/hooks/usePlanosAcao'
 import { useSdgJustificativas } from '@/hooks/useSdgJustificativas'
@@ -20,7 +18,7 @@ import { SlideRotinas } from '@/pages/sdg/SlideRotinas'
 import { SlidePlanoAcao } from '@/pages/sdg/SlidePlanoAcao'
 import { SlideAssuntosGerais } from '@/pages/sdg/SlideAssuntosGerais'
 import { cn } from '@/lib/utils'
-import type { OrcamentoLinha, PlanoAcao, SdgIndicador, Unidade } from '@/types'
+import type { PlanoAcao, SdgIndicador } from '@/types'
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 
@@ -53,14 +51,13 @@ export function SdgFinanceiroPage() {
   const [selMes, setSelMes] = useState<number | null>(null)
   const [slideIdx, setSlideIdx] = useState(0)
 
-  // Busca própria de unidades — essa página roda numa rota tela-cheia fora
-  // do DataProvider (sem sidebar/AppShell), então não pode usar useUnidades()
-  // (que depende do cache global do DataContext); só precisa da lista, não
-  // do DRE/orçamento de todas as unidades que o DataProvider carregaria junto.
-  const [unidades, setUnidades] = useState<Unidade[]>([])
-  useEffect(() => {
-    supabase.from('unidades').select('*').order('nome').then(({ data }) => setUnidades(data ?? []))
-  }, [])
+  // Unidades/DRE/Orçamento vêm do DataProvider próprio dessa rota (ver
+  // App.tsx) — carrega uma vez só por sessão dessa página, não a cada troca
+  // de unidade no seletor (antes `useDreLongo(selUnidade)` +
+  // `fetchOrcamentoPaginado` refaziam a busca completa a cada troca,
+  // multiplicando o egress do Supabase quando o admin revisava várias
+  // unidades em sequência).
+  const { unidades, rowsDreTodas, orcamentos, loading } = useData()
 
   // Inicializa unidade com a do usuário (ou primeira disponível para admins)
   useEffect(() => {
@@ -72,7 +69,7 @@ export function SdgFinanceiroPage() {
   }, [unidades, role, unidadeUsuario, selUnidade])
 
   // ── Dados ─────────────────────────────────────────────────────────────────
-  const { rows, loading } = useDreLongo(selUnidade || null)
+  const rows = useMemo(() => rowsDreTodas.filter(r => r.unidade === selUnidade), [rowsDreTodas, selUnidade])
   const { ecs } = useEncontroContas()
   const { planos } = usePlanosAcao()
   const { tags } = usePlanoAcaoTags()
@@ -117,20 +114,13 @@ export function SdgFinanceiroPage() {
   // Meta vem do Orçamento (mesma fonte do Farol de Metas — ver orcamento-farol.ts),
   // não da tabela `metas`/AVO do DRE: o AVO embutido no DRE parou de vir a
   // partir da migração pro Orçamento, então a meta mensal sumiria sem isso.
-  const [orcamentoRows, setOrcamentoRows] = useState<OrcamentoLinha[]>([])
-  useEffect(() => {
-    if (selUnidade === '' || selAno === null) { setOrcamentoRows([]); return }
-    let cancelado = false
-    fetchOrcamentoPaginado((from, to) =>
-      supabase.from('orcamentos').select('*')
-        .eq('unidade', selUnidade).eq('negocio', 'CONS').eq('ano', selAno)
-        .order('id', { ascending: true })
-        .range(from, to),
-    )
-      .then(rows => { if (!cancelado) setOrcamentoRows(rows) })
-      .catch(() => { if (!cancelado) setOrcamentoRows([]) })
-    return () => { cancelado = true }
-  }, [selUnidade, selAno])
+  // Filtrado em memória do cache global (`orcamentos`), já limitado às
+  // contas usadas por algum pacote (`CONTAS_ORCAMENTO_USADAS`) e aos
+  // últimos ~2 anos — suficiente pra tudo que esses slides calculam.
+  const orcamentoRows = useMemo(
+    () => orcamentos.filter(o => o.unidade === selUnidade && o.negocio === 'CONS' && o.ano === selAno),
+    [orcamentos, selUnidade, selAno],
+  )
 
   const mesesDisponiveis = useMemo(
     () => unicos(rowsAno.filter(r => r.tipo_periodo === 'MENSAL').map(r => r.mes)).sort((a, b) => a - b),

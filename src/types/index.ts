@@ -393,20 +393,35 @@ export interface DisponibilidadeArmazemAcumulada {
 }
 
 /**
- * Scorecard acumulado (Importação > Financeiro > Dados auxiliares) —
- * snapshot único por unidade × negócio, sem ano/mês; cada importação
- * substitui o conteúdo inteiro da tabela. O `negocio` vem do "Canal" da
- * planilha ("Apoio Logístico" = ARM, "Distribuição Urbana" = ROTA,
- * "Empurrada" = EMP, ver `scorecard-parser.ts`). `score` em escala de
- * percentual (ex: 97.4 = 97,4%); a meta é fixa em 80% no código
- * (`META_SCORECARD`), não vem da planilha. Alimenta as linhas "Scorecard
- * Rota./Arm./Empur." do Farol Gerentes.
+ * Disponibilidade Empurrada acumulada (Importação > Financeiro > Dados
+ * auxiliares) — mesmo espírito da `DisponibilidadeRotaAcumulada`, snapshot
+ * único por unidade. Na prática só Ponta Grossa e Estância usam esse
+ * indicador (únicas unidades com negócio Empurrada). Alimenta o "Disp.
+ * Empurrada" do Farol Gerentes. `meta`/`real` em escala de percentual (ex:
+ * 85.3 = 85,3%).
  */
-export interface ScorecardAcumulado {
+export interface DisponibilidadeEmpurradaAcumulada {
   id?: string
   unidade: string
-  negocio: 'ARM' | 'ROTA' | 'EMP'
-  score: number
+  meta: number
+  real: number
+}
+
+/**
+ * Posição da LOG20 (empresa toda, não por unidade) no ranking de operadores
+ * da Ambev — faixa livre (ex: "1-5", "6-10"), preenchida manualmente em
+ * Importação > Financeiro > Dados auxiliares, 1 linha por ano (migration
+ * 127). Substitui o antigo Scorecard por unidade (`scorecard_acumulado`,
+ * agora sem uso do app). Meta fixa em top 5 no código
+ * (`META_POSICAO_LOG20`), não vem de coluna. Alimenta a linha "Posição
+ * LOG20" do Farol Gerentes — mesmo valor em todo card, como o EBITDA
+ * Global já faz.
+ */
+export interface Log20PosicaoAmbev {
+  ano: number
+  faixa: string
+  atualizado_por_email: string | null
+  updated_at: string
 }
 
 /** Meta (máximo de TRI) e peso do indicador TRI — cadastro único, vale pra todas as unidades. */
@@ -600,6 +615,19 @@ export type SdgIndicador =
   | 'encontro-contas'
   /** Slide final — texto livre (usa só `pontos_positivos`), sem ações do Plano de Ação vinculadas. */
   | 'assuntos-gerais'
+  /** Slide "Assuntos Gerais" do SDG dos Gerentes (/sdg-gerentes) — conteúdo PRÓPRIO, não reaproveita `assuntos-gerais` do SDG Financeiro. */
+  | 'assuntos-gerais-gerentes'
+  /**
+   * Indicadores do SDG dos Gerentes (/sdg-gerentes) — um por slide "de
+   * resultado" daquela apresentação (prefixo "gerentes-" pra não colidir com
+   * os equivalentes do SDG Financeiro acima, que são apresentações
+   * independentes). Sem slide próprio de Justificativa (isso é o "Resumo
+   * Executivo" do SDG Gerentes) — só alimentam o slide final "Plano de Ação"
+   * (`SlidePlanoAcaoGerentes.tsx`), agrupado por indicador.
+   */
+  | 'gerentes-receita' | 'gerentes-ebitda' | 'gerentes-gastos-totais'
+  | 'gerentes-pacote-de-gente' | 'gerentes-pacote-de-frota' | 'gerentes-despesa-adm'
+  | 'gerentes-custos-freteiros' | 'gerentes-pacote-de-perdas'
 
 /** Catálogo padrão de tags do Plano de Ação (Cadastro, admin-only) — substitui o texto livre de antes. `sdg_indicador` é opcional: quando setado, as ações com essa tag aparecem no slide daquele indicador no SDG. */
 export interface PlanoAcaoTag {
@@ -625,6 +653,9 @@ export interface SdgJustificativa {
   indicador: SdgIndicador
   pontos_positivos: string
   pontos_negativos: string
+  /** Só usados pelo indicador `assuntos-gerais-gerentes` (slide "Resumo Executivo" do SDG Gerentes, migration 121) — '' nos demais indicadores. */
+  pontos_atencao: string
+  pontos_andamento: string
   /** Caminho no bucket `sdg-prints` (Storage) do print anexado pela unidade — null = nenhum anexado. Sempre .jpg (recomprimido no upload, ver comprimirImagem). */
   print_path: string | null
   updated_by_email: string | null
@@ -684,6 +715,52 @@ export interface EncontroContasHistorico {
   usuario_role: string | null
   usuario_unidade: string | null
   created_at: string
+}
+
+/** Status das aprovações internas (GOD/GEO/RPO) de um registro de Limpa Pauta — nada a ver com `status_freightech`, que é o status do Freightech. 'em_analise' = ainda sem decisão manual. */
+export type StatusAprovacaoLimpaPauta = 'em_analise' | 'ok' | 'nok'
+
+/**
+ * Limpa Pauta (Área Financeira) — descontos que cobramos da Ambev e subimos
+ * pro Freightech (sistema deles), que aprova ou reprova. Além do status do
+ * Freightech, o financeiro acompanha 3 aprovações internas independentes
+ * (GOD/GEO/RPO — áreas que precisam opinar antes, nessa ordem de alçada),
+ * cada uma com seu próprio status Em Análise/OK/NOK e justificativa
+ * (migration_123/124). O "status atual" exibido na lista (ver
+ * `statusAtualLimpaPauta` em `limpa-pauta.ts`) é sempre o da alçada mais
+ * alta já decidida — RPO, senão GEO, senão GOD, senão "Em Análise".
+ */
+export interface LimpaPauta {
+  id: string
+  ano: number
+  mes: number
+  unidade: string
+  /** Id da coluna "Id" da exportação completa do Freightech — chave de deduplicação na reimportação (null em exportações antigas, que não têm essa coluna). */
+  id_freightech: string | null
+  /** Texto original (truncado) da coluna Unidades da planilha do Freightech — auditoria do fuzzy-match. */
+  unidade_planilha: string
+  segmento: string
+  categoria: string
+  /** Status cru do Freightech (ex: 'EM_ANALISE', 'CANCELADA_PELO_SOLICITANTE') — vocabulário deles, não um enum nosso. */
+  status_freightech: string
+  valor_solicitado: number
+  /** Quanto a Ambev efetivamente pagou — pode ser menor que `valor_solicitado` (pagamento parcial). 0 até ser preenchido (migration_126). */
+  valor_pago: number
+  /** Mês/Ano em que o pagamento (parcial ou total) foi feito — null até ser preenchido. Separado da competência (`ano`/`mes`) porque o pagamento pode cair num mês diferente. */
+  mes_pagamento: number | null
+  ano_pagamento: number | null
+  /** Observação geral sobre o chamado (do que se trata) — pra lembrar o contexto, independente das 3 justificativas de aprovação. */
+  observacao: string
+  status_god: StatusAprovacaoLimpaPauta
+  justificativa_god: string
+  status_geo: StatusAprovacaoLimpaPauta
+  justificativa_geo: string
+  status_rpo: StatusAprovacaoLimpaPauta
+  justificativa_rpo: string
+  criado_por_email: string | null
+  criado_por_role: string | null
+  created_at: string
+  updated_at: string
 }
 
 export type ReuniaoSetor = 'financeiro' | 'gente' | 'frota' | 'seguranca' | 'armazem' | 'distribuicao'
@@ -1044,4 +1121,34 @@ export interface LucroAmbevRow {
   volume: number
   valor_hl: number
   lucro: number
+}
+
+/**
+ * Relato de segurança (RELATOS/GSDPQ) — base da Pirâmide de Segurança do SDG
+ * Gerentes (migration 115). `classificacao` não é uma lista fechada (a
+ * pirâmide desenha o que vier na planilha, ordenado do menos pro mais
+ * frequente); `sif` = true quando a coluna SIF da planilha vem preenchida
+ * com qualquer coisa diferente de "NÃO" (qualquer tipo). `sif_tipo`
+ * (migration 120) guarda o texto original dessa coluna (ex: "SIF PERCUSOR",
+ * "SIF POTENCIAL") — null quando não é SIF ("NÃO"/vazio) ou quando o relato
+ * foi importado antes da migration 120 (texto original não capturado nessa
+ * época). A Pirâmide restringe especificamente a "SIF PERCUSOR"/"SIF
+ * POTENCIAL" (ver `piramide-seguranca.ts`, `SIF_TIPOS_VALIDOS`) — por isso
+ * precisa do texto, não só do booleano.
+ */
+export interface RelatoSeguranca {
+  id?: string
+  /** ID da linha na planilha de origem — chave de upsert (reimportar atualiza, não duplica). */
+  relato_id: number
+  unidade: string
+  data_ocorrencia: string
+  ano: number
+  mes: number
+  classificacao: string
+  sif: boolean
+  /** Texto original da coluna SIF (ex: "SIF PERCUSOR") — null quando não é SIF ou quando importado antes da migration 120. */
+  sif_tipo: string | null
+  tipo_relato: string | null
+  /** Texto livre da ocorrência (coluna DETALHAMENTO da planilha) — usado na tabela de eventos graves/SIF do slide da Pirâmide. */
+  detalhamento: string | null
 }

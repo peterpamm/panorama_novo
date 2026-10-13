@@ -2,13 +2,13 @@ import { useState } from 'react'
 import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { usePlanoAcaoTags } from '@/hooks/usePlanosAcao'
-import { SDG_INDICADORES } from '@/lib/sdg-indicadores'
+import { SDG_INDICADOR_LABEL, SDG_INDICADORES, SDG_INDICADORES_GERENTES } from '@/lib/sdg-indicadores'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { TableCard } from '@/components/ui/table-card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/use-toast'
 import { cn } from '@/lib/utils'
@@ -19,9 +19,11 @@ const FORM_INICIAL = { nome: '', ordem: '0', sdgIndicador: SEM_VINCULO }
 
 /**
  * Cadastro das tags do Plano de Ação — catálogo padrão (substitui o texto
- * livre de antes). Uma tag pode se ligar a um dos 5 indicadores do SDG
- * (`sdg_indicador`): quando ligada, as ações ativas com essa tag aparecem no
- * slide daquele indicador no modo apresentação.
+ * livre de antes). Uma tag pode se ligar a um indicador do SDG Financeiro ou
+ * do SDG Gerentes (`sdg_indicador`, ver `SDG_INDICADORES`/
+ * `SDG_INDICADORES_GERENTES`): quando ligada, as ações ativas com essa tag
+ * aparecem no slide daquele indicador (SDG Financeiro) ou na seção
+ * correspondente do slide final "Plano de Ação" (SDG Gerentes).
  */
 export function CadastroTagsPlanoAcaoTab() {
   const { toast } = useToast()
@@ -95,7 +97,7 @@ export function CadastroTagsPlanoAcaoTab() {
     await recarregar()
   }
 
-  const labelIndicador = (id: SdgIndicador | null) => id ? (SDG_INDICADORES.find(i => i.id === id)?.label ?? id) : null
+  const labelIndicador = (id: SdgIndicador | null) => id ? (SDG_INDICADOR_LABEL[id] ?? id) : null
 
   return (
     <div className="space-y-4">
@@ -184,7 +186,16 @@ export function CadastroTagsPlanoAcaoTab() {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={SEM_VINCULO}>Sem vínculo</SelectItem>
-                  {SDG_INDICADORES.map(i => <SelectItem key={i.id} value={i.id}>{i.label}</SelectItem>)}
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel>SDG Financeiro</SelectLabel>
+                    {SDG_INDICADORES.map(i => <SelectItem key={i.id} value={i.id}>{i.label}</SelectItem>)}
+                  </SelectGroup>
+                  <SelectSeparator />
+                  <SelectGroup>
+                    <SelectLabel>SDG Gerentes</SelectLabel>
+                    {SDG_INDICADORES_GERENTES.map(i => <SelectItem key={i.id} value={i.id}>{i.label}</SelectItem>)}
+                  </SelectGroup>
                 </SelectContent>
               </Select>
             </div>

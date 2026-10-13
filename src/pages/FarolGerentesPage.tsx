@@ -6,9 +6,9 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { CardFarolGerente } from '@/components/farol-gerentes/CardFarolGerente'
 import { ResumoExecutivoFarolGerentes, type LinhaResumoFarolGerente } from '@/components/farol-gerentes/ResumoExecutivoFarolGerentes'
 import {
-  NOME_DISPONIBILIDADE, calcularAcidentesTriPorUnidade, calcularIndicadorPorNegocio, calcularPacotePerdasPorUnidade,
-  linhaAcidentesTri, linhaDisponibilidadeArmazem, linhaDisponibilidadeRota, linhaIndicadorDre, linhaPacotePerdas,
-  linhaPendente, linhaScorecard, participaContagemEbitda, unidadesCardsFarol,
+  calcularAcidentesTriPorUnidade, calcularIndicadorPorNegocio, calcularPacotePerdasPorUnidade,
+  linhaAcidentesTri, linhaDisponibilidadeArmazem, linhaDisponibilidadeEmpurrada, linhaDisponibilidadeRota,
+  linhaIndicadorDre, linhaPacotePerdas, linhaPosicaoLog20, type LinhaFarolGerente, participaContagemEbitda, unidadesCardsFarol,
 } from '@/lib/farol-gerentes'
 
 const ANO_ATUAL = new Date().getFullYear()
@@ -18,10 +18,12 @@ const ANO_ATUAL = new Date().getFullYear()
  * no layout novo. Estrutura idêntica ao original: card corporativo (AMBEV)
  * consolidado, Resumo Executivo (ranking Semestre/Ano) e um card por unidade
  * com os mesmos indicadores (Gastos Totais, Acidentes TRI, Disponibilidade
- * ARM/ROTA/EMP no Semestre; Scorecard por negócio, Pacote de Perdas, EBITDA
- * Unidade/Global no Ano). O Scorecard é uma linha por negócio da unidade
- * (Scorecard Rota./Arm./Empur.), na mesma divisão da Disponibilidade —
- * Carambeí, que não tem negócio nenhum nessa régua, fica sem Scorecard.
+ * ARM/ROTA/EMP no Semestre; Posição LOG20, Pacote de Perdas, EBITDA Unidade/
+ * Global no Ano). Posição LOG20 e EBITDA Global são sempre o mesmo valor em
+ * todo card (empresa toda); Pacote de Perdas também é sempre igual nos 2
+ * cards de uma mesma unidade com split (não quebra por negócio); só Gastos
+ * Totais e EBITDA Unidade variam de fato entre os 2 cards de Camaçari/Ponta
+ * Grossa (cada gerente responde pelo resultado do próprio negócio).
  *
  * Camaçari e Ponta Grossa (unidades com 2 gerentes) não têm card
  * consolidado — aparecem como 2 cards cada, um por negócio (Rota/Armazém
@@ -33,21 +35,29 @@ const ANO_ATUAL = new Date().getFullYear()
  * o resultado da AMBEV consolidada, mesmo valor em todo card), Acidentes
  * TRI (registro manual, RV de Segurança > Importação > TRI — meta sempre 0),
  * Pacote de Perdas (% de perdas sobre faturamento, mesmo cálculo do Painel
- * de Perdas — sempre CONS, não quebra por negócio), Disp. Rota e Disp.
- * Armazém (snapshots únicos importados em Importação > Financeiro >
- * Disponibilidade Rota/Armazém — a de Armazém pode ficar sem meta se a
- * planilha não trouxer essa coluna) e Scorecard por negócio (Importação >
- * Financeiro > Scorecard — meta fixa de 80%, ver `META_SCORECARD`). Só
- * Disp. Empurrada continua "—"/pendente.
+ * de Perdas — sempre CONS, não quebra por negócio), Disp. Rota, Disp.
+ * Armazém e Disp. Empurrada (snapshots únicos importados em Importação >
+ * Financeiro > Disponibilidade Rota/Armazém/Empurrada — a de Armazém pode
+ * ficar sem meta se a planilha não trouxer essa coluna; a de Empurrada só
+ * tem dado de verdade pra Ponta Grossa/Estância, únicas unidades com esse
+ * negócio) e Posição LOG20 (Importação > Financeiro > Dados auxiliares —
+ * faixa manual da LOG20 no ranking de operadores da Ambev, meta fixa de
+ * top 5, ver `META_POSICAO_LOG20`). Posição LOG20 é da empresa toda, não
+ * por unidade — mesmo valor em todo card, como o EBITDA Global já é
+ * (substituiu o antigo Scorecard por unidade, que a Ambev não fornece mais).
  */
 export function FarolGerentesPage() {
   const { unidades, loading: loadingUnidades } = useUnidades()
   const {
     rows, orcamentos, resultadosTri, rowsAux, metasPerdasIndicadores, disponibilidadeRota, disponibilidadeArmazem,
-    scorecards, loading: loadingDados,
+    disponibilidadeEmpurrada, posicoesLog20, loading: loadingDados,
   } = useFarolGerentesDados(unidades)
 
-  const unidadesOperacionais = useMemo(() => unidades.filter(u => u.codigo !== 'AMBEV'), [unidades])
+  const posicaoLog20 = useMemo(
+    () => posicoesLog20.find(p => p.ano === ANO_ATUAL)?.faixa ?? null,
+    [posicoesLog20],
+  )
+
   const dataEntradaPorUnidade = useMemo(() => new Map(unidades.map(u => [u.codigo, u.data_entrada])), [unidades])
 
   const mapaGastos = useMemo(
@@ -74,12 +84,10 @@ export function FarolGerentesPage() {
     () => new Map(disponibilidadeArmazem.map(d => [d.unidade, d])),
     [disponibilidadeArmazem],
   )
-  // Scorecard tem uma linha por unidade × negócio — chave `${unidade}|${negocio}`.
-  const mapaScorecard = useMemo(
-    () => new Map(scorecards.map(s => [`${s.unidade}|${s.negocio}`, s])),
-    [scorecards],
+  const mapaDispEmpurrada = useMemo(
+    () => new Map(disponibilidadeEmpurrada.map(d => [d.unidade, d])),
+    [disponibilidadeEmpurrada],
   )
-
   // EBITDA Global é sempre o resultado da AMBEV consolidada — mesmo valor
   // (meta, real e status) em todos os cards, unidade nenhuma tem o "seu
   // próprio" EBITDA Global.
@@ -87,6 +95,8 @@ export function FarolGerentesPage() {
     () => linhaIndicadorDre('EBITDA Global', mapaEbitda.get('AMBEV|CONS')),
     [mapaEbitda],
   )
+  // Posição LOG20 (empresa toda) — mesmo valor em todo card, como o EBITDA Global.
+  const linhaPosicaoLog20Global = useMemo(() => linhaPosicaoLog20(posicaoLog20), [posicaoLog20])
 
   const cards = useMemo(() => unidadesCardsFarol(unidades).map(card => {
     const chaveNegocio = `${card.unidadeCodigo}|${card.negocio ?? 'CONS'}`
@@ -98,17 +108,17 @@ export function FarolGerentesPage() {
         ...card.disponibilidades.map(d => {
           if (d === 'ROTA') return linhaDisponibilidadeRota(mapaDispRota.get(card.unidadeCodigo))
           if (d === 'ARM') return linhaDisponibilidadeArmazem(mapaDispArmazem.get(card.unidadeCodigo))
-          return linhaPendente(`Disp. ${NOME_DISPONIBILIDADE[d]}`)
+          return linhaDisponibilidadeEmpurrada(mapaDispEmpurrada.get(card.unidadeCodigo))
         }),
       ],
       ano: [
-        ...card.disponibilidades.map(d => linhaScorecard(d, mapaScorecard.get(`${card.unidadeCodigo}|${d}`))),
+        linhaPosicaoLog20Global,
         linhaPacotePerdas(mapaPerdas.get(card.unidadeCodigo)),
         linhaIndicadorDre('EBITDA Unidade', mapaEbitda.get(chaveNegocio)),
         linhaEbitdaGlobal,
       ],
     }
-  }), [unidades, mapaGastos, mapaEbitda, mapaTri, mapaPerdas, mapaDispRota, mapaDispArmazem, mapaScorecard, linhaEbitdaGlobal])
+  }), [unidades, mapaGastos, mapaEbitda, mapaTri, mapaPerdas, mapaDispRota, mapaDispArmazem, mapaDispEmpurrada, linhaPosicaoLog20Global, linhaEbitdaGlobal])
 
   const resumo = useMemo<LinhaResumoFarolGerente[]>(() => cards.map(c => ({
     unidade: c.card.chave,
@@ -119,9 +129,17 @@ export function FarolGerentesPage() {
     anoTotal: c.ano.length,
   })), [cards])
 
-  const totalUnidadesEbitda = useMemo(
-    () => unidadesOperacionais.filter(u => participaContagemEbitda(u.nome)).length,
-    [unidadesOperacionais],
+  // Conta sobre os `cards` já montados (pós-split Camaçari/Ponta Grossa),
+  // não sobre a lista crua de unidades — senão Camaçari/Ponta Grossa contam
+  // como 1 unidade só em vez de 2 (CDL/CDR ou Empurrada/Armazém, cada
+  // negócio com seu próprio gerente e seu próprio resultado de EBITDA).
+  const cardsParaEbitda = useMemo(
+    () => cards.filter(c => participaContagemEbitda(c.card.titulo)),
+    [cards],
+  )
+  const unidadesEbitdaBatidas = useMemo(
+    () => cardsParaEbitda.filter(c => c.ano[2]?.status === 'bateu').length,
+    [cardsParaEbitda],
   )
 
   const secoesAmbev = useMemo(() => [
@@ -133,22 +151,25 @@ export function FarolGerentesPage() {
         linhaAcidentesTri(mapaTri.get('AMBEV')),
         linhaDisponibilidadeArmazem(mapaDispArmazem.get('AMBEV')),
         linhaDisponibilidadeRota(mapaDispRota.get('AMBEV')),
-        linhaPendente(`Disp. ${NOME_DISPONIBILIDADE.EMP}`),
+        linhaDisponibilidadeEmpurrada(mapaDispEmpurrada.get('AMBEV')),
       ],
     },
     {
       titulo: 'Anual',
       icone: BarChart3,
       linhas: [
-        linhaScorecard('ROTA', mapaScorecard.get('AMBEV|ROTA')),
-        linhaScorecard('ARM', mapaScorecard.get('AMBEV|ARM')),
-        linhaScorecard('EMP', mapaScorecard.get('AMBEV|EMP')),
+        linhaPosicaoLog20Global,
         linhaPacotePerdas(mapaPerdas.get('AMBEV')),
-        { indicador: 'Unid. EBITDA', meta: String(totalUnidadesEbitda), real: '0', status: 'pendente' as const },
+        {
+          indicador: 'Unid. EBITDA',
+          meta: String(cardsParaEbitda.length),
+          real: String(unidadesEbitdaBatidas),
+          status: unidadesEbitdaBatidas >= cardsParaEbitda.length ? 'bateu' : 'perdeu',
+        } satisfies LinhaFarolGerente,
         linhaEbitdaGlobal,
       ],
     },
-  ], [mapaGastos, mapaTri, mapaPerdas, mapaDispRota, mapaDispArmazem, mapaScorecard, totalUnidadesEbitda, linhaEbitdaGlobal])
+  ], [mapaGastos, mapaTri, mapaPerdas, mapaDispRota, mapaDispArmazem, mapaDispEmpurrada, linhaPosicaoLog20Global, cardsParaEbitda, unidadesEbitdaBatidas, linhaEbitdaGlobal])
 
   if (loadingUnidades || loadingDados) {
     return (

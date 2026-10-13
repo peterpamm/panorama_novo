@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
 import { CONTAS_ORCAMENTO_USADAS } from '@/lib/constants'
 import { fetchRpcPorUnidade } from '@/lib/fetch-rpc-todas-unidades'
 import type {
-  DisponibilidadeArmazemAcumulada, DisponibilidadeRotaAcumulada, DreLongoRow, MetaPerdaIndicador, OrcamentoLinha,
-  PainelPerdasAux, ResultadoTri, ScorecardAcumulado, Unidade,
+  DisponibilidadeArmazemAcumulada, DisponibilidadeEmpurradaAcumulada, DisponibilidadeRotaAcumulada, DreLongoRow,
+  Log20PosicaoAmbev, MetaPerdaIndicador, OrcamentoLinha, PainelPerdasAux, ResultadoTri, Unidade,
 } from '@/types'
 
 /**
@@ -15,8 +16,10 @@ import type {
  * `farol_gerentes_metas_perdas_indicadores` (migration_095),
  * `farol_gerentes_disponibilidade_rota` (migration_096),
  * `farol_gerentes_disponibilidade_armazem` (migration_097) e
- * `farol_gerentes_scorecard` (migration_098) — não das tabelas com RLS
- * normal.
+ * `farol_gerentes_disponibilidade_empurrada` (migration_119) — não das
+ * tabelas com RLS normal. `log20_posicao_ambev` (migration_127) é exceção:
+ * não é por unidade (é a empresa toda), então lê direto com RLS normal
+ * (leitura liberada pra todo autenticado), sem RPC nem filtro de unidade.
  */
 export function useFarolGerentesDados(unidades: Unidade[]) {
   const [rows, setRows] = useState<DreLongoRow[]>([])
@@ -26,7 +29,8 @@ export function useFarolGerentesDados(unidades: Unidade[]) {
   const [metasPerdasIndicadores, setMetasPerdasIndicadores] = useState<MetaPerdaIndicador[]>([])
   const [disponibilidadeRota, setDisponibilidadeRota] = useState<DisponibilidadeRotaAcumulada[]>([])
   const [disponibilidadeArmazem, setDisponibilidadeArmazem] = useState<DisponibilidadeArmazemAcumulada[]>([])
-  const [scorecards, setScorecards] = useState<ScorecardAcumulado[]>([])
+  const [disponibilidadeEmpurrada, setDisponibilidadeEmpurrada] = useState<DisponibilidadeEmpurradaAcumulada[]>([])
+  const [posicoesLog20, setPosicoesLog20] = useState<Log20PosicaoAmbev[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -42,7 +46,7 @@ export function useFarolGerentesDados(unidades: Unidade[]) {
       // Promise.allSettled, não Promise.all: uma RPC falhar (ex: migration
       // ainda não rodada) não pode derrubar as outras junto — mesmo motivo
       // de DataContext.tsx.
-      const [dreR, orcR, triR, auxR, metasPerdasR, dispRotaR, dispArmazemR, scorecardR] = await Promise.allSettled([
+      const [dreR, orcR, triR, auxR, metasPerdasR, dispRotaR, dispArmazemR, dispEmpurradaR, posicaoLog20R] = await Promise.allSettled([
         fetchRpcPorUnidade<DreLongoRow>('ranking_dre_longo', undefined, codigos, ['negocio', 'ano', 'mes', 'tipo_periodo', 'conta_codigo']),
         fetchRpcPorUnidade<OrcamentoLinha>('ranking_orcamentos', { p_contas: CONTAS_ORCAMENTO_USADAS }, codigos, ['id']),
         fetchRpcPorUnidade<ResultadoTri>('farol_gerentes_resultados_tri', undefined, codigos, ['id']),
@@ -50,7 +54,11 @@ export function useFarolGerentesDados(unidades: Unidade[]) {
         fetchRpcPorUnidade<MetaPerdaIndicador>('farol_gerentes_metas_perdas_indicadores', undefined, codigos, ['id']),
         fetchRpcPorUnidade<DisponibilidadeRotaAcumulada>('farol_gerentes_disponibilidade_rota', undefined, codigos, ['id']),
         fetchRpcPorUnidade<DisponibilidadeArmazemAcumulada>('farol_gerentes_disponibilidade_armazem', undefined, codigos, ['id']),
-        fetchRpcPorUnidade<ScorecardAcumulado>('farol_gerentes_scorecard', undefined, codigos, ['id']),
+        fetchRpcPorUnidade<DisponibilidadeEmpurradaAcumulada>('farol_gerentes_disponibilidade_empurrada', undefined, codigos, ['id']),
+        supabase.from('log20_posicao_ambev').select('*').then(({ data, error }) => {
+          if (error) throw new Error(error.message)
+          return (data ?? []) as Log20PosicaoAmbev[]
+        }),
       ])
       if (!ativo) return
 
@@ -69,8 +77,10 @@ export function useFarolGerentesDados(unidades: Unidade[]) {
       else erros.push(`Disponibilidade Rota: ${(dispRotaR.reason as Error)?.message ?? dispRotaR.reason}`)
       if (dispArmazemR.status === 'fulfilled') setDisponibilidadeArmazem(dispArmazemR.value)
       else erros.push(`Disponibilidade Armazém: ${(dispArmazemR.reason as Error)?.message ?? dispArmazemR.reason}`)
-      if (scorecardR.status === 'fulfilled') setScorecards(scorecardR.value)
-      else erros.push(`Scorecard: ${(scorecardR.reason as Error)?.message ?? scorecardR.reason}`)
+      if (dispEmpurradaR.status === 'fulfilled') setDisponibilidadeEmpurrada(dispEmpurradaR.value)
+      else erros.push(`Disponibilidade Empurrada: ${(dispEmpurradaR.reason as Error)?.message ?? dispEmpurradaR.reason}`)
+      if (posicaoLog20R.status === 'fulfilled') setPosicoesLog20(posicaoLog20R.value)
+      else erros.push(`Posição LOG20: ${(posicaoLog20R.reason as Error)?.message ?? posicaoLog20R.reason}`)
 
       setError(erros.length > 0 ? erros.join(' · ') : null)
       setLoading(false)
@@ -82,6 +92,6 @@ export function useFarolGerentesDados(unidades: Unidade[]) {
 
   return {
     rows, orcamentos, resultadosTri, rowsAux, metasPerdasIndicadores, disponibilidadeRota, disponibilidadeArmazem,
-    scorecards, loading, error,
+    disponibilidadeEmpurrada, posicoesLog20, loading, error,
   }
 }

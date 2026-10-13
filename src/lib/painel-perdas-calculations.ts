@@ -33,10 +33,87 @@ export interface MatrizPerdas {
 
 // ─── Helpers internos ────────────────────────────────────────────────────────
 
-function somaDif(rows: DreLongoRow[], contas: readonly string[]): number {
+/** Soma da diferença (campo `diferenca` bruto da view, já vindo assim do GInfo — não recalculado via remunerado−realizado abs()'d) das contas do indicador. Exportado pra outros lugares que precisam bater exatamente com o Painel de Perdas (ex: SDG Gerentes). */
+export function somaDif(rows: DreLongoRow[], contas: readonly string[]): number {
   return rows
     .filter(r => contas.some(c => r.conta_codigo.startsWith(c)))
     .reduce((acc, r) => acc + (r.diferenca ?? 0), 0)
+}
+
+/**
+ * Meta de Perdas mensal (Metas > Metas de Perdas) de um indicador pra UMA
+ * unidade específica (nunca AMBEV — essa soma a taxa mensal de cada unidade
+ * individual, ver `metaPerdasMensal` em `PainelPerdasPage.tsx`, não precisa
+ * aqui). A tabela `metas_perdas_indicadores` só guarda o total anual
+ * (`meta_anual`), então o valor "mensal" é sempre esse total dividido pelos
+ * meses em que a unidade esteve ativa no ano (`mesesAtivosNoAno`) — mesma
+ * régua usada em toda a família de Metas de Perdas. null = sem meta
+ * cadastrada pra essa unidade/ano/indicador.
+ */
+export function metaPerdasMensalUnidade(
+  metasPerdasIndicadores: MetaPerdaIndicador[],
+  indicador: IndicadorKey,
+  unidade: string,
+  ano: number,
+  dataEntrada: string | null,
+): number | null {
+  const rows = metasPerdasIndicadores.filter(m => m.unidade === unidade && m.ano === ano && m.indicador === indicador)
+  if (rows.length === 0) return null
+  const metaAnual = rows.reduce((acc, m) => acc + m.meta_anual, 0)
+  return metaAnual / mesesAtivosNoAno(dataEntrada, ano)
+}
+
+/**
+ * Mesma régua de `metaPerdasMensalUnidade`, mas somando os 8 indicadores de
+ * uma vez (sem filtrar por `indicador`) — meta TOTAL de Perdas do mês pra uma
+ * unidade, mesmo cálculo de `metaMensalUnidade` dentro de `calcularMatrizPerdas`.
+ */
+export function metaPerdasMensalTotalUnidade(
+  metasPerdasIndicadores: MetaPerdaIndicador[],
+  unidade: string,
+  ano: number,
+  dataEntrada: string | null,
+): number | null {
+  const rows = metasPerdasIndicadores.filter(m => m.unidade === unidade && m.ano === ano)
+  if (rows.length === 0) return null
+  const metaAnualTotal = rows.reduce((acc, m) => acc + m.meta_anual, 0)
+  return metaAnualTotal / mesesAtivosNoAno(dataEntrada, ano)
+}
+
+/**
+ * Valor de UM indicador de Perdas pra uma unidade/mês — DRE usa `somaDif`
+ * (sempre CONS), AUX soma `painel_perdas_aux`. Réplica exata de
+ * `valorIndicadorUnidadeMes` em `PainelPerdasPage.tsx` (mantida separada de
+ * propósito — evita acoplar essa página, já complexa, a outros consumidores
+ * como o SDG Gerentes; qualquer mudança de regra precisa espelhar as duas).
+ */
+export function valorIndicadorUnidadeMes(
+  rowsDre: DreLongoRow[],
+  rowsAux: PainelPerdasAux[],
+  ind: (typeof INDICADORES_PERDAS)[number],
+  unidade: string,
+  ano: number,
+  mes: number,
+): number | null {
+  if (ind.fonte === 'AUX') {
+    const indKey = ind.key as PainelPerdasAux['indicador']
+    const rows = rowsAux.filter(r => r.unidade === unidade && r.ano === ano && r.mes === mes && r.indicador === indKey)
+    return rows.length > 0 ? rows.reduce((acc, r) => acc + r.valor, 0) : null
+  }
+  const rowsU = rowsDre.filter(
+    r => r.unidade === unidade && r.negocio === 'CONS' && r.tipo_periodo === 'MENSAL' && r.ano === ano && r.mes === mes,
+  )
+  if (rowsU.length === 0) return null
+  return somaDif(rowsU, ind.contas)
+}
+
+/** Faturamento (conta '001', REMUN em magnitude) de uma unidade/mês, CONS — mesmo denominador de `calcularMatrizPerdas` pro % de Perdas. null = sem dado no mês. */
+export function faturamentoMes(rowsDre: DreLongoRow[], unidade: string, ano: number, mes: number): number | null {
+  const rows = rowsDre.filter(
+    r => r.unidade === unidade && r.negocio === 'CONS' && r.tipo_periodo === 'MENSAL' && r.ano === ano && r.mes === mes && r.conta_codigo.startsWith('001'),
+  )
+  if (rows.length === 0) return null
+  return rows.reduce((acc, r) => acc + Math.abs(r.remunerado ?? 0), 0)
 }
 
 function somaAux(rows: PainelPerdasAux[], unidade: string | null, indicador: PainelPerdasAux['indicador']): number {

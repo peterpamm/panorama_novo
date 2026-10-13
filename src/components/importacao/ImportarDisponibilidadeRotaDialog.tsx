@@ -3,7 +3,9 @@ import { Upload } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { parseDisponibilidadeRotaXlsx, type LinhaDisponibilidadeRota } from '@/lib/disponibilidade-rota-parser'
 import { resolverUnidade } from '@/lib/unidade-resolver'
+import { MODELO_DISPONIBILIDADE_ROTA } from '@/lib/modelos-importacao'
 import { FileDropzone } from '@/components/importacao/FileDropzone'
+import { BotaoModeloPlanilha } from '@/components/importacao/BotaoModeloPlanilha'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
@@ -95,6 +97,9 @@ export function ImportarDisponibilidadeRotaDialog({ unidades, onImportado }: Imp
           vem acumulado, essa importação <strong>substitui</strong> a anterior por completo, não soma.
         </p>
 
+        <div className="flex justify-end">
+          <BotaoModeloPlanilha nomeArquivo="modelo_disponibilidade_rota" abas={MODELO_DISPONIBILIDADE_ROTA} />
+        </div>
         <FileDropzone label="Selecione o arquivo .xlsx" file={file} onFile={handleFile} />
 
         {file && (

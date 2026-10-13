@@ -1,0 +1,39 @@
+import { Link } from 'react-router-dom'
+import { ChevronLeft } from 'lucide-react'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Toaster } from '@/components/ui/toaster'
+import { ResumoExecutivoGerentesTab } from '@/components/financeira/ResumoExecutivoGerentesTab'
+import { RelatosSegurancaImportacaoTab } from '@/components/financeira/RelatosSegurancaImportacaoTab'
+
+/** Subpágina SDG Gerentes — /sdg/gerentes. Gestão de conteúdo do SDG dos Gerentes (apresentação em `/sdg-gerentes`): Resumo Executivo + Importação dos Relatos de Segurança (Pirâmide de Segurança). */
+export function SdgGerentesGestaoPage() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <Link to="/sdg" className="flex items-center gap-1 text-sm text-muted-foreground transition-colors hover:text-foreground">
+          <ChevronLeft className="h-4 w-4" />
+          SDG
+        </Link>
+        <span className="text-muted-foreground/40">/</span>
+        <h2 className="text-base font-semibold text-foreground">SDG Gerentes</h2>
+      </div>
+
+      <Tabs defaultValue="resumo-executivo">
+        <TabsList>
+          <TabsTrigger value="resumo-executivo">Resumo Executivo</TabsTrigger>
+          <TabsTrigger value="importacao">Importação — Relatos de Segurança</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="resumo-executivo" className="pt-4">
+          <ResumoExecutivoGerentesTab />
+        </TabsContent>
+
+        <TabsContent value="importacao" className="pt-4">
+          <RelatosSegurancaImportacaoTab />
+        </TabsContent>
+      </Tabs>
+
+      <Toaster />
+    </div>
+  )
+}

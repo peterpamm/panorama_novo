@@ -47,7 +47,7 @@ function TooltipReceita({ active, payload, label }: { active?: boolean; payload?
  * Atingimento) — com um toggle Mensal/YTD.
  */
 export function SlideReceita({ rowsAno, orcamentoAno, unidades, negocio, ano, mes }: Props) {
-  const { axis, legend } = getChartColors()
+  const { axis, legend, cursor } = getChartColors()
   const nomesUnidade = useMemo(() => new Map(unidades.map(u => [u.codigo, u.nome])), [unidades])
 
   const rowsAmbev = useMemo(() => rowsAno.filter(r => r.unidade === 'AMBEV'), [rowsAno])
@@ -82,7 +82,7 @@ export function SlideReceita({ rowsAno, orcamentoAno, unidades, negocio, ano, me
               <ComposedChart data={serieReceita} margin={{ top: 24, right: 16, bottom: 0, left: 0 }}>
                 <XAxis dataKey="mes" tickFormatter={m => MES_ABREV[m] ?? m} tickLine={false} axisLine={false} tick={{ fill: axis, fontSize: 12, fontWeight: 500 }} />
                 <YAxis tickLine={false} axisLine={false} tick={{ fill: axis, fontSize: 11, fontWeight: 500 }} tickFormatter={v => formatCurrencyCompact(v)} width={64} />
-                <Tooltip content={<TooltipReceita />} />
+                <Tooltip content={<TooltipReceita />} cursor={{ fill: cursor }} />
                 <Legend verticalAlign="top" align="right" iconType="plainline" wrapperStyle={{ fontSize: 12, color: legend }} />
                 <Bar dataKey="realizado" name="Realizado" radius={[4, 4, 0, 0]} barSize={32}>
                   {serieReceita.map(p => (

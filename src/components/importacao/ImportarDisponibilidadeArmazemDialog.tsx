@@ -3,7 +3,9 @@ import { Upload } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { parseDisponibilidadeArmazemXlsx, type LinhaDisponibilidadeArmazem } from '@/lib/disponibilidade-armazem-parser'
 import { resolverUnidade } from '@/lib/unidade-resolver'
+import { MODELO_DISPONIBILIDADE_ARMAZEM } from '@/lib/modelos-importacao'
 import { FileDropzone } from '@/components/importacao/FileDropzone'
+import { BotaoModeloPlanilha } from '@/components/importacao/BotaoModeloPlanilha'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
@@ -103,6 +105,9 @@ export function ImportarDisponibilidadeArmazemDialog({ unidades, onImportado }: 
           tiver a coluna de meta, a importação atualiza só o realizado e preserva a última meta salva.
         </p>
 
+        <div className="flex justify-end">
+          <BotaoModeloPlanilha nomeArquivo="modelo_disponibilidade_armazem" abas={MODELO_DISPONIBILIDADE_ARMAZEM} />
+        </div>
         <FileDropzone label="Selecione o arquivo .xlsx" file={file} onFile={handleFile} />
 
         {file && (

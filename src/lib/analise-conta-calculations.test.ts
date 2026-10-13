@@ -11,9 +11,13 @@ import {
   corClasseGapReal,
 } from './analise-conta-calculations'
 
+// ano: 2026 de propósito — os códigos de conta usados aqui (232/233 etc.)
+// são a numeração NOVA; ano <= 2025 dispararia a tradução pra numeração
+// antiga em normalizarParaCalculo (farol-calculations.ts) e quebraria o
+// casamento com CODIGOS_PERFORMANCE.
 function linha(conta_codigo: string, mes: number, remunerado: number, realizado: number): DreLongoRow {
   return {
-    unidade: 'FOZ', negocio: 'ROTA', ano: 2025, mes, tipo_periodo: 'MENSAL', conta_codigo,
+    unidade: 'FOZ', negocio: 'ROTA', ano: 2026, mes, tipo_periodo: 'MENSAL', conta_codigo,
     remunerado, realizado, diferenca: realizado - remunerado, avo: null, avr: 0,
   }
 }

@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { DreLongoRow, OrcamentoLinha } from '@/types'
 import { calcularRankingIndicador, calcularRankingReceita, corClasseAtingimento } from './ranking-calculations'
 
+// ano: 2026 de propósito, diferente de orcamento()/orcamentoPacote() abaixo
+// (que ficam em 2025 pra testar a tradução bespoke do Orçamento) — os
+// códigos de conta do DRE aqui (233 etc.) são a numeração NOVA, e ano <=
+// 2025 dispararia a tradução pra numeração antiga em normalizarParaCalculo
+// (farol-calculations.ts), quebrando o casamento com CODIGOS_PERFORMANCE.
 function linha(
   unidade: string,
   conta_codigo: string,
@@ -11,7 +16,7 @@ function linha(
   realizado: number,
   avr = 0,
 ): DreLongoRow {
-  return { unidade, negocio: 'ROTA', ano: 2025, mes, tipo_periodo, conta_codigo, remunerado, realizado, diferenca: realizado - remunerado, avo: null, avr }
+  return { unidade, negocio: 'ROTA', ano: 2026, mes, tipo_periodo, conta_codigo, remunerado, realizado, diferenca: realizado - remunerado, avo: null, avr }
 }
 
 function orcamento(unidade: string, mes: number, orcado: number): OrcamentoLinha {
