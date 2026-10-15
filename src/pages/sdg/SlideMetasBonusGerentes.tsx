@@ -1,11 +1,37 @@
 import { useMemo } from 'react'
 import { BarChart3, CalendarDays } from 'lucide-react'
 import { CardFarolGerente } from '@/components/farol-gerentes/CardFarolGerente'
-import { montarCardsFarolGerentes } from '@/lib/farol-gerentes'
+import { calcularRampaBonus, montarCardsFarolGerentes, type ResultadoRampaBonus } from '@/lib/farol-gerentes'
+import { PACOTES } from '@/lib/constants'
+import { cn, formatPercent } from '@/lib/utils'
 import type {
   DisponibilidadeArmazemAcumulada, DisponibilidadeEmpurradaAcumulada, DisponibilidadeRotaAcumulada, DreLongoRow,
   MetaPerdaIndicador, OrcamentoLinha, PainelPerdasAux, ResultadoTri, Unidade,
 } from '@/types'
+
+function corBonus(bonusPercent: number): string {
+  if (bonusPercent >= 100) return 'text-emerald-600 dark:text-emerald-400'
+  if (bonusPercent >= 75) return 'text-amber-600 dark:text-amber-400'
+  if (bonusPercent >= 50) return 'text-orange-600 dark:text-orange-400'
+  return 'text-red-600 dark:text-red-400'
+}
+
+/** Um item da Rampa de Bônus (EBITDA ou Gastos Totais) — só o atingimento da unidade, sem mostrar os degraus da regra (pedido do usuário). */
+function RampaBonusItem({ titulo, resultado }: { titulo: string; resultado: ResultadoRampaBonus | null }) {
+  return (
+    <div className="rounded-xl bg-white shadow dark:bg-slate-800/60 p-3 text-center">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-400">{titulo}</p>
+      {resultado === null ? (
+        <p className="mt-2 text-sm text-gray-400 dark:text-slate-500">Sem meta cadastrada</p>
+      ) : (
+        <>
+          <p className={cn('mt-1 text-xl font-bold', corBonus(resultado.bonusPercent))}>Atingiu {formatPercent(resultado.percentualAtingido, 1)}</p>
+          <p className="text-xs text-muted-foreground">{resultado.bonusPercent}% do bônus</p>
+        </>
+      )}
+    </div>
+  )
+}
 
 interface Props {
   unidades: Unidade[]
@@ -101,14 +127,25 @@ export function SlideMetasBonusGerentes({
         <div className="mx-auto w-full max-w-2xl origin-top scale-125 pb-10">
           <div className="flex flex-col gap-5">
             {cardsUnidade.map(c => (
-              <CardFarolGerente
-                key={c.card.chave}
-                titulo={c.card.titulo}
-                secoes={[
-                  { titulo: 'Semestre', icone: CalendarDays, linhas: c.semestre },
-                  { titulo: 'Anual', icone: BarChart3, linhas: c.ano },
-                ]}
-              />
+              <div key={c.card.chave} className="flex flex-col gap-3">
+                <CardFarolGerente
+                  titulo={c.card.titulo}
+                  secoes={[
+                    { titulo: 'Semestre', icone: CalendarDays, linhas: c.semestre },
+                    { titulo: 'Anual', icone: BarChart3, linhas: c.ano },
+                  ]}
+                />
+                <div className="grid grid-cols-2 gap-3">
+                  <RampaBonusItem
+                    titulo={`Rampa Bônus · EBITDA Unidade${c.card.negocio ? ` (${c.card.negocio})` : ''}`}
+                    resultado={c.ebitdaUnidade ? calcularRampaBonus(c.ebitdaUnidade.avr, c.ebitdaUnidade.meta, PACOTES['233'].natureza) : null}
+                  />
+                  <RampaBonusItem
+                    titulo={`Rampa Bônus · Gastos Totais${c.card.negocio ? ` (${c.card.negocio})` : ''}`}
+                    resultado={c.gastosTotais ? calcularRampaBonus(c.gastosTotais.avr, c.gastosTotais.meta, PACOTES['900'].natureza) : null}
+                  />
+                </div>
+              </div>
             ))}
           </div>
         </div>

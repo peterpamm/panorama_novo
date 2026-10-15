@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Upload } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
-import { parsePainelPerdasAuxCsv, type ParsedPainelPerdasAuxRow } from '@/lib/painel-perdas-aux-csv-parser'
+import { parsePainelPerdasAuxCsv, parsePainelPerdasAuxXlsx, type ParsedPainelPerdasAuxRow } from '@/lib/painel-perdas-aux-csv-parser'
 import { resolverUnidade } from '@/lib/unidade-resolver'
+import { BotaoModeloPlanilha } from '@/components/importacao/BotaoModeloPlanilha'
 import { FileDropzone } from '@/components/importacao/FileDropzone'
+import { MODELO_PAINEL_PERDAS_AUX } from '@/lib/modelos-importacao'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/use-toast'
@@ -16,7 +18,7 @@ interface ImportarPainelPerdasAuxDialogProps {
   onImportado: () => void
 }
 
-/** Importa Indisponibilidade e Devolução do painel_de_perdas.csv (formato: INDICADOR;NEGOCIO;ANO;MES;UNIDADE;VALOR). */
+/** Importa Indisponibilidade e Devolução — aceita .xlsx ou o painel_de_perdas.csv herdado do painel antigo (colunas: INDICADOR;NEGOCIO;ANO;MES;UNIDADE;VALOR). */
 export function ImportarPainelPerdasAuxDialog({ unidades, onImportado }: ImportarPainelPerdasAuxDialogProps) {
   const { toast } = useToast()
   const [open, setOpen] = useState(false)
@@ -39,8 +41,9 @@ export function ImportarPainelPerdasAuxDialog({ unidades, onImportado }: Importa
 
   async function handleFile(f: File) {
     setFile(f)
-    const texto = await f.text()
-    const resultado = parsePainelPerdasAuxCsv(texto)
+    const resultado = /\.xlsx?$/i.test(f.name)
+      ? await parsePainelPerdasAuxXlsx(f)
+      : parsePainelPerdasAuxCsv(await f.text())
     setLinhas(resultado.linhas)
     setErrosParse(resultado.erros)
   }
@@ -84,12 +87,16 @@ export function ImportarPainelPerdasAuxDialog({ unidades, onImportado }: Importa
           <DialogTitle>Importar dados AUX (Indisponibilidade / Devolução)</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground">
-          Formato: <span className="font-mono">INDICADOR;NEGOCIO;ANO;MES;UNIDADE;VALOR</span> (decimal com vírgula).
+          Aceita .xlsx ou .csv, colunas <span className="font-mono">INDICADOR;NEGOCIO;ANO;MES;UNIDADE;VALOR</span> (decimal com vírgula no .csv).
           Indicadores: <span className="font-mono">Indisponibilidade</span> ou <span className="font-mono">Devolução</span>.
           Registros já existentes pro mesmo período são sobrescritos.
         </p>
 
-        <FileDropzone label="Selecione o arquivo .csv" accept=".csv" file={file} onFile={handleFile} />
+        <div className="flex justify-end">
+          <BotaoModeloPlanilha nomeArquivo="modelo_indisponibilidade_devolucao" abas={MODELO_PAINEL_PERDAS_AUX} />
+        </div>
+
+        <FileDropzone label="Selecione o arquivo .xlsx ou .csv" accept=".xlsx,.xls,.csv" file={file} onFile={handleFile} />
 
         {file && (
           <div className="space-y-1.5 text-sm">

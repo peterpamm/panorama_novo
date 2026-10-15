@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  calcularAcidentesTriPorUnidade, calcularPacotePerdasPorUnidade, disponibilidadesDaUnidade, linhaAcidentesTri,
-  linhaDisponibilidadeArmazem, linhaDisponibilidadeRota, linhaIndicadorDre, linhaPacotePerdas, linhaPosicaoLog20,
-  participaContagemEbitda, unidadesCardsFarol,
+  calcularAcidentesTriPorUnidade, calcularPacotePerdasPorUnidade, calcularRampaBonus, disponibilidadesDaUnidade,
+  linhaAcidentesTri, linhaDisponibilidadeArmazem, linhaDisponibilidadeRota, linhaIndicadorDre, linhaPacotePerdas,
+  linhaPosicaoLog20, participaContagemEbitda, unidadesCardsFarol,
 } from './farol-gerentes'
 import type { RankingLinhaIndicador } from './ranking-calculations'
 import type { DreLongoRow, ResultadoTri, Unidade } from '@/types'
@@ -223,5 +223,42 @@ describe('linhaDisponibilidadeArmazem', () => {
   it('bate/perde normalmente quando tem meta salva', () => {
     expect(linhaDisponibilidadeArmazem({ unidade: 'DIADEMA', meta: 90, real: 92 }).status).toBe('bateu')
     expect(linhaDisponibilidadeArmazem({ unidade: 'DIADEMA', meta: 90, real: 85 }).status).toBe('perdeu')
+  })
+})
+
+describe('calcularRampaBonus', () => {
+  it('EBITDA (performance): >=100% do atingido garante o bônus cheio', () => {
+    expect(calcularRampaBonus(10, 10, 'performance')).toMatchObject({ percentualAtingido: 100, bonusPercent: 100 })
+    expect(calcularRampaBonus(11, 10, 'performance')).toMatchObject({ bonusPercent: 100 }) // superou a meta, continua 100%
+  })
+
+  it('EBITDA (performance): degraus intermediários — 95% e 90% do atingido', () => {
+    expect(calcularRampaBonus(9.6, 10, 'performance')).toMatchObject({ percentualAtingido: 96, bonusPercent: 75 })
+    expect(calcularRampaBonus(9.0, 10, 'performance')).toMatchObject({ percentualAtingido: 90, bonusPercent: 50 })
+  })
+
+  it('EBITDA (performance): abaixo do pior degrau (90%) não garante nada', () => {
+    expect(calcularRampaBonus(8.9, 10, 'performance')).toMatchObject({ bonusPercent: 0 })
+  })
+
+  it('Custos (custo): atingir até 100% do orçado garante o bônus cheio (gastou dentro ou menos que a meta)', () => {
+    expect(calcularRampaBonus(10, 10, 'custo')).toMatchObject({ percentualAtingido: 100, bonusPercent: 100 })
+    expect(calcularRampaBonus(9, 10, 'custo')).toMatchObject({ bonusPercent: 100 }) // gastou menos que a meta, continua 100%
+  })
+
+  it('Custos (custo): degraus intermediários — gastou até 105% ou até 110% do orçado', () => {
+    expect(calcularRampaBonus(10.4, 10, 'custo')).toMatchObject({ percentualAtingido: 104, bonusPercent: 75 })
+    const resultado = calcularRampaBonus(10.9, 10, 'custo')
+    expect(resultado?.percentualAtingido).toBeCloseTo(109, 5) // ponto flutuante: 10.9/10*100 não bate 109 exato
+    expect(resultado?.bonusPercent).toBe(50)
+  })
+
+  it('Custos (custo): estourou acima de 110% do orçado não garante nada', () => {
+    expect(calcularRampaBonus(11.1, 10, 'custo')).toMatchObject({ bonusPercent: 0 })
+  })
+
+  it('sem meta cadastrada (null) ou meta zero retorna null — nada pra comparar', () => {
+    expect(calcularRampaBonus(10, null, 'performance')).toBeNull()
+    expect(calcularRampaBonus(10, 0, 'custo')).toBeNull()
   })
 })

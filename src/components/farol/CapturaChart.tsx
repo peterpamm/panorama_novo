@@ -104,7 +104,8 @@ export function CapturaChart({ serie, natureza, nomeSerie = 'AVR Realizado', nom
             stroke={COR_NECESSARIO}
             strokeWidth={2}
             strokeDasharray="5 3"
-            dot={false}
+            dot={{ r: 3, fill: COR_NECESSARIO, strokeWidth: 0 }}
+            activeDot={{ r: 5, fill: COR_NECESSARIO, strokeWidth: 0 }}
             isAnimationActive={false}
             label={<RotuloLinhaExtra primeiroIndex={primeiroFuturoIndex} valor={valorNecessario} formatter={formatter} texto="Necessário" />}
           />

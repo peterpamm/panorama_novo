@@ -615,9 +615,10 @@ describe('calcularSerieCaptura', () => {
     expect(serie.map(p => p.mes)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
 
     expect(serie[0]).toMatchObject({ mes: 1, avrRealizado: 80, avrNecessario: null, metaAnual: 90 })
-    // mes 2 (último realizado): o próprio AVR de fevereiro (70) E ponto de conexão do necessário
+    // mes 2 (último realizado): o próprio AVR de fevereiro (70) — avrNecessario fica null em TODO mês já
+    // realizado (mesmo o último), a curva é só projeção pra frente, não "conecta" mais no último real.
     expect(serie[1].avrRealizado).toBeCloseTo(70, 2)
-    expect(serie[1].avrNecessario).toBeCloseTo(70, 2)
+    expect(serie[1].avrNecessario).toBeNull()
     // massa de meta = 100000(receita realizada jan)*10% + 100000(fev)*20% = 30000; meta acumulada ponderada = 30000/200000 = 15%
     // massa permitida = receita orçada anual (1200000) * 15% = 180000; despesa já realizada = 30000+30000 = 60000
     // massa disponível = 180000-60000 = 120000; receita restante = orçada anual (1200000) - realizada acumulada (200000) = 1000000
@@ -649,7 +650,7 @@ describe('calcularSerieCaptura', () => {
     expect(serie[0].mes).toBe(12)
   })
 
-  it('meses realizados carregam a receita do próprio mês; meses futuros/projetados ficam com receita null', () => {
+  it('meses realizados carregam a receita REALIZADA; meses futuros/projetados carregam a receita ORÇADA (não null — dá pra converter o Necessário num teto de gasto em R$ de verdade)', () => {
     const metasManuais: Meta[] = [{ unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '021', mes: 0, meta_avr: 90 }]
     const rowsAno: DreLongoRow[] = [
       linha('002', 1, 'MENSAL', 1000000, 1100000, 100000, 100),
@@ -657,7 +658,7 @@ describe('calcularSerieCaptura', () => {
     ]
     const serie = calcularSerieCaptura(rowsAno, metasManuais, orcamentosBase(), { unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '021', prefixos: '021', natureza: 'custo' })
     expect(serie[0].receita).toBeCloseTo(1100000, 2) // janeiro, realizado
-    expect(serie[1].receita).toBeNull()               // fevereiro em diante, projetado
+    expect(serie[1].receita).toBeCloseTo(100000, 2) // fevereiro em diante: receita ORÇADA do próprio mês (orcamentosBase() = 100000/mês), não null
   })
 
   it('trava o ritmo necessário na própria meta anual quando economizar antes deixaria o ritmo pedir um % PIOR que ela (custo: nunca libera gastar mais que a meta)', () => {
@@ -677,9 +678,10 @@ describe('calcularSerieCaptura', () => {
   it('trava o ritmo necessário na própria meta anual quando ficaria PIOR que ela (performance, ex: EBITDA: nunca libera cair abaixo da meta)', () => {
     const rowsAno: DreLongoRow[] = [
       linha('002', 1, 'MENSAL', 100000, 100000, 0, 100),
-      linha('021', 1, 'MENSAL', -1000000, -30000, 0, -80),
+      // Performance: realizado positivo (ganho), ao contrário do teste de custo acima (negativo) — soma com sinal, não abs, então precisa ser positivo pra reproduzir o mesmo ritmo bruto de 12%.
+      linha('021', 1, 'MENSAL', 1000000, 30000, 0, 80),
       linha('002', 2, 'MENSAL', 100000, 100000, 0, 100),
-      linha('021', 2, 'MENSAL', -1000000, -30000, 0, -70),
+      linha('021', 2, 'MENSAL', 1000000, 30000, 0, 70),
     ]
     // Mesmo ritmo bruto (12%) — meta anual informada agora é 20%, maior: em performance o ritmo trava subindo pra 20 (não pode pedir menos que a meta).
     const serie = calcularSerieCaptura(
@@ -702,11 +704,97 @@ describe('calcularSerieCaptura', () => {
       linha('021', 2, 'MENSAL', -1000000, -5000, 0, -70),
     ]
     const serie = calcularSerieCaptura(rowsAno, [], orcamentos, { unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '021', prefixos: '021', natureza: 'custo' })
-    // meta acumulada ponderada = só janeiro = 100000(receita realizada)*10% / 100000 = 10%
-    // massa permitida = 1200000*10% = 120000; despesa já realizada = 5000+5000 = 10000; massa disponível = 110000
-    // receita restante = orçada anual (1200000) - realizada acumulada (100000+100000=200000) = 1000000
-    // curva de captura = 110000/1000000*100 = 11%
-    expect(serie[11].avrNecessario).toBeCloseTo(11, 2)
+    // soma massa meta = só janeiro = 100000(receita realizada)*10% = 10000 (fevereiro fica de fora, sem meta %)
+    // despesa já realizada = 5000+5000 = 10000; economia realizada = 10000-10000 = 0 (bateu certinho, nem sobrou nem faltou)
+    // massa orçada futura (mar..dez, 10 meses, todos no fallback de 10% = meta acumulada ponderada) = 10×(100000*10%) = 100000
+    // massa disponível = 0 + 100000 = 100000; curva de captura = 100000/1000000*100 = 10% (= a própria meta acumulada ponderada, já que a economia foi zero)
+    expect(serie[11].avrNecessario).toBeCloseTo(10, 2)
+  })
+
+  it('performance (ex: EBITDA): um mês de PREJUÍZO subtrai do acumulado, não soma como se fosse lucro (bug real: abs() inflava a massa já realizada e derrubava o ritmo necessário)', () => {
+    // codigo '233' (EBITDA) ano 2025 -> PACOTE_CONTA_ORCAMENTO['232'] = ['133'] pra Meta %.
+    const orcamentos: OrcamentoLinha[] = [
+      ...Array.from({ length: 12 }, (_, i) => orc({ mes: i + 1, conta_codigo: '002', orcado: 100000 })),
+      orc({ mes: 1, conta_codigo: '133', av: 10 }),
+      orc({ mes: 2, conta_codigo: '133', av: 10 }),
+    ]
+    const rowsAno: DreLongoRow[] = [
+      linha('002', 1, 'MENSAL', 100000, 100000, 0, 100),
+      linha('233', 1, 'MENSAL', 20000, 20000, 0, 20), // janeiro: EBITDA positivo (20%)
+      linha('002', 2, 'MENSAL', 100000, 100000, 0, 100),
+      linha('233', 2, 'MENSAL', -5000, -5000, 0, -5), // fevereiro: PREJUÍZO (-5%)
+    ]
+    const serie = calcularSerieCaptura(rowsAno, [], orcamentos, { unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '233', prefixos: '233', natureza: 'performance' })
+    // meta acumulada ponderada = (100000*10% + 100000*10%)/200000 = 10%; massa permitida = 1200000*10% = 120000
+    // EBITDA já realizado COM SINAL = 20000 + (-5000) = 15000 (não 25000, que seria abs(20000)+abs(-5000))
+    // massa disponível = 120000-15000 = 105000; receita restante = 1200000-200000 = 1000000
+    // curva de captura = 105000/1000000*100 = 10,5% — com o bug antigo (abs) teria saído 9,5%
+    expect(serie[11].avrNecessario).toBeCloseTo(10.5, 2)
+  })
+
+  it('meses futuros com meta % própria diferente no Orçamento (ex: dezembro mais pesado por 13º/bônus) fazem a curva VARIAR, preservando esse formato — não achata numa reta', () => {
+    const orcamentos: OrcamentoLinha[] = [
+      ...Array.from({ length: 12 }, (_, i) => orc({ mes: i + 1, conta_codigo: '002', orcado: 100000 })),
+      orc({ mes: 1, conta_codigo: '012', av: -10 }), // janeiro (único mês realizado): meta 10%
+      // meses 2-10 (futuros) sem meta % própria cadastrada -> caem no fallback (meta acumulada ponderada = 10%)
+      orc({ mes: 11, conta_codigo: '012', av: -9 }), // novembro: meta 9% (mês mais leve)
+      orc({ mes: 12, conta_codigo: '012', av: -13 }), // dezembro: meta 13% (mês mais pesado, ex: 13º/bônus)
+    ]
+    const rowsAno: DreLongoRow[] = [
+      linha('002', 1, 'MENSAL', 100000, 100000, 0, 100),
+      linha('021', 1, 'MENSAL', -1000000, -5000, 0, -50), // janeiro: só 5000 gasto (sobrou bastante massa)
+    ]
+    const serie = calcularSerieCaptura(rowsAno, [], orcamentos, { unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '021', prefixos: '021', natureza: 'custo' })
+    // soma massa meta = 100000(receita real jan)*10% = 10000; despesa já realizada = 5000; economia realizada = 5000
+    // massa orçada futura = Σ receita(100000)×meta%/100 dos meses 2..12
+    //   = 9 meses a 10% (fallback) + novembro a 9% + dezembro a 13% = 90000 + 9000 + 13000 = 112000
+    // massa disponível = economia (5000) + massa orçada futura (112000) = 117000
+    // fator de correção = 117000/112000 = 1,044642857...
+    // novembro = 9% × fator = 9,401785...%; dezembro = 13% × fator = 13,580357...%; meses sem meta própria (ex: mar) = 10% × fator = 10,446428...%
+    // único mês realizado é janeiro (mes 1, índice 0); daí em diante índice = mes-1 (fev..dez sem buracos).
+    expect(serie[10].avrNecessario).toBeCloseTo(9.40, 2) // mês 11 (novembro)
+    expect(serie[11].avrNecessario).toBeCloseTo(13.58, 2) // mês 12 (dezembro)
+    expect(serie[2].avrNecessario).toBeCloseTo(10.45, 2) // mês 3 (sem meta própria, cai no fallback)
+    // dezembro (mais pesado no orçamento) fica proporcionalmente mais alto que novembro — a curva varia, não é uma reta.
+    expect(serie[11].avrNecessario!).toBeGreaterThan(serie[10].avrNecessario!)
+    // metaMensal carrega a própria meta % do mês (SEM o fator de correção) — serve pra estender
+    // a linha "Meta" do gráfico até dezembro; meses sem meta própria caem no fallback (10%).
+    expect(serie[10].metaMensal).toBeCloseTo(9, 2) // novembro
+    expect(serie[11].metaMensal).toBeCloseTo(13, 2) // dezembro
+    expect(serie[2].metaMensal).toBeCloseTo(10, 2) // março (fallback)
+    expect(serie[0].metaMensal).toBeUndefined() // janeiro (mês já realizado) não preenche metaMensal
+  })
+
+  it('receita REALIZADA bem diferente da ORÇADA (unidade faturando "quente") não distorce o ritmo necessário — a parte já realizada é medida contra a receita real, a futura contra a orçada, cada uma na escala certa', () => {
+    const orcamentos: OrcamentoLinha[] = [
+      ...Array.from({ length: 12 }, (_, i) => orc({ mes: i + 1, conta_codigo: '002', orcado: 100000 })), // receita ORÇADA: 100000 todo mês
+      orc({ mes: 1, conta_codigo: '012', av: -10 }), // meta janeiro: 10%
+      orc({ mes: 2, conta_codigo: '012', av: -20 }), // meta fevereiro: 20%
+    ]
+    const rowsAno: DreLongoRow[] = [
+      // janeiro: receita real igual à orçada (100000), sem surpresa — gasta exatamente a meta (10000 = 10%)
+      linha('002', 1, 'MENSAL', 100000, 100000, 0, 100),
+      linha('021', 1, 'MENSAL', -1000000, -10000, 0, -10),
+      // fevereiro: receita real bem ACIMA da orçada (300000 vs 100000 orçado) — fatura "quente".
+      // Gasta só 30000 (10% da receita REAL, bem abaixo da meta de 20%) — economia de verdade.
+      linha('002', 2, 'MENSAL', 100000, 300000, 0, 100),
+      linha('021', 2, 'MENSAL', -1000000, -30000, 0, -10),
+    ]
+    const serie = calcularSerieCaptura(rowsAno, [], orcamentos, { unidade: 'FOZ', negocio: 'ROTA', ano: 2025, codigo: '021', prefixos: '021', natureza: 'custo' })
+    // soma massa meta = 100000(receita real jan)*10% + 300000(receita real fev, QUENTE)*20% = 10000+60000 = 70000
+    // meta acumulada ponderada = 70000/(100000+300000) = 17,5%
+    // despesa já realizada = 10000+30000 = 40000; economia realizada = 70000-40000 = 30000 (toda vinda de fevereiro)
+    // massa orçada futura (mar..dez, 10 meses, todos no fallback 17,5% — nenhum tem meta própria cadastrada) = 10×(100000×17,5%) = 175000
+    // massa disponível = 30000 + 175000 = 205000; curva de captura = 205000/1000000*100 = 20,5%
+    //
+    // Pra comparação (não é o que o código faz, só referência): a fórmula ANTIGA multiplicava a
+    // meta acumulada ponderada (17,5%) pela receita ORÇADA do ano inteiro (1.200.000) = 210000 de
+    // massa permitida, subtraía a despesa real (40000) = 170000 disponível, e dividia pela receita
+    // restante calculada como orçada anual MENOS a receita REAL já realizada (1.200.000-400.000=
+    // 800.000) = 170000/800000*100 = 21,25% — divergia da nova por misturar receita orçada (de um
+    // lado) com receita real "quente" (do outro) numa conta só.
+    expect(serie[11].avrNecessario).toBeCloseTo(20.5, 2)
+    expect(serie[11].metaMensal).toBeCloseTo(17.5, 2) // dezembro, fallback da meta acumulada ponderada
   })
 })
 

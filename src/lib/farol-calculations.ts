@@ -73,6 +73,19 @@ export function somaReal(rows: DreCalculoRow[], prefixos: string[]): number {
     .reduce((acc, r) => acc + r.real, 0)
 }
 
+/**
+ * Soma do REALIZADO bruto (com sinal original do GInfo, sem abs) — usado só
+ * onde o sinal importa de verdade (ex: Curva de Captura de contas de
+ * performance, onde um mês de prejuízo tem que subtrair do acumulado em vez
+ * de somar como `somaReal`/`normalizarParaCalculo` fariam). Opera em
+ * `DreLongoRow` bruto porque `DreCalculoRow.real` já perdeu o sinal.
+ */
+function somaRealizadoComSinal(rows: DreLongoRow[], prefixos: string[]): number {
+  return rows
+    .filter(r => startsWithAny(codigoDreNumeracaoAtual(r.conta_codigo, r.ano), prefixos))
+    .reduce((acc, r) => acc + (r.realizado ?? 0), 0)
+}
+
 /** Soma de REAL para contas que começam com "002" (Receita Líquida Operacional). */
 export function calcularReceita(rows: DreCalculoRow[]): number {
   return somaReal(rows, [CONTA_RECEITA])
@@ -248,16 +261,28 @@ export interface SeriePontoCaptura {
   mes: number
   /** AVR do próprio mês (mesmo valor do gráfico de Acompanhamento mensal) — só nos meses já realizados. */
   avrRealizado: number | null
-  /** Ritmo médio necessário nos meses restantes pra fechar o ano na meta — só nos meses futuros (mais o mês de transição, igual ao avrRealizado, pra a linha conectar sem buraco). */
+  /** Ritmo necessário pra fechar o ano na meta — só nos meses futuros (a curva é só projeção, não tem valor nos meses já realizados). */
   avrNecessario: number | null
   metaAnual: number | null
   /**
-   * Receita do mês, pra converter o ponto em impacto financeiro (R$) sob
-   * demanda — ver `calcularImpactoFinanceiro`. Só nos meses já realizados
-   * (`null` nos futuros/projetados — sem dado real pra calcular; quem usa
-   * projeta com a média dos meses realizados). Opcional porque séries que já
-   * nascem em R$ (ex: `calcularSerieCapturaReducaoCustos`) reaproveitam esse
-   * mesmo tipo sem preencher esse campo.
+   * Meta % do PRÓPRIO mês (vinda do Orçamento mês a mês, mesma fonte que o
+   * Acompanhamento Mensal usa) — só preenchida nos meses futuros, onde o
+   * Acompanhamento Mensal não tem essa informação (só cobre meses já
+   * realizados). Serve só pra estender a linha "Meta" até dezembro quando o
+   * gráfico também mostra a Curva de Captura — quem usa prioriza a meta do
+   * Acompanhamento Mensal quando ela existe, essa é só o complemento.
+   */
+  metaMensal?: number | null
+  /**
+   * Receita do mês, pra converter o ponto em R$ sob demanda — nos meses já
+   * realizados é a receita REALIZADA (mesmo uso de antes: impacto financeiro
+   * do Realizado contra a meta, ver `calcularImpactoFinanceiro`); nos meses
+   * futuros é a receita ORÇADA daquele mês específico (não uma média — dá pra
+   * converter o ritmo necessário num teto de gasto em R$ de verdade por mês).
+   * `null` só quando o Orçamento não tem a receita daquele mês cadastrada.
+   * Opcional porque séries que já nascem em R$ (ex:
+   * `calcularSerieCapturaReducaoCustos`) reaproveitam esse mesmo tipo sem
+   * preencher esse campo.
    */
   receita?: number | null
 }
@@ -279,49 +304,70 @@ function receitaOrcadaMes(
  * "Curva de captura": nos meses já realizados, mostra o AVR do próprio mês
  * (mesmo cálculo e mesmo valor de calcularSerieAnual — não é uma média
  * acumulada, senão os dois gráficos mostrariam números diferentes pro mesmo
- * mês). Nos meses futuros, mostra o ritmo necessário pros meses restantes,
- * calculado pela MASSA financeira ponderada pela receita de cada mês (não
- * mais uma média/distribuição uniforme entre os meses — meses com mais
- * receita pesam mais). Fórmula conferida célula a célula contra a planilha
- * de referência do usuário (Graficos Padrao.xlsm, aba DESPESAS ADM) — bateu
- * exato (14,7082%):
+ * mês). Nos meses futuros, mostra o ritmo necessário pros meses restantes —
+ * uma "reprevisão" (reforecast): mede o quanto já foi economizado ou
+ * estourado até agora e redistribui isso proporcionalmente nos meses que
+ * faltam, igual um índice de performance (tipo o CPI do EVM em gestão de
+ * projetos — "Estimativa no Término = Orçamento ÷ CPI" — só que aplicado por
+ * mês em vez de uma vez só no total):
  *   1. Massa de Meta do mês = Receita REALIZADA do mês × Meta % do mês (cada
- *      mês já realizado, Meta % vindo do Orçamento via buscarMetaOrcamento —
- *      é a única peça que vem do Orçamento aqui; a receita usada pra
- *      ponderar é a que já aconteceu de fato, não a orçada, confirmado
- *      contra a planilha: 'RL 2026' pondera, não 'RL Orçada')
- *   2. Meta Acumulada Ponderada = Σ Massa de Meta ÷ Σ Receita Realizada (só
- *      dos meses já realizados)
- *   3. Massa Permitida = Receita Orçada ANUAL (12 meses) × Meta Acumulada
- *      Ponderada
- *   4. Massa Disponível = Massa Permitida − Despesa já realizada (acumulada,
- *      direto do DRE)
- *   5. Receita Restante = Receita Orçada Anual − Receita Realizada Acumulada
- *      (não é a soma da receita orçada só dos meses futuros — é o quanto
- *      ainda falta do total orçado pro ano inteiro, depois de descontar o
- *      que já foi de fato faturado; a planilha de referência faz exatamente
- *      assim, ver aba RECEITA LIQUIDA)
- *   6. Curva de Captura (ritmo necessário) = Massa Disponível ÷ Receita
- *      Restante
+ *      mês já realizado, Meta % vindo do Orçamento via buscarMetaOrcamento).
+ *      Soma de todos os meses já realizados = Soma Massa Meta: "quanto a
+ *      unidade DEVERIA ter gasto até agora, nas próprias metas de cada mês,
+ *      em cima da receita que ela de fato faturou" — nunca usa receita
+ *      ORÇADA pra essa parte, só a REALIZADA, pra não misturar escalas (ver
+ *      nota abaixo).
+ *   2. Meta Acumulada Ponderada = Soma Massa Meta ÷ Receita Realizada
+ *      Acumulada (só dos meses já realizados) — serve só de fallback pro
+ *      passo 4, quando algum mês futuro não tem meta % própria cadastrada.
+ *   3. Economia Realizada = Soma Massa Meta − Despesa Já Realizada (dado do
+ *      DRE, independe do Orçamento). Positivo = economizou (gastou menos do
+ *      que a própria meta permitia, dada a receita real); negativo = estourou.
+ *   4. Massa Orçada Futura = Σ (Receita ORÇADA de cada mês restante × Meta %
+ *      PRÓPRIA daquele mês) — "quanto os meses que faltam gastariam se cada
+ *      um batesse exatamente a própria meta, sem nenhum ajuste". Mês sem
+ *      meta % própria cadastrada cai na Meta Acumulada Ponderada (passo 2).
+ *   5. Massa Disponível = Economia Realizada + Massa Orçada Futura — a
+ *      economia (ou estouro) do que já passou soma (ou desconta) em cima do
+ *      que os meses futuros já tinham direito de gastar pelo plano normal.
+ *   6. Fator de Correção = Massa Disponível ÷ Massa Orçada Futura — um
+ *      índice de performance: >1 significa "sobrou espaço, dá pra gastar
+ *      mais que o normal nos meses restantes"; <1 significa "aperta". Curva
+ *      de Captura (ritmo necessário) de cada mês futuro = Meta % PRÓPRIA
+ *      daquele mês (passo 4) × Fator de Correção — multiplicar pelo MESMO
+ *      fator em todo mês preserva o FORMATO original (um mês já orçado mais
+ *      pesado, ex: dezembro por 13º/bônus, continua proporcionalmente mais
+ *      pesado), só escalando tudo pra cima ou pra baixo igual.
+ * IMPORTANTE (motivo de ser "Economia Realizada + Massa Orçada Futura" em vez
+ * de uma única "massa permitida do ano inteiro ÷ receita restante", como era
+ * antes): o passo 1-3 mede o já-realizado contra a receita REAL (não a
+ * orçada), e o passo 4 mede o futuro contra a receita ORÇADA (a real ainda
+ * não existe) — cada pedaço na escala de receita que faz sentido pra ele.
+ * Misturar os dois numa conta só (ex: aplicar a taxa média de Jan-Set em
+ * cima da receita ORÇADA do ano inteiro) distorce o resultado toda vez que a
+ * receita real foge muito da orçada — unidade que fatura mais que o
+ * orçado deixa a conta antiga mais apertada do que deveria (e vice-versa).
+ * Quando a receita real bate com a orçada, as duas contas dão o mesmo
+ * resultado — não é uma mudança de comportamento pro caso "sem surpresa",
+ * só uma correção pra quando a receita foge do orçado.
  * Mês sem Meta % no Orçamento (não importado pra esse mês/pacote) fica de
  * fora da Meta Acumulada Ponderada — não zera a média, só não entra nela.
- * Sem Receita Orçada Anual completa (12 meses) ou sem Receita Restante, não
- * há o que projetar — mesmo comportamento de "sem meta anual" de antes
- * (retorna só os meses já realizados, sem avrNecessario). `metaAnualOverride`,
- * quando informado (mesmo null), substitui a busca em `metasManual` — mas só
- * alimenta a linha de referência "Meta Anual" do gráfico, não entra mais no
- * cálculo do ritmo necessário (que agora vem só do Orçamento/DRE, ver acima).
+ * Sem meta % em nenhum mês já realizado, ou sem receita orçada completa pros
+ * meses que faltam, não há o que projetar (retorna só os meses já
+ * realizados, sem avrNecessario). `metaAnualOverride`, quando informado
+ * (mesmo null), substitui a busca em `metasManual` — mas só alimenta a linha
+ * de referência "Meta Anual" do gráfico e a trava abaixo, não entra no
+ * cálculo do ritmo necessário em si (que vem só do Orçamento/DRE, ver acima).
  *
- * Travado pela própria meta anual (`metaAnualOverride`/`metasManual`), quando
- * ela existe: economizar nos meses já realizados pode fazer a MASSA
- * disponível sobrar tanto que o ritmo necessário pros meses restantes passe a
- * pedir um % PIOR que a meta anual (ex: meta 12,38% virar "pode gastar 23%")
- * — isso incentivaria a unidade a gastar mais só porque guardou antes. Em vez
- * de deixar passar, o ritmo necessário fica travado na própria meta nesse
- * caso (nunca pior que ela): conta de custo (menor % é melhor) não deixa o
- * ritmo passar ACIMA da meta; conta de performance (maior % é melhor, ex:
- * EBITDA) não deixa cair ABAIXO. Sem meta anual pra comparar, o ritmo fica
- * como calculado, sem travar.
+ * Travado pela própria meta anual (`metaAnualOverride`/`metasManual`), por
+ * mês: o Fator de Correção pode liberar um ritmo necessário PIOR que a meta
+ * anual nos meses restantes (ex: meta 12,54% virar "pode gastar 13,66%" só
+ * porque sobrou uma folga) — isso incentivaria a unidade a gastar mais só
+ * porque economizou antes. Em vez de deixar passar, cada mês fica travado na
+ * própria meta nesse caso (nunca pior que ela): conta de custo (menor % é
+ * melhor) não deixa o ritmo passar ACIMA da meta; conta de performance
+ * (maior % é melhor, ex: EBITDA) não deixa cair ABAIXO. Sem meta anual pra
+ * comparar, o ritmo fica como calculado, sem travar.
  */
 export function calcularSerieCaptura(
   rowsAno: DreLongoRow[],
@@ -340,11 +386,21 @@ export function calcularSerieCaptura(
 
   const prefixosList = toList(params.prefixos)
   const porMes = new Map(mesesRealizados.map(mes => {
-    const calc = normalizarParaCalculo(mensal.filter(r => r.mes === mes))
+    const rowsMes = mensal.filter(r => r.mes === mes)
+    const calc = normalizarParaCalculo(rowsMes)
     return [mes, {
       avr: avrPorPrefixo(calc, params.prefixos),
       receita: calcularReceita(calc),
-      despesaRealizada: somaReal(calc, prefixosList),
+      // Custo: `real` (magnitude) já representa "quanto foi gasto" — abs()
+      // está correto (GInfo sempre reporta custo negativo). Performance (ex:
+      // EBITDA): um mês de PREJUÍZO tem que SUBTRAIR do acumulado, não somar
+      // como se fosse lucro — por isso usa o `realizado` bruto com sinal
+      // (não passa por normalizarParaCalculo, que sempre tira o sinal via
+      // abs em `real`), senão um mês negativo infla "massa já realizada" e
+      // derruba artificialmente o ritmo necessário dos meses restantes.
+      despesaRealizada: params.natureza === 'performance'
+        ? somaRealizadoComSinal(rowsMes, prefixosList)
+        : somaReal(calc, prefixosList),
     }] as const
   }))
 
@@ -361,30 +417,51 @@ export function calcularSerieCaptura(
     somaMassaMeta += receitaRealMes * (metaMesPct / 100)
     somaReceitaPonderacao += receitaRealMes
   }
-  const metaAcumuladaPonderada = somaReceitaPonderacao === 0 ? null : somaMassaMeta / somaReceitaPonderacao
+  // Já em percentual (não razão) — usada só como fallback no passo 4.
+  const metaAcumuladaPonderada = somaReceitaPonderacao === 0 ? null : (somaMassaMeta / somaReceitaPonderacao) * 100
 
-  // Passo 3: receita orçada anual — só fecha com os 12 meses completos.
-  let receitaOrcadaAnual: number | null = 0
-  for (let mes = 1; mes <= 12 && receitaOrcadaAnual !== null; mes++) {
-    const v = receitaOrcadaMes(orcamentos, { unidade: params.unidade, negocio: params.negocio, ano: params.ano, mes })
-    receitaOrcadaAnual = v === null ? null : receitaOrcadaAnual + v
-  }
-  const massaPermitida = metaAcumuladaPonderada === null || receitaOrcadaAnual === null
-    ? null
-    : receitaOrcadaAnual * metaAcumuladaPonderada
-
-  // Passo 4: despesa já realizada, acumulada — dado do DRE, independe do Orçamento.
+  // Passo 3: economia (ou estouro) já realizada, medida contra a receita REAL — nunca a orçada.
   const despesaJaRealizada = [...porMes.values()].reduce((acc, v) => acc + v.despesaRealizada, 0)
-  const massaDisponivel = massaPermitida === null ? null : massaPermitida - despesaJaRealizada
+  const economiaRealizada = metaAcumuladaPonderada === null ? null : somaMassaMeta - despesaJaRealizada
 
-  // Passo 5: receita orçada anual menos a receita já realizada até agora (não a soma da orçada só dos meses futuros).
-  const receitaRealizadaAcumulada = [...porMes.values()].reduce((acc, v) => acc + v.receita, 0)
-  const receitaRestante = receitaOrcadaAnual === null ? null : receitaOrcadaAnual - receitaRealizadaAcumulada
+  // Passo 4: meta % PRÓPRIA de cada mês futuro × receita ORÇADA daquele mês —
+  // "quanto os meses que faltam gastariam no plano normal, sem ajuste nenhum".
+  // Só fecha quando TODOS os meses restantes têm receita orçada cadastrada
+  // (sem isso não dá pra saber o peso de cada mês no fator de correção).
+  let metaMesFuturo: Map<number, number> | null = null
+  let massaOrcadaFutura: number | null = null
+  let receitaOrcadaFutura: number | null = null
+  if (economiaRealizada !== null && metaAcumuladaPonderada !== null && mesesRestantes > 0) {
+    const mapa = new Map<number, number>()
+    let massa = 0
+    let receita = 0
+    let completo = true
+    for (let mes = ultimoMes + 1; mes <= 12; mes++) {
+      const receitaOrcMes = receitaOrcadaMes(orcamentos, { unidade: params.unidade, negocio: params.negocio, ano: params.ano, mes })
+      if (receitaOrcMes === null) { completo = false; break }
+      const metaMesPct = buscarMetaOrcamento(orcamentos, { unidade: params.unidade, negocio: params.negocio, ano: params.ano, codigo: params.codigo, mes })
+      const pct = metaMesPct ?? metaAcumuladaPonderada
+      mapa.set(mes, pct)
+      massa += receitaOrcMes * (pct / 100)
+      receita += receitaOrcMes
+    }
+    if (completo) {
+      metaMesFuturo = mapa
+      massaOrcadaFutura = massa
+      receitaOrcadaFutura = receita
+    }
+  }
 
-  // Passo 6: curva de captura.
-  const ritmoNecessarioBruto = massaDisponivel === null || receitaRestante === null || mesesRestantes <= 0 || receitaRestante === 0
+  // Passo 5-6: massa disponível (economia realizada + o que os meses futuros já
+  // tinham direito) ÷ massa orçada futura = fator de correção — escala a meta
+  // própria de cada mês futuro pra cima ou pra baixo, preservando o formato.
+  const massaDisponivel = economiaRealizada === null || massaOrcadaFutura === null
     ? null
-    : (massaDisponivel / receitaRestante) * 100
+    : economiaRealizada + massaOrcadaFutura
+
+  const ritmoNecessarioBruto = massaDisponivel === null || receitaOrcadaFutura === null || receitaOrcadaFutura === 0
+    ? null
+    : (massaDisponivel / receitaOrcadaFutura) * 100
 
   // Trava: nunca pior que a própria meta anual (ver comentário da função).
   const ritmoNecessario = ritmoNecessarioBruto === null || metaAnual === null
@@ -393,17 +470,39 @@ export function calcularSerieCaptura(
       ? Math.min(ritmoNecessarioBruto, metaAnual)
       : Math.max(ritmoNecessarioBruto, metaAnual)
 
+  let ritmoPorMesFuturo: Map<number, number> | null = null
+  if (ritmoNecessario !== null && massaDisponivel !== null && massaOrcadaFutura !== null && massaOrcadaFutura !== 0 && metaMesFuturo !== null) {
+    const fatorCorrecao = massaDisponivel / massaOrcadaFutura
+    ritmoPorMesFuturo = new Map(Array.from(metaMesFuturo.entries()).map(([mes, pct]) => {
+      const valor = pct * fatorCorrecao
+      // mesma trava de sempre (ver comentário da função), agora por mês.
+      const travado = metaAnual === null ? valor : params.natureza === 'custo' ? Math.min(valor, metaAnual) : Math.max(valor, metaAnual)
+      return [mes, travado]
+    }))
+  }
+
+  // `avrNecessario` fica sempre null nos meses já realizados (mesmo no
+  // último) — a curva é uma projeção pra FRENTE, começa só no 1º mês futuro.
+  // Já teve um "ponto de conexão" aqui (repetia o avr do último mês
+  // realizado pra linha não ter buraco visual), mas isso criava um ponto de
+  // Necessário sobre um mês que já fechou — e em modo R$ (teto de gasto) o
+  // número ali não tem o mesmo significado do Impacto Financeiro do
+  // Realizado no mesmo mês, confundindo mais do que ajudava.
   const pontos: SeriePontoCaptura[] = mesesRealizados.map(mes => ({
     mes,
     avrRealizado: porMes.get(mes)!.avr,
-    // ponto de conexão com a linha do necessário, só quando existe projeção futura
-    avrNecessario: mes === ultimoMes && ritmoNecessario !== null ? porMes.get(mes)!.avr : null,
+    avrNecessario: null,
     metaAnual,
     receita: porMes.get(mes)!.receita,
   }))
   if (ritmoNecessario !== null) {
     for (let mes = ultimoMes + 1; mes <= 12; mes++) {
-      pontos.push({ mes, avrRealizado: null, avrNecessario: ritmoNecessario, metaAnual, receita: null })
+      const valor = ritmoPorMesFuturo?.get(mes) ?? ritmoNecessario
+      // Receita ORÇADA do próprio mês (não a realizada, que ainda não existe
+      // pra mês futuro) — permite converter o ritmo necessário em R$ (teto de
+      // gasto do mês) com a receita de verdade daquele mês, não uma média.
+      const receitaOrcMes = receitaOrcadaMes(orcamentos, { unidade: params.unidade, negocio: params.negocio, ano: params.ano, mes })
+      pontos.push({ mes, avrRealizado: null, avrNecessario: valor, metaAnual, receita: receitaOrcMes, metaMensal: metaMesFuturo?.get(mes) ?? null })
     }
   }
   return pontos

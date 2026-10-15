@@ -216,7 +216,7 @@ export function TooltipCustom({
   nomeMeta?: string
   dataKeyAvr: string
   dataKeyMeta: string
-  /** dataKey da 3ª linha opcional (Curva de Captura, ver `CurvaCapturaToggle`) — sem isso, o tooltip continua só com AVR/Meta. */
+  /** dataKey da 3ª linha opcional (Curva de Captura) — sem isso, o tooltip continua só com AVR/Meta. */
   dataKeyCurva?: string
   formatter?: (v: number) => string
 }) {

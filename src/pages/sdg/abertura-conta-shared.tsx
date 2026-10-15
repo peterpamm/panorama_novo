@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ArrowUpDown } from 'lucide-react'
 import { Bar, BarChart, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { CurvaCapturaToggle } from '@/components/farol/CurvaCapturaToggle'
 import { IndicadorChart } from '@/components/farol/IndicadorChart'
 import {
   avrPorPrefixo, calcularImpactoFinanceiro, calcularReceita, calcularSemaforo, calcularSerieAnual, calcularSerieCaptura,
@@ -184,7 +183,7 @@ export interface BlocoPacoteProps {
   percentualDoPacoteAno?: number | null
   /** Título do 3º card, exibido só quando `percentualDoPacoteAno` é informado (ex: "Impacto % no Pacote de Frota"). */
   tituloImpactoPacote?: string
-  /** Liga o radio "Meta"/"Curva de Captura" no gráfico principal — só o bloco do pacote-mãe (114/159) usa, não as aberturas por conta-mãe filha (Combustível, Salários etc.). Default false. */
+  /** Mostra a Curva de Captura (sempre visível, sem toggle) em cima do gráfico de Acompanhamento Mensal — só o bloco do pacote-mãe (114/159) usa, não as aberturas por conta-mãe filha (Combustível, Salários etc. não têm meta de Orçamento própria nesse nível). Default false. */
   mostrarToggleCurvaCaptura?: boolean
 }
 
@@ -209,7 +208,6 @@ export function BlocoPacote({
   const fonteTabela = tabelaFonte ?? fonteMeta
   const { cursor } = getChartColors()
   const ctx = { unidade, negocio, ano, codigo }
-  const [mostrarCurva, setMostrarCurva] = useState(false)
 
   const rowsAno = useMemo(() => rowsUnidadeCons.filter(r => r.ano === ano), [rowsUnidadeCons, ano])
 
@@ -251,10 +249,10 @@ export function BlocoPacote({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rowsAno, orcamentoAno, unidade, negocio, ano, codigo, prefixos, fonteMeta])
 
-  // Curva de Captura (ritmo necessário) — só calculada quando o toggle existe
-  // pra esse bloco (pacote-mãe), e só faz sentido com meta vinda do Orçamento
-  // (as aberturas com fonteMeta='remunerado' não têm meta de Orçamento
-  // cadastrada nesse nível, então nem oferecem o toggle).
+  // Curva de Captura (ritmo necessário) — só calculada quando `mostrarToggleCurvaCaptura`
+  // está ligado pra esse bloco (pacote-mãe), e só faz sentido com meta vinda do
+  // Orçamento (as aberturas com fonteMeta='remunerado' não têm meta de
+  // Orçamento cadastrada nesse nível, então nem mostram a curva).
   const serieCaptura = useMemo(() => {
     if (!mostrarToggleCurvaCaptura) return []
     const metaAnual = buscarMetaOrcamento(orcamentoAno, { ...ctx, mes: 0 })
@@ -436,21 +434,16 @@ export function BlocoPacote({
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-4">
         {/* Gráfico principal — linhas suavizadas, AVR mensal x Meta */}
         <div className="rounded-2xl bg-white shadow dark:bg-slate-800/60 p-5 lg:col-span-3">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-400">
-              {titulo} % — Acompanhamento Mensal — {ano}
-            </p>
-            {mostrarToggleCurvaCaptura && (
-              <CurvaCapturaToggle mostrar={mostrarCurva} onChange={setMostrarCurva} idPrefix={`sdg-gerentes-${codigo}`} />
-            )}
-          </div>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-400">
+            {titulo} % — Acompanhamento Mensal — {ano}
+          </p>
           <IndicadorChart
             serie={serieAnual}
             gradientId={`sdg-gerentes-${codigo}`}
             natureza={natureza}
             nomeSerie="Realizado"
             serieCaptura={serieCaptura}
-            mostrarCurvaCaptura={mostrarToggleCurvaCaptura && mostrarCurva}
+            mostrarCurvaCaptura={mostrarToggleCurvaCaptura}
           />
         </div>
 

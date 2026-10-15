@@ -6,7 +6,7 @@ import { calcularMatrizPerdas } from '@/lib/painel-perdas-calculations'
 import { formatPercent } from '@/lib/utils'
 import type {
   DisponibilidadeArmazemAcumulada, DisponibilidadeEmpurradaAcumulada, DisponibilidadeRotaAcumulada, DreLongoRow,
-  MetaPerdaIndicador, OrcamentoLinha, PainelPerdasAux, ResultadoTri, Unidade,
+  MetaPerdaIndicador, Natureza, OrcamentoLinha, PainelPerdasAux, ResultadoTri, Unidade,
 } from '@/types'
 
 export type StatusFarolGerente = 'bateu' | 'perdeu' | 'pendente'
@@ -143,6 +143,53 @@ export function linhaIndicadorDre(indicador: string, linha: RankingLinhaIndicado
     real: formatPercent(linha.avr, 1),
     status: linha.delta === null ? 'pendente' : linha.delta >= 0 ? 'bateu' : 'perdeu',
   }
+}
+
+/** Um degrau da rampa de bônus: a partir de quanto % do indicador foi atingido, quanto % do valor do bônus fica garantido. */
+export interface DegrauRampaBonus {
+  atingiu: number
+  levou: number
+}
+
+/**
+ * Rampa de bônus por indicador (fixa no código por enquanto — sem cadastro,
+ * ver conversa do SDG Gerentes > Metas Bônus). EBITDA (performance): quanto
+ * MAIS alto o % atingido (realizado ÷ meta), melhor — 100% ou mais garante o
+ * bônus cheio. Gastos Totais (custo): quanto MAIS BAIXO o % atingido
+ * (realizado ÷ meta — "quanto do orçamento foi consumido"), melhor — 100%
+ * ou menos garante o bônus cheio; acima de 110% não garante nada.
+ */
+export const RAMPA_BONUS_EBITDA: DegrauRampaBonus[] = [
+  { atingiu: 100, levou: 100 },
+  { atingiu: 95, levou: 75 },
+  { atingiu: 90, levou: 50 },
+]
+export const RAMPA_BONUS_CUSTOS: DegrauRampaBonus[] = [
+  { atingiu: 100, levou: 100 },
+  { atingiu: 105, levou: 75 },
+  { atingiu: 110, levou: 50 },
+]
+
+export interface ResultadoRampaBonus {
+  /** % do indicador atingido (realizado ÷ meta × 100) — mesmo pra custo e performance, só muda o sentido de "melhor". */
+  percentualAtingido: number
+  /** % do valor do bônus garantido nesse patamar — 0 quando não bate nem o pior degrau da rampa. */
+  bonusPercent: number
+}
+
+/**
+ * Calcula o degrau da rampa de bônus batido por um indicador, a partir do
+ * realizado/meta brutos (mesmos números de `RankingLinhaIndicador`, antes de
+ * formatar pra `LinhaFarolGerente`). null sem meta cadastrada (nada pra
+ * comparar) ou meta zero (divisão inválida).
+ */
+export function calcularRampaBonus(avr: number, meta: number | null, natureza: Natureza): ResultadoRampaBonus | null {
+  if (meta === null || meta === 0) return null
+  const percentualAtingido = (avr / meta) * 100
+  const bonusPercent = natureza === 'performance'
+    ? RAMPA_BONUS_EBITDA.find(d => percentualAtingido >= d.atingiu)?.levou ?? 0
+    : [...RAMPA_BONUS_CUSTOS].sort((a, b) => a.atingiu - b.atingiu).find(d => percentualAtingido <= d.atingiu)?.levou ?? 0
+  return { percentualAtingido, bonusPercent }
 }
 
 /**
@@ -301,6 +348,9 @@ export interface CardFarolGerenteComputado {
   card: UnidadeCardFarol
   semestre: LinhaFarolGerente[]
   ano: LinhaFarolGerente[]
+  /** Dado bruto (realizado/meta, antes de formatar) de Gastos Totais e EBITDA Unidade desse card — usado pra calcular a Rampa de Bônus (ver `calcularRampaBonus`), que precisa do número, não da string já arredondada em `LinhaFarolGerente`. undefined = sem dado pra essa unidade/negócio. */
+  gastosTotais: RankingLinhaIndicador | undefined
+  ebitdaUnidade: RankingLinhaIndicador | undefined
 }
 
 /**
@@ -350,6 +400,8 @@ export function montarCardsFarolGerentes(params: {
     const chaveNegocio = `${card.unidadeCodigo}|${card.negocio ?? 'CONS'}`
     return {
       card,
+      gastosTotais: mapaGastos.get(chaveNegocio),
+      ebitdaUnidade: mapaEbitda.get(chaveNegocio),
       semestre: [
         linhaIndicadorDre('Gastos Totais', mapaGastos.get(chaveNegocio)),
         linhaAcidentesTri(mapaTri.get(card.unidadeCodigo)),

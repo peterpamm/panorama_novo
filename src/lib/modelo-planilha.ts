@@ -35,3 +35,20 @@ export function montarWorkbookModelo(abas: AbaModelo[]): XLSX.WorkBook {
 export function baixarModeloXlsx(nomeArquivo: string, abas: AbaModelo[]): void {
   XLSX.writeFile(montarWorkbookModelo(abas), `${nomeArquivo}.xlsx`)
 }
+
+/**
+ * Monta e baixa o modelo como .csv (telas que importam .csv em vez de
+ * .xlsx — ex: Indisponibilidade/Devolução) — não tem conceito de "aba",
+ * então recebe uma única `AbaModelo` e ignora o campo `nome`. `separador`
+ * default `;` (padrão dos .csv herdados do painel antigo nesse app).
+ */
+export function baixarModeloCsv(nomeArquivo: string, aba: AbaModelo, separador = ';'): void {
+  const texto = aba.linhas.map(linha => linha.join(separador)).join('\r\n')
+  const blob = new Blob([texto], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${nomeArquivo}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+}

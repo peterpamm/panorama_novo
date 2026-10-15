@@ -250,3 +250,21 @@ export const MODELO_DISPONIBILIDADE_EMPURRADA: AbaModelo[] = [
     ],
   },
 ]
+
+/**
+ * Indisponibilidade/Devolução — a tela aceita .xlsx (modelo baixado assim,
+ * mesmo padrão dos outros) ou o painel_de_perdas.csv herdado do painel
+ * antigo (nesse caso, usa `baixarModeloCsv` com só a 1ª aba — csv não tem
+ * conceito de aba). NEGOCIO é sempre ignorado pelo parser (sempre CONS),
+ * mas a coluna precisa estar presente no cabeçalho.
+ */
+export const MODELO_PAINEL_PERDAS_AUX: AbaModelo[] = [
+  {
+    nome: 'Indisponib Devolucao',
+    linhas: [
+      ['INDICADOR', 'NEGOCIO', 'ANO', 'MES', 'UNIDADE', 'VALOR'],
+      ['Indisponibilidade', 'CONS', 2026, 1, 'FOZ', '2,35'],
+      ['Devolução', 'CONS', 2026, 1, 'FOZ', '1,10'],
+    ],
+  },
+]

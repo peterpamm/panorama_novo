@@ -22,7 +22,7 @@ interface IndicadorChartProps {
   nomeMeta?: string
   /** Como formatar os valores nos rótulos/tooltip — default percentual (AVR); passe formatCurrencyInteiro pra séries em R$. */
   formatter?: (v: number) => string
-  /** Curva de Captura (ritmo necessário, ver `calcularSerieCaptura`) — 3ª linha amarela tracejada opcional, ligada por `CurvaCapturaToggle` fora deste componente. Estende o eixo X até os meses futuros da projeção quando `mostrarCurvaCaptura` está ativo. */
+  /** Curva de Captura (ritmo necessário, ver `calcularSerieCaptura`) — 3ª linha amarela tracejada opcional, sempre visível quando informada. Estende o eixo X até os meses futuros da projeção quando `mostrarCurvaCaptura` está ativo. */
   serieCaptura?: SeriePontoCaptura[]
   mostrarCurvaCaptura?: boolean
 }
@@ -46,7 +46,11 @@ export function IndicadorChart({
       return {
         mes,
         avr: base?.avr ?? null,
-        meta: base?.meta ?? null,
+        // Meses futuros não têm `base` (o Acompanhamento Mensal só cobre o
+        // que já foi realizado) — cai pra `metaMensal` da própria curva, que
+        // já traz a meta % daquele mês vinda do Orçamento, pra linha "Meta"
+        // continuar até dezembro junto com a Curva de Captura.
+        meta: base?.meta ?? captura?.metaMensal ?? null,
         curva: captura?.avrNecessario ?? null,
       }
     })
@@ -125,7 +129,8 @@ export function IndicadorChart({
               stroke={COR_NECESSARIO}
               strokeWidth={2}
               strokeDasharray="5 3"
-              dot={false}
+              dot={{ r: 3, fill: COR_NECESSARIO, strokeWidth: 0 }}
+              activeDot={{ r: 5, fill: COR_NECESSARIO, strokeWidth: 0 }}
               isAnimationActive={false}
               label={<RotuloLinhaExtra primeiroIndex={primeiroIndexCurva} valor={valorCurvaLabel} formatter={formatter} />}
             />

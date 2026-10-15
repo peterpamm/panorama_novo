@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Bar, BarChart, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { CurvaCapturaToggle } from '@/components/farol/CurvaCapturaToggle'
 import { IndicadorChart } from '@/components/farol/IndicadorChart'
 import {
   avrPorPrefixo, calcularImpactoFinanceiro, calcularReceita, calcularSemaforo, calcularSerieAnual, calcularSerieCaptura,
@@ -115,8 +114,7 @@ export function SlideGastosTotaisGerentes({ rowsUnidadeCons, orcamentoAno, unida
     return base.map(ponto => ({ ...ponto, meta: buscarMetaOrcamento(orcamentoAno, { ...ctx, mes: ponto.mes }) }))
   }, [rowsAno, orcamentoAno, unidade, ano])
 
-  // Curva de Captura (ritmo necessário) — linha amarela tracejada extra, ligada pelo radio "Meta"/"Curva de Captura".
-  const [mostrarCurva, setMostrarCurva] = useState(false)
+  // Curva de Captura (ritmo necessário) — linha amarela tracejada extra, sempre visível em cima do Acompanhamento Mensal.
   const serieCaptura = useMemo(
     () => calcularSerieCaptura(rowsAno, [], orcamentoAno, { ...ctx, prefixos: INFO.prefixos, natureza: INFO.natureza }, ytdMeta),
     [rowsAno, orcamentoAno, unidade, ano, ytdMeta],
@@ -246,19 +244,16 @@ export function SlideGastosTotaisGerentes({ rowsUnidadeCons, orcamentoAno, unida
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-4">
           {/* Gráfico principal — linhas suavizadas, AVR mensal x Meta */}
           <div className="rounded-2xl bg-white shadow dark:bg-slate-800/60 p-5 lg:col-span-3">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-400">
-                Gastos Totais % — Acompanhamento Mensal — {ano}
-              </p>
-              <CurvaCapturaToggle mostrar={mostrarCurva} onChange={setMostrarCurva} idPrefix="sdg-gerentes-gastos-totais" />
-            </div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-400">
+              Gastos Totais % — Acompanhamento Mensal — {ano}
+            </p>
             <IndicadorChart
               serie={serieAnual}
               gradientId="sdg-gerentes-gastos-totais"
               natureza={INFO.natureza}
               nomeSerie="Realizado"
               serieCaptura={serieCaptura}
-              mostrarCurvaCaptura={mostrarCurva}
+              mostrarCurvaCaptura
             />
           </div>
 

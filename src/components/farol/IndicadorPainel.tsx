@@ -3,7 +3,6 @@ import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { PillToggle } from '@/components/ui/pill-toggle'
 import { IndicadorChart } from '@/components/farol/IndicadorChart'
-import { CapturaChart } from '@/components/farol/CapturaChart'
 import { calcularImpactoFinanceiro, type SeriePontoCaptura, type SeriePontoMensal } from '@/lib/farol-calculations'
 import { formatCurrencyInteiro } from '@/lib/utils'
 import type { Natureza } from '@/types'
@@ -59,10 +58,9 @@ export function IndicadorPainel({ indicadores, ano, nomeSerie, nomeMeta, formatt
 
   const atual = indicadores.find(i => i.codigo === selecionado) ?? indicadores[0]
 
-  // Receita média dos meses já realizados na curva de captura — usada só
-  // pra estimar o impacto (R$) do ritmo necessário nos meses futuros, que
-  // não têm receita própria ainda (sem DRE importado). Aproximação: assume
-  // que a receita futura segue perto da média já realizada no ano.
+  // Fallback só pro caso raro de `calcularSerieCaptura` não ter achado a
+  // receita orçada de algum mês específico (normalmente ela vem preenchida
+  // mês a mês, inclusive nos futuros — ver `SeriePontoCaptura.receita`).
   const receitaMediaCaptura = useMemo(() => {
     if (!atual) return 0
     const valores = atual.serieCaptura.map(p => p.receita).filter((v): v is number => v !== null && v !== undefined)
@@ -87,9 +85,13 @@ export function IndicadorPainel({ indicadores, ano, nomeSerie, nomeMeta, formatt
       avrRealizado: p.avrRealizado === null || p.receita == null
         ? null
         : calcularImpactoFinanceiro(p.avrRealizado, p.metaAnual, p.receita, atual.natureza),
+      // Teto de gasto (ou alvo, pra performance) em R$ daquele mês — não um
+      // gap contra a meta: o Necessário já É a meta ajustada, então o gap
+      // dele contra a própria meta é quase sempre pertinho de zero, não
+      // importa a gravidade real (ver farol-calculations.ts, calcularSerieCaptura).
       avrNecessario: p.avrNecessario === null
         ? null
-        : calcularImpactoFinanceiro(p.avrNecessario, p.metaAnual, receitaMediaCaptura, atual.natureza),
+        : (p.avrNecessario / 100) * (p.receita ?? receitaMediaCaptura),
       metaAnual: 0,
     }))
   }, [atual, modoImpacto, receitaMediaCaptura])
@@ -103,6 +105,7 @@ export function IndicadorPainel({ indicadores, ano, nomeSerie, nomeMeta, formatt
   const naturezaExibida: Natureza = modoImpacto ? 'performance' : atual.natureza
   const formatterExibido = modoImpacto ? formatCurrencyInteiro : formatter
   const nomeSerieExibido = modoImpacto ? 'Impacto Financeiro' : nomeSerie
+  const curvaDisponivel = atual.serieCaptura.length > 0
 
   return (
     <Card className="p-6">
@@ -122,28 +125,18 @@ export function IndicadorPainel({ indicadores, ano, nomeSerie, nomeMeta, formatt
         </div>
       </div>
 
-      <div className="space-y-8">
-        <div>
-          <div className="mb-2 text-sm font-medium text-muted-foreground">Acompanhamento mensal</div>
-          <IndicadorChart
-            serie={serieAnualExibida}
-            gradientId={`grad-mensal-${atual.codigo}`}
-            natureza={naturezaExibida}
-            nomeSerie={nomeSerieExibido}
-            formatter={formatterExibido}
-          />
-        </div>
-
-        <div>
-          <div className="mb-2 text-sm font-medium text-muted-foreground">Curva de captura da meta anual</div>
-          <CapturaChart
-            serie={serieCapturaExibida}
-            natureza={naturezaExibida}
-            nomeSerie={nomeSerieExibido}
-            nomeMeta={nomeMeta}
-            formatter={formatterExibido}
-          />
-        </div>
+      <div>
+        <div className="mb-2 text-sm font-medium text-muted-foreground">Acompanhamento mensal</div>
+        <IndicadorChart
+          serie={serieAnualExibida}
+          gradientId={`grad-mensal-${atual.codigo}`}
+          natureza={naturezaExibida}
+          nomeSerie={nomeSerieExibido}
+          nomeMeta={nomeMeta}
+          formatter={formatterExibido}
+          serieCaptura={serieCapturaExibida}
+          mostrarCurvaCaptura={curvaDisponivel}
+        />
       </div>
 
       <p className="mt-2 text-right text-[0.65rem] text-muted-foreground">
