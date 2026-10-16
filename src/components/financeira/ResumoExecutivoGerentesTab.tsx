@@ -15,6 +15,10 @@ import { cn } from '@/lib/utils'
 const ANO_ATUAL = new Date().getFullYear()
 const ANOS_OPCOES = [ANO_ATUAL + 1, ANO_ATUAL, ANO_ATUAL - 1]
 const MESES_NOMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+/** Mês/ano inicial = mês anterior ao atual (normalmente é o mês que acabou de fechar, ainda sendo preenchido) — mesma regra de `SdgGerentesPage.tsx`. */
+const MES_ATUAL = new Date().getMonth() + 1
+const MES_INICIAL = MES_ATUAL === 1 ? 12 : MES_ATUAL - 1
+const ANO_MES_INICIAL = MES_ATUAL === 1 ? ANO_ATUAL - 1 : ANO_ATUAL
 
 type CampoBloco = 'pontos_positivos' | 'pontos_negativos' | 'pontos_atencao' | 'pontos_andamento'
 
@@ -44,8 +48,8 @@ export function ResumoExecutivoGerentesTab() {
   const unidadesFiltro = useMemo(() => unidades.filter(u => u.codigo !== 'AMBEV'), [unidades])
 
   const [selUnidade, setSelUnidade] = useState('')
-  const [ano, setAno] = useState(ANO_ATUAL)
-  const [mes, setMes] = useState(new Date().getMonth() + 1)
+  const [ano, setAno] = useState(ANO_MES_INICIAL)
+  const [mes, setMes] = useState(MES_INICIAL)
 
   useEffect(() => {
     if (selUnidade || unidadesFiltro.length === 0) return

@@ -112,6 +112,10 @@ export function PacoteDeFrotaDetalhado({ rowsUnidadeCons, orcamentoAno, unidade,
         rotuloPercentual="% da Frota"
         nomesConta={nomesConta}
         mes={mes}
+        ano={ano}
+        unidade={unidade}
+        negocio={negocio}
+        orcamentoAno={orcamentoAno}
       />
 
       <Separador titulo="PNEUS" />
@@ -133,6 +137,10 @@ export function PacoteDeFrotaDetalhado({ rowsUnidadeCons, orcamentoAno, unidade,
         rotuloPercentual="% da Frota"
         nomesConta={nomesConta}
         mes={mes}
+        ano={ano}
+        unidade={unidade}
+        negocio={negocio}
+        orcamentoAno={orcamentoAno}
       />
 
       {/* Sem BlocoPacote aqui — "Outros Gastos com Frota" é um recorte do
@@ -149,6 +157,10 @@ export function PacoteDeFrotaDetalhado({ rowsUnidadeCons, orcamentoAno, unidade,
         rotuloPercentual="% da Frota"
         nomesConta={nomesConta}
         mes={mes}
+        ano={ano}
+        unidade={unidade}
+        negocio={negocio}
+        orcamentoAno={orcamentoAno}
       />
       <AcompanhamentoConta
         rowsAno={rowsAno}

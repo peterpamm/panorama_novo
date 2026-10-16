@@ -7,6 +7,7 @@ import {
   normalizarParaCalculo, type Semaforo,
 } from '@/lib/farol-calculations'
 import { buscarMetaOrcamento } from '@/lib/orcamento-farol'
+import { buscarOrcadoContaFilha } from '@/lib/orcamento-conta-filha'
 import {
   COR_META, COR_META_DESTAQUE, COR_NEGATIVO, COR_POSITIVO, MES_ABREV, TickComparativoAcumulado, domainComparativo, getChartColors,
   type BarraComparativo,
@@ -40,7 +41,9 @@ export interface LinhaAberturaConta {
   codigo: string
   realizado: number
   remunerado: number
-  /** remunerado - realizado, ambos em magnitude — negativo = estourou (gastou mais que o remunerado, ruim), positivo = gastou menos (bom) — mesma convenção de sinal de `calcularImpactoFinanceiro` (meta - realizado) usada no resto do app. */
+  /** Orçado (R$) dessa conta-filha específica — ver `buscarOrcadoContaFilha` (orcamento-conta-filha.ts). 0 quando a conta não tem orçado cadastrado/mapeado pra essa unidade (nunca null — pedido explícito: "contas que não tem orçado mostra 0, sem problema"). */
+  orcado: number
+  /** (orçado ou remunerado, conforme o toggle ativo) - realizado — negativo = estourou, positivo = gastou menos (bom) — mesma convenção de sinal de `calcularImpactoFinanceiro` (meta - realizado) usada no resto do app. */
   delta: number
   /** % do realizado dessa conta sobre o realizado-base informado pelo chamador (normalmente o pacote-mãe de topo, não a conta-mãe imediata — ver `TabelaAberturaConta`). */
   percentualDoCusto: number
@@ -50,24 +53,31 @@ export interface ContaBruta {
   codigo: string
   realizado: number
   remunerado: number
+  orcado: number
 }
 
 /**
  * Agrupa uma lista de contas (não precisa ser uma faixa contígua) por
- * `conta_codigo` (soma REAL em `realizado`, REMUN em `remunerado`) — não
- * reaproveita `agregarPorConta` (top-contas.ts) de propósito: aquela função
- * expõe `gap` = soma do DIF bruto (sinal original, pré-abs), que pra essa
- * tabela daria um delta diferente do que faz sentido aqui (remunerado -
- * realizado, os dois já em magnitude, mesma convenção "positivo é bom" do
- * resto do app). Contas zeradas (sem realizado nem remunerado) saem fora.
+ * `conta_codigo` (soma REAL em `realizado`, REMUN em `remunerado`, e busca
+ * o Orçado em `orcadoPorConta` — mapa pré-calculado pelo chamador, ver
+ * `TabelaAberturaConta`) — não reaproveita `agregarPorConta` (top-contas.ts)
+ * de propósito: aquela função expõe `gap` = soma do DIF bruto (sinal
+ * original, pré-abs), que pra essa tabela daria um delta diferente do que
+ * faz sentido aqui (comparativo - realizado, ambos já em magnitude, mesma
+ * convenção "positivo é bom" do resto do app). Contas zeradas (sem
+ * realizado nem remunerado) saem fora.
  */
-export function agruparContasBrutas(calc: DreCalculoRow[], codigos: readonly number[]): ContaBruta[] {
+export function agruparContasBrutas(
+  calc: DreCalculoRow[],
+  codigos: readonly number[],
+  orcadoPorConta: Map<string, number> = new Map(),
+): ContaBruta[] {
   const alvo = new Set(codigos)
   const porConta = new Map<string, ContaBruta>()
   for (const r of calc) {
     const num = Number(r.conta_codigo)
     if (!Number.isInteger(num) || !alvo.has(num)) continue
-    const atual = porConta.get(r.conta_codigo) ?? { codigo: r.conta_codigo, realizado: 0, remunerado: 0 }
+    const atual = porConta.get(r.conta_codigo) ?? { codigo: r.conta_codigo, realizado: 0, remunerado: 0, orcado: orcadoPorConta.get(r.conta_codigo) ?? 0 }
     atual.realizado += r.real
     atual.remunerado += r.remun
     porConta.set(r.conta_codigo, atual)
@@ -82,26 +92,32 @@ export interface GrupoAberturaConta {
   codigos: readonly number[]
 }
 
-/** Como `agruparContasBrutas`, mas agrupando por `GrupoAberturaConta.rotulo` em vez de por `conta_codigo` — soma todos os códigos de cada grupo numa única linha. Usado quando a mesma "conta" de negócio existe com códigos diferentes em duas árvores do DRE que precisam ser somadas pra dar o valor consolidado. */
-export function agruparContasBrutasPorGrupo(calc: DreCalculoRow[], grupos: readonly GrupoAberturaConta[]): ContaBruta[] {
+/** Como `agruparContasBrutas`, mas agrupando por `GrupoAberturaConta.rotulo` em vez de por `conta_codigo` — soma todos os códigos de cada grupo numa única linha (realizado, remunerado E orçado). Usado quando a mesma "conta" de negócio existe com códigos diferentes em duas árvores do DRE que precisam ser somadas pra dar o valor consolidado. */
+export function agruparContasBrutasPorGrupo(
+  calc: DreCalculoRow[],
+  grupos: readonly GrupoAberturaConta[],
+  orcadoPorConta: Map<string, number> = new Map(),
+): ContaBruta[] {
   return grupos
     .map(g => {
-      const brutas = agruparContasBrutas(calc, g.codigos)
+      const brutas = agruparContasBrutas(calc, g.codigos, orcadoPorConta)
       return {
         codigo: g.rotulo,
         realizado: brutas.reduce((acc, c) => acc + c.realizado, 0),
         remunerado: brutas.reduce((acc, c) => acc + c.remunerado, 0),
+        orcado: brutas.reduce((acc, c) => acc + c.orcado, 0),
       }
     })
     .filter(c => c.realizado !== 0 || c.remunerado !== 0)
 }
 
-export function comPercentualEDelta(brutas: ContaBruta[], realizadoMae: number): LinhaAberturaConta[] {
+export function comPercentualEDelta(brutas: ContaBruta[], realizadoMae: number, comparativo: 'orcado' | 'remunerado' = 'orcado'): LinhaAberturaConta[] {
   return brutas.map(c => ({
     codigo: c.codigo,
     realizado: c.realizado,
     remunerado: c.remunerado,
-    delta: c.remunerado - c.realizado,
+    orcado: c.orcado,
+    delta: (comparativo === 'orcado' ? c.orcado : c.remunerado) - c.realizado,
     percentualDoCusto: realizadoMae === 0 ? 0 : (c.realizado / realizadoMae) * 100,
   }))
 }
@@ -563,6 +579,11 @@ export interface TabelaAberturaContaProps {
   maxLinhasVisiveis?: number
   nomesConta: Map<string, string>
   mes: number
+  ano: number
+  unidade: string
+  negocio: string
+  /** Orçamento da unidade/ano selecionado (qualquer negócio — a busca por conta-filha já filtra) — usado pra achar o Orçado de cada conta-filha (ver `buscarOrcadoContaFilha`). */
+  orcamentoAno: OrcamentoLinha[]
   /** Opcional — quando informado, cada linha vira clicável (cursor-pointer + destaque no hover), chamando com `l.codigo` (o código, em modo `codigos`; o rótulo do grupo, em modo `grupos`). Sem efeito nos chamadores que não passam isso (comportamento de antes). */
   onClickLinha?: (codigoOuRotulo: string) => void
 }
@@ -570,19 +591,22 @@ export interface TabelaAberturaContaProps {
 /**
  * Tabela de abertura por conta filha — Realizado (com barrinha horizontal
  * proporcional à maior conta), % do pacote (sobre o realizado do pacote de
- * topo inteiro, ver `realizadoMaeMes`/`realizadoMaeAno`), Remunerado e Delta.
- * Pareto (%-acumulado) não fazia sentido pra uma análise de custo, mais pra
- * volume/quantidade — troquei por essa tabela ordenável (maior custo primeiro
- * por padrão, seta ao lado de "Realizado" pra inverter). Mensal por padrão,
- * com um toggle pro YTD (acumulado Jan até o mês selecionado).
+ * topo inteiro, ver `realizadoMaeMes`/`realizadoMaeAno`), Orçado/Remunerado
+ * (toggle — ver `buscarOrcadoContaFilha`, conta sem orçado cadastrado
+ * mostra 0, não "—") e Delta. Pareto (%-acumulado) não fazia sentido pra
+ * uma análise de custo, mais pra volume/quantidade — troquei por essa
+ * tabela ordenável (maior custo primeiro por padrão, seta ao lado de
+ * "Realizado" pra inverter). Mensal por padrão, com um toggle pro YTD
+ * (acumulado Jan até o mês selecionado).
  */
-type ColunaAberturaConta = 'realizado' | 'percentualDoCusto' | 'remunerado' | 'delta'
+type ColunaAberturaConta = 'realizado' | 'percentualDoCusto' | 'orcado' | 'remunerado' | 'delta'
 
 export function TabelaAberturaConta({
   titulo, codigos, grupos, descricaoContas, calcMes, calcAno, realizadoMaeMes, realizadoMaeAno, rotuloPercentual = '% do Total',
-  linhasDestaque, maxLinhasVisiveis, nomesConta, mes, onClickLinha,
+  linhasDestaque, maxLinhasVisiveis, nomesConta, mes, ano, unidade, negocio, orcamentoAno, onClickLinha,
 }: TabelaAberturaContaProps) {
   const [periodo, setPeriodo] = useState<'mensal' | 'ytd'>('mensal')
+  const [comparativo, setComparativo] = useState<'orcado' | 'remunerado'>('orcado')
   const [colunaOrdenada, setColunaOrdenada] = useState<ColunaAberturaConta>('realizado')
   const [ordemAsc, setOrdemAsc] = useState(false)
   const calc = periodo === 'mensal' ? calcMes : calcAno
@@ -596,30 +620,69 @@ export function TabelaAberturaConta({
     else { setColunaOrdenada(coluna); setOrdemAsc(false) }
   }
 
+  // Troca o toggle Orçado/Remunerado e, se a ordenação atual era por uma
+  // dessas duas colunas, segue junto pra coluna nova — senão o usuário
+  // ficaria "ordenando por uma coluna escondida" sem perceber.
+  function alternarComparativo(novo: 'orcado' | 'remunerado') {
+    setComparativo(novo)
+    setColunaOrdenada(atual => (atual === 'orcado' || atual === 'remunerado') ? novo : atual)
+  }
+
+  const codigosNecessarios = useMemo(
+    () => grupos ? grupos.flatMap(g => g.codigos) : (codigos ?? []),
+    [grupos, codigos],
+  )
+
+  // Orçado de cada conta-filha — mensal busca só o mês selecionado, YTD soma
+  // Jan até o mês selecionado (mesma régua do `calc` mensal/acumulado acima).
+  const orcadoPorConta = useMemo(() => {
+    const mapa = new Map<string, number>()
+    const mesesParaSomar = periodo === 'mensal' ? [mes] : Array.from({ length: mes }, (_, i) => i + 1)
+    for (const codigoNum of codigosNecessarios) {
+      const codigoStr = String(codigoNum).padStart(3, '0')
+      let soma = 0
+      for (const m of mesesParaSomar) {
+        soma += buscarOrcadoContaFilha(orcamentoAno, { unidade, negocio, ano, mes: m }, codigoStr) ?? 0
+      }
+      mapa.set(codigoStr, soma)
+    }
+    return mapa
+  }, [orcamentoAno, unidade, negocio, ano, mes, periodo, codigosNecessarios])
+
   const brutas = useMemo(
-    () => grupos ? agruparContasBrutasPorGrupo(calc, grupos) : agruparContasBrutas(calc, codigos ?? []),
-    [calc, codigos, grupos],
+    () => grupos ? agruparContasBrutasPorGrupo(calc, grupos, orcadoPorConta) : agruparContasBrutas(calc, codigos ?? [], orcadoPorConta),
+    [calc, codigos, grupos, orcadoPorConta],
   )
   const totalDoGrupo = useMemo(() => brutas.reduce((acc, c) => acc + c.realizado, 0), [brutas])
   const realizadoMae = realizadoMaeExplicito ?? totalDoGrupo
 
   const linhas = useMemo(() => {
-    const base = comPercentualEDelta(brutas, realizadoMae)
+    const base = comPercentualEDelta(brutas, realizadoMae, comparativo)
     return [...base].sort((a, b) => ordemAsc ? a[colunaOrdenada] - b[colunaOrdenada] : b[colunaOrdenada] - a[colunaOrdenada])
-  }, [brutas, realizadoMae, ordemAsc, colunaOrdenada])
+  }, [brutas, realizadoMae, ordemAsc, colunaOrdenada, comparativo])
   const maiorRealizado = useMemo(() => Math.max(0, ...linhas.map(l => l.realizado)), [linhas])
+
+  const rotuloComparativo = comparativo === 'orcado' ? 'Orçado' : 'Remunerado'
 
   return (
     <TableCard
       titulo={titulo}
-      subtitulo={`Realizado × Remunerado por conta filha${descricaoContas ? ` (${descricaoContas})` : ''} — ${periodo === 'mensal' ? `M${mes}` : 'YTD — acumulado do ano'}`}
+      subtitulo={`Realizado × ${rotuloComparativo} por conta filha${descricaoContas ? ` (${descricaoContas})` : ''} — ${periodo === 'mensal' ? `M${mes}` : 'YTD — acumulado do ano'}`}
       acoes={
-        <PillToggle
-          variant="navy"
-          opcoes={[{ value: 'mensal', label: `M${mes}` }, { value: 'ytd', label: 'YTD' }] as const}
-          value={periodo}
-          onChange={setPeriodo}
-        />
+        <div className="flex items-center gap-2">
+          <PillToggle
+            variant="navy"
+            opcoes={[{ value: 'orcado', label: 'Orçado' }, { value: 'remunerado', label: 'Remunerado' }] as const}
+            value={comparativo}
+            onChange={alternarComparativo}
+          />
+          <PillToggle
+            variant="navy"
+            opcoes={[{ value: 'mensal', label: `M${mes}` }, { value: 'ytd', label: 'YTD' }] as const}
+            value={periodo}
+            onChange={setPeriodo}
+          />
+        </div>
       }
     >
       <div
@@ -643,9 +706,9 @@ export function TabelaAberturaConta({
               </button>
             </TableHead>
             <TableHead className="text-center">
-              <button type="button" onClick={() => alternarOrdenacao('remunerado')} className="inline-flex items-center gap-1 hover:opacity-80">
-                Remunerado
-                <ArrowUpDown className={cn('h-3 w-3', colunaOrdenada === 'remunerado' ? 'opacity-100' : 'opacity-50')} />
+              <button type="button" onClick={() => alternarOrdenacao(comparativo)} className="inline-flex items-center gap-1 hover:opacity-80">
+                {rotuloComparativo}
+                <ArrowUpDown className={cn('h-3 w-3', colunaOrdenada === comparativo ? 'opacity-100' : 'opacity-50')} />
               </button>
             </TableHead>
             <TableHead className="text-center">
@@ -680,7 +743,7 @@ export function TabelaAberturaConta({
                 </div>
               </TableCell>
               <TableCell className="text-center text-sm tabular-nums">{formatInteiroPtBr(l.realizado)}</TableCell>
-              <TableCell className="text-center text-sm tabular-nums">{formatInteiroPtBr(l.remunerado)}</TableCell>
+              <TableCell className="text-center text-sm tabular-nums">{formatInteiroPtBr(comparativo === 'orcado' ? l.orcado : l.remunerado)}</TableCell>
               <TableCell className={cn('text-center text-sm font-semibold tabular-nums', corGapRs(l.delta))}>
                 {formatInteiroPtBr(l.delta)}
               </TableCell>

@@ -96,6 +96,10 @@ export function SlidePacoteDeFrotaGerentes({ rowsUnidadeCons, orcamentoAno, unid
           maxLinhasVisiveis={12}
           nomesConta={nomesConta}
           mes={mes}
+          ano={ano}
+          unidade={unidade}
+          negocio={negocio}
+          orcamentoAno={orcamentoAno}
         />
       </div>
     </div>

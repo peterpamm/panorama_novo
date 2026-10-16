@@ -89,10 +89,10 @@ export function PlanoAcaoFormDialog({ open, onOpenChange, editando, isAdmin, min
     const existente = tags.find(t => t.sdg_indicador === indicadorGerentes)
     if (existente) return existente.nome
     const label = SDG_INDICADORES_GERENTES.find(i => i.id === indicadorGerentes)?.label ?? String(indicadorGerentes)
-    const { data, error } = await supabase.from('planos_acao_tags')
-      .insert({ nome: label, ativo: true, ordem: 0, sdg_indicador: indicadorGerentes })
-      .select()
-      .single()
+    // RPC (SECURITY DEFINER) em vez de insert direto: criar ação é liberado
+    // a qualquer usuário (migration_091), mas a RLS de `planos_acao_tags`
+    // continua admin-only (migration_084) — ver migration_130.
+    const { data, error } = await supabase.rpc('criar_tag_sdg_gerentes', { p_indicador: indicadorGerentes, p_nome: label }).single()
     if (error) throw new Error(error.message)
     onTagCriada?.()
     return (data as PlanoAcaoTag).nome

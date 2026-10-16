@@ -832,9 +832,11 @@ function PainelPiorUnidadePorConta({ rotulo, codigos, rowsFiltrado, unidades, an
  * calculado em memória a partir de `rowsFiltrado` (todas as unidades, já no
  * cache global), sem nenhuma busca nova.
  */
-function SecaoAberturaContaAmbev({ rowsFiltrado, unidades, ano, mes, nomesConta }: {
+function SecaoAberturaContaAmbev({ rowsFiltrado, orcamentosFiltrado, unidades, negocio, ano, mes, nomesConta }: {
   rowsFiltrado: DreLongoRow[]
+  orcamentosFiltrado: OrcamentoLinha[]
   unidades: Unidade[]
+  negocio: string
   ano: number
   mes: number
   nomesConta: Map<string, string>
@@ -883,6 +885,10 @@ function SecaoAberturaContaAmbev({ rowsFiltrado, unidades, ano, mes, nomesConta 
           maxLinhasVisiveis={12}
           nomesConta={nomesConta}
           mes={mes}
+          ano={ano}
+          unidade="AMBEV"
+          negocio={negocio}
+          orcamentoAno={orcamentosFiltrado}
           onClickLinha={setRotuloSelecionado}
         />
         <TabelaAberturaConta
@@ -898,6 +904,10 @@ function SecaoAberturaContaAmbev({ rowsFiltrado, unidades, ano, mes, nomesConta 
           maxLinhasVisiveis={12}
           nomesConta={nomesConta}
           mes={mes}
+          ano={ano}
+          unidade="AMBEV"
+          negocio={negocio}
+          orcamentoAno={orcamentosFiltrado}
           onClickLinha={setRotuloSelecionado}
         />
       </div>
@@ -1380,7 +1390,10 @@ export function PacoteDeGenteCorporativo({ rowsTodasUnidades, orcamentosTodasUni
         subtitulo={`Orçado/Remunerado × Realizado — resultado de ${MES_ABREV[mes]}/${ano} · clique numa coluna pra ordenar`}
       />
 
-      <SecaoAberturaContaAmbev rowsFiltrado={rowsFiltrado} unidades={unidades} ano={ano} mes={mes} nomesConta={nomesConta} />
+      <SecaoAberturaContaAmbev
+        rowsFiltrado={rowsFiltrado} orcamentosFiltrado={orcamentosFiltrado} unidades={unidades} negocio={negocio} ano={ano} mes={mes}
+        nomesConta={nomesConta}
+      />
 
       <SecaoSubPacote
         chave="036" titulo="Salários" tituloSeparador="SALÁRIOS" comSegmento baseTabelaInicial="orcado" comTabelaMensalPorUnidade

@@ -8,7 +8,7 @@ import type { OrcamentoLinha } from '@/types'
  * pacote que não seja EBITDA/Geração de Caixa, pra bater com a convenção do
  * resto do Farol (custo sempre positivo, "quanto menor melhor").
  */
-function ajustarSinal(codigo: string, valor: number): number {
+export function ajustarSinal(codigo: string, valor: number): number {
   return CODIGOS_PERFORMANCE.includes(codigo) ? valor : -valor
 }
 
@@ -53,7 +53,7 @@ function paraCodigoPreCutover(codigoAtual: string): string {
  * ≥ 200 (mesmo negócio/ano/unidade) é prova de que esse orçamento específico
  * já é nativo — os dois nunca colidem no mesmo unidade/negócio/ano.
  */
-function usaNumeracaoDreNativa(orcamentos: OrcamentoLinha[], unidade: string, negocio: string, ano: number): boolean {
+export function usaNumeracaoDreNativa(orcamentos: OrcamentoLinha[], unidade: string, negocio: string, ano: number): boolean {
   return orcamentos.some(o =>
     o.unidade === unidade && o.negocio === negocio && o.ano === ano && Number(o.conta_codigo) >= 200,
   )
@@ -75,7 +75,7 @@ function usaNumeracaoDreNativa(orcamentos: OrcamentoLinha[], unidade: string, ne
  * contas, então qualquer linha com código > 155 nessa unidade/negócio/ano já
  * prova que esse orçamento específico está deslocado.
  */
-function usaOrcamentoTtDeslocado(orcamentos: OrcamentoLinha[], unidade: string, negocio: string, ano: number): boolean {
+export function usaOrcamentoTtDeslocado(orcamentos: OrcamentoLinha[], unidade: string, negocio: string, ano: number): boolean {
   return orcamentos.some(o =>
     o.unidade === unidade && o.negocio === negocio && o.ano === ano && Number(o.conta_codigo) > 155,
   )
@@ -84,7 +84,7 @@ function usaOrcamentoTtDeslocado(orcamentos: OrcamentoLinha[], unidade: string, 
 /** Desloca +1 um código-alvo de PACOTE_CONTA_ORCAMENTO (esquema bespoke
  * antigo) pro equivalente na aba TT deslocada das unidades novas — inverso
  * de `paraCodigoPreCutover`, mas pro esquema bespoke, não pro DRE. */
-function paraCodigoTtDeslocado(codigo: string): string {
+export function paraCodigoTtDeslocado(codigo: string): string {
   const n = Number(codigo)
   if (!Number.isFinite(n) || n < 22 || n > 155) return codigo
   return String(n + 1).padStart(3, '0')

@@ -151,15 +151,129 @@ const CONTAS_ORCAMENTO_USADAS_TT_DESLOCADO = Object.values(PACOTE_CONTA_ORCAMENT
   })
 
 /**
+ * Código nativo do DRE (numeração atual, 283 contas) → código da planilha
+ * de Orçamento bespoke das unidades antigas (155 contas) — contas-FILHA
+ * (não pacote inteiro, ver `PACOTE_CONTA_ORCAMENTO` pra isso) usadas nas
+ * tabelas de Análise por Conta do SDG Gerentes/Análise Detalhada (Pacote
+ * de Gente, Pacote de Frota, Despesa Administrativa). Fica aqui (não em
+ * `orcamento-conta-filha.ts`, que importa de `orcamento-farol.ts`, que por
+ * sua vez importa deste arquivo) só pra não criar import circular — ver
+ * `buscarOrcadoContaFilha` em orcamento-conta-filha.ts pra como é usado.
+ *
+ * Montada comparando a DESCRIÇÃO de cada conta nos dois planos (não um
+ * offset numérico fixo — a diferença de contagem entre os dois planos não
+ * é uniforme, e várias contas do plano novo simplesmente não existiam
+ * separadas no antigo). Conferido célula a célula contra um DRE e um
+ * Orçamento reais (Diadema, 09/2026). Código nativo sem entrada aqui = o
+ * formato antigo nunca detalhou essa conta separadamente (fica sem orçado
+ * pra unidade antiga — 0, não é bug).
+ */
+export const CONTA_FILHA_ORCAMENTO_BESPOKE: Record<string, string> = {
+  // Pacote de Gente — lado operacional (036-079 nativo → 022-048 bespoke)
+  '036': '022', // SALÁRIOS E ORDENADOS
+  '039': '024', // INSS E PROVISÕES
+  '040': '025', // FGTS E PROVISÕES
+  '041': '026', // FÉRIAS E PROVISÕES
+  '042': '027', // DÉCIMO TERCEIRO SALÁRIO E PROVISÕES
+  '043': '028', // PROCESSOS TRABALHISTAS
+  '044': '029', // AVISO PRÉVIO
+  '049': '030', // FGTS S/ RESCISÕES
+  '055': '032', // VALES SINISTRO
+  '057': '034', // VALE REFEIÇÃO
+  '058': '035', // VALE TRANSPORTE
+  '059': '036', // PLANO DE SAÚDE
+  '060': '037', // CESTA BÁSICA
+  '061': '038', // CAFÉ DA MANHÃ
+  '062': '039', // SEGURO DE VIDA
+  '063': '040', // PLR – PARTICIPAÇÃO NOS RESULTADOS
+  '067': '041', // INCENTIVOS
+  '070': '043', // PCMSO/PPRA
+  '071': '044', // EXAMES MÉDICOS
+  '073': '045', // CURSOS E TREINAMENTOS
+  '075': '047', // EPI'S
+  '076': '048', // UNIFORMES
+
+  // Pacote de Gente / Despesa Administrativa — lado ADM (161-190 nativo → 080-095 bespoke)
+  '161': '080', // SALÁRIOS
+  '164': '082', // INSS E PROVISÕES
+  '165': '083', // FGTS E PROVISÕES
+  '166': '084', // FÉRIAS E PROVISÕES
+  '167': '085', // DÉCIMO TERCEIRO SALÁRIO E PROVISÕES
+  '170': '086', // CONTRIBUIÇÃO SINDICAL PATRONAL
+  '173': '088', // VALE REFEIÇÃO
+  '174': '089', // VALE TRANSPORTE
+  '175': '090', // PLANO DE SAÚDE
+  '176': '091', // CESTA BÁSICA
+  '177': '092', // AUXILIO EDUCAÇÃO
+  '181': '093', // CURSOS E TREINAMENTOS
+  '186': '095', // EXAMES MÉDICOS
+
+  // Despesa Administrativa Gerais (192-228 nativo → 097-128 bespoke)
+  '192': '097', // HONORÁRIOS PROFISSIONAIS
+  '193': '098', // DESPESA DE VIAGENS E HOSPEDAGENS
+  '194': '099', // SISTEMAS DE INFORMÁTICA
+  '195': '100', // ALUGUÉIS E CONDOMÍNIOS
+  '196': '101', // ENERGIA ELÉTRICA
+  '197': '102', // ÁGUA E ESGOTO
+  '198': '103', // TELEFONE
+  '199': '104', // INTERNET
+  '200': '105', // BENS DE PEQUENO VALOR
+  '201': '106', // MATERIAIS DE EXPEDIENTE
+  '202': '107', // MATERIAL DE LIMPEZA
+  '203': '108', // CORREIOS
+  '204': '109', // CARTÓRIO
+  '205': '110', // OUTRAS DESPESAS ADMINISTRATIVAS
+  '206': '111', // MANUTENÇÃO E REPAROS ADMINISTRATIVOS
+  '207': '112', // IMPRESSOS GRÁFICOS
+  '208': '113', // DESPESA C/TAXAS E IMPOSTOS
+  '209': '114', // CONFRATERNIZAÇÃO E EVENTOS
+  '210': '115', // DESPESAS LEGAIS E JUDICIAIS
+  '211': '116', // SEGURANÇA E VIGILÂNCIA
+  '212': '117', // LANCHES, REFEIÇÕES
+  '214': '118', // BRINDES DIVERSOS
+  '215': '119', // DESPESA C/MERCADO
+  '217': '120', // HONORÁRIOS COM CONSULTORIA DE OPERAÇÕES
+  '219': '122', // MANUTENÇÃO FROTA LEVE
+  '220': '123', // COMBUSTÍVEL FROTA LEVE
+  '222': '124', // ALUGUEL FROTA LEVE
+  '224': '125', // IPVA FROTA LEVE
+  '225': '126', // SEGURO FROTA LEVE
+  '226': '127', // PEDÁGIO FROTA LEVE
+  '227': '128', // LAVAÇÃO FROTA LEVE
+
+  // Pacote de Frota (119-152 nativo → 056-073 bespoke)
+  '119': '056', // MANUTENÇÃO DE VEÍCULOS PRÓPRIOS
+  '125': '057', // AVARIAS E SINISTROS
+  '133': '058', // PNEUS
+  '137': '060', // PEDÁGIOS
+  '138': '061', // MULTAS DE TRÂNSITO
+  '139': '062', // LAVAÇÃO
+  '141': '064', // IPVA/DPVAT E LICENCIAMENTOS
+  '142': '065', // SEGURO DE FROTA
+  '143': '066', // RASTREAMENTO
+  '146': '068', // MANUTENÇÃO DE RASTREADORES
+  '152': '073', // ALUGUEL DE EQUIPAMENTOS
+}
+
+/** Mesma regra de `CONTAS_ORCAMENTO_USADAS_TT_DESLOCADO`, aplicada aos valores de `CONTA_FILHA_ORCAMENTO_BESPOKE`. */
+const CONTAS_FILHA_ORCAMENTO_USADAS_TT_DESLOCADO = Object.values(CONTA_FILHA_ORCAMENTO_BESPOKE)
+  .map((codigo) => {
+    const n = Number(codigo)
+    return n >= 22 && n <= 155 ? String(n + 1).padStart(3, '0') : codigo
+  })
+
+/**
  * Códigos de conta do orçamento realmente usados por algum pacote do Farol:
  * todos os valores de PACOTE_CONTA_ORCAMENTO (esquema bespoke, unidades
  * antigas) + seus equivalentes deslocados na aba TT das unidades novas
  * (CONTAS_ORCAMENTO_USADAS_TT_DESLOCADO) + os prefixos de PACOTES (usados
  * direto pelas abas RT/AR das unidades novas, que já vêm na numeração
  * nativa do DRE — ver usaNumeracaoDreNativa) + a Receita Líquida
- * Operacional (denominador de qualquer AV/semestre). Usado pra recalcular
- * só o necessário em vez de todas as contas de cada aba — bem mais rápido e
- * mais leve pro Supabase.
+ * Operacional (denominador de qualquer AV/semestre) + as contas-FILHA de
+ * `CONTA_FILHA_ORCAMENTO_BESPOKE` (chaves = código nativo, usado direto
+ * pelas unidades novas; valores + deslocados = código bespoke, unidades
+ * antigas). Usado pra recalcular só o necessário em vez de todas as contas
+ * de cada aba — bem mais rápido e mais leve pro Supabase.
  */
 export const CONTAS_ORCAMENTO_USADAS = Array.from(
   new Set([
@@ -167,6 +281,9 @@ export const CONTAS_ORCAMENTO_USADAS = Array.from(
     ...Object.values(PACOTE_CONTA_ORCAMENTO).flat(),
     ...CONTAS_ORCAMENTO_USADAS_TT_DESLOCADO,
     ...Object.values(PACOTES).flatMap((p) => p.prefixos),
+    ...Object.keys(CONTA_FILHA_ORCAMENTO_BESPOKE),
+    ...Object.values(CONTA_FILHA_ORCAMENTO_BESPOKE),
+    ...CONTAS_FILHA_ORCAMENTO_USADAS_TT_DESLOCADO,
   ]),
 )
 

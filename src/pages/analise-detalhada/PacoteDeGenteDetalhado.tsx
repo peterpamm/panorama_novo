@@ -553,6 +553,10 @@ export function PacoteDeGenteDetalhado({
         linhasDestaque={['Incentivos']}
         nomesConta={nomesConta}
         mes={mes}
+        ano={ano}
+        unidade={unidade}
+        negocio={negocio}
+        orcamentoAno={orcamentoAno}
       />
 
       <Separador titulo="SEGURANÇA" />
@@ -574,6 +578,10 @@ export function PacoteDeGenteDetalhado({
         rotuloPercentual="Peso % no Pacote"
         nomesConta={nomesConta}
         mes={mes}
+        ano={ano}
+        unidade={unidade}
+        negocio={negocio}
+        orcamentoAno={orcamentoAno}
       />
 
       <Separador titulo="ENCARGOS" />
@@ -589,6 +597,10 @@ export function PacoteDeGenteDetalhado({
         linhasDestaque={['043']}
         nomesConta={nomesConta}
         mes={mes}
+        ano={ano}
+        unidade={unidade}
+        negocio={negocio}
+        orcamentoAno={orcamentoAno}
       />
       <AcompanhamentoConta
         rowsAno={rowsAno}
@@ -629,6 +641,10 @@ export function PacoteDeGenteDetalhado({
         rotuloPercentual="Peso % no Pacote"
         nomesConta={nomesConta}
         mes={mes}
+        ano={ano}
+        unidade={unidade}
+        negocio={negocio}
+        orcamentoAno={orcamentoAno}
       />
     </div>
   )

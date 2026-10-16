@@ -358,6 +358,10 @@ export function SlideDespesaAdministrativaGerentes({ rowsUnidadeCons, orcamentoA
             maxLinhasVisiveis={12}
             nomesConta={nomesConta}
             mes={mes}
+            ano={ano}
+            unidade={unidade}
+            negocio={negocio}
+            orcamentoAno={orcamentoAno}
           />
           <TabelaAberturaConta
             titulo="Despesas ADM Gerais"
@@ -370,6 +374,10 @@ export function SlideDespesaAdministrativaGerentes({ rowsUnidadeCons, orcamentoA
             maxLinhasVisiveis={12}
             nomesConta={nomesConta}
             mes={mes}
+            ano={ano}
+            unidade={unidade}
+            negocio={negocio}
+            orcamentoAno={orcamentoAno}
           />
         </div>
       </div>
