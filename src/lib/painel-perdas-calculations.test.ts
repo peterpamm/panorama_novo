@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calcularMatrizPerdas } from './painel-perdas-calculations'
+import { calcularMatrizPerdas, faturamentoMes, INDICADORES_PERDAS, valorIndicadorUnidadeMes } from './painel-perdas-calculations'
 import type { DreLongoRow, MetaPerdaIndicador, PainelPerdasAux } from '@/types'
 
 function rowDre(override: Partial<DreLongoRow>): DreLongoRow {
@@ -12,7 +12,7 @@ function rowDre(override: Partial<DreLongoRow>): DreLongoRow {
 }
 
 function rowAux(override: Partial<PainelPerdasAux>): PainelPerdasAux {
-  return { unidade: 'FOZ', ano: 2025, mes: 1, indicador: 'indisponibilidade', valor: -100, ...override }
+  return { unidade: 'FOZ', negocio: 'CONS', ano: 2025, mes: 1, indicador: 'indisponibilidade', valor: -100, ...override }
 }
 
 describe('calcularMatrizPerdas', () => {
@@ -180,5 +180,68 @@ describe('calcularMatrizPerdas', () => {
     const r = calcularMatrizPerdas(dre, [], metas, 2026, [1])
     const linhaMetaRs = r.linhas.find(l => l.tipo === 'meta_rs')!
     expect(linhaMetaRs.valores['ARA']).toBeCloseTo(-1000) // -12000/12 * 1
+  })
+})
+
+describe('valorIndicadorUnidadeMes', () => {
+  const indAux = INDICADORES_PERDAS.find(i => i.key === 'indisponibilidade')!
+  const indDre = INDICADORES_PERDAS.find(i => i.key === 'vales')!
+
+  it('AUX sem negocio informado soma todos os negócios (comportamento de sempre)', () => {
+    const aux = [
+      rowAux({ unidade: 'CAMACARI', negocio: 'ROTA', valor: -100 }),
+      rowAux({ unidade: 'CAMACARI', negocio: 'ARM', valor: -50 }),
+    ]
+    expect(valorIndicadorUnidadeMes([], aux, indAux, 'CAMACARI', 2025, 1)).toBeCloseTo(-150)
+  })
+
+  it('AUX com negocio="CONS" também soma todos os negócios', () => {
+    const aux = [
+      rowAux({ unidade: 'CAMACARI', negocio: 'ROTA', valor: -100 }),
+      rowAux({ unidade: 'CAMACARI', negocio: 'ARM', valor: -50 }),
+    ]
+    expect(valorIndicadorUnidadeMes([], aux, indAux, 'CAMACARI', 2025, 1, 'CONS')).toBeCloseTo(-150)
+  })
+
+  it('AUX com negocio="ROTA" só soma a linha do CDL, não vaza o CDR pro gerente errado', () => {
+    const aux = [
+      rowAux({ unidade: 'CAMACARI', negocio: 'ROTA', valor: -100 }),
+      rowAux({ unidade: 'CAMACARI', negocio: 'ARM', valor: -50 }),
+    ]
+    expect(valorIndicadorUnidadeMes([], aux, indAux, 'CAMACARI', 2025, 1, 'ROTA')).toBeCloseTo(-100)
+    expect(valorIndicadorUnidadeMes([], aux, indAux, 'CAMACARI', 2025, 1, 'ARM')).toBeCloseTo(-50)
+  })
+
+  it('DRE sem negocio informado usa CONS (unidade inteira, comportamento de sempre)', () => {
+    const dre = [rowDre({ unidade: 'CAMACARI', negocio: 'CONS', conta_codigo: '052', diferenca: -300 })]
+    expect(valorIndicadorUnidadeMes(dre, [], indDre, 'CAMACARI', 2025, 1)).toBeCloseTo(-300)
+  })
+
+  it('DRE com negocio="ROTA" busca só o DRE daquele negócio, não o CONS da unidade inteira', () => {
+    const dre = [
+      rowDre({ unidade: 'CAMACARI', negocio: 'CONS', conta_codigo: '052', diferenca: -300 }),
+      rowDre({ unidade: 'CAMACARI', negocio: 'ROTA', conta_codigo: '052', diferenca: -120 }),
+      rowDre({ unidade: 'CAMACARI', negocio: 'ARM', conta_codigo: '052', diferenca: -180 }),
+    ]
+    expect(valorIndicadorUnidadeMes(dre, [], indDre, 'CAMACARI', 2025, 1, 'ROTA')).toBeCloseTo(-120)
+    expect(valorIndicadorUnidadeMes(dre, [], indDre, 'CAMACARI', 2025, 1, 'ARM')).toBeCloseTo(-180)
+    expect(valorIndicadorUnidadeMes(dre, [], indDre, 'CAMACARI', 2025, 1, 'CONS')).toBeCloseTo(-300)
+  })
+})
+
+describe('faturamentoMes', () => {
+  it('default (sem negocio) usa CONS, comportamento de sempre', () => {
+    const dre = [rowDre({ unidade: 'CAMACARI', negocio: 'CONS', conta_codigo: '001', remunerado: -90000 })]
+    expect(faturamentoMes(dre, 'CAMACARI', 2025, 1)).toBeCloseTo(90000)
+  })
+
+  it('com negocio informado, usa o faturamento só daquele negócio (denominador bate com o Realizado filtrado)', () => {
+    const dre = [
+      rowDre({ unidade: 'CAMACARI', negocio: 'CONS', conta_codigo: '001', remunerado: -90000 }),
+      rowDre({ unidade: 'CAMACARI', negocio: 'ROTA', conta_codigo: '001', remunerado: -50000 }),
+      rowDre({ unidade: 'CAMACARI', negocio: 'ARM', conta_codigo: '001', remunerado: -40000 }),
+    ]
+    expect(faturamentoMes(dre, 'CAMACARI', 2025, 1, 'ROTA')).toBeCloseTo(50000)
+    expect(faturamentoMes(dre, 'CAMACARI', 2025, 1, 'ARM')).toBeCloseTo(40000)
   })
 })

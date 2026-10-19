@@ -195,13 +195,14 @@ export function JustificativasSdgTab() {
     const { error } = await supabase.from('sdg_justificativas').upsert(
       {
         unidade: selUnidade,
+        negocio: 'CONS',
         ano,
         mes,
         indicador,
         pontos_positivos: rascunho.pontos_positivos.trim(),
         pontos_negativos: rascunho.pontos_negativos.trim(),
       },
-      { onConflict: 'unidade,ano,mes,indicador' },
+      { onConflict: 'unidade,negocio,ano,mes,indicador' },
     )
     setSalvando(null)
     if (error) {
@@ -231,6 +232,7 @@ export function JustificativasSdgTab() {
       const { error: erroUpsert } = await supabase.from('sdg_justificativas').upsert(
         {
           unidade: selUnidade,
+          negocio: 'CONS',
           ano,
           mes,
           indicador,
@@ -238,7 +240,7 @@ export function JustificativasSdgTab() {
           pontos_negativos: rascunho.pontos_negativos.trim(),
           print_path: path,
         },
-        { onConflict: 'unidade,ano,mes,indicador' },
+        { onConflict: 'unidade,negocio,ano,mes,indicador' },
       )
       if (erroUpsert) throw erroUpsert
 

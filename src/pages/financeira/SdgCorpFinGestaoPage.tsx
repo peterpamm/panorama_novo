@@ -25,7 +25,7 @@ export function SdgCorpFinGestaoPage() {
 
       <Tabs defaultValue="assuntos-gerais">
         <TabsList>
-          <TabsTrigger value="assuntos-gerais">Assuntos Gerais</TabsTrigger>
+          <TabsTrigger value="assuntos-gerais">Resumo Executivo</TabsTrigger>
           <TabsTrigger value="lucro">Lucro</TabsTrigger>
         </TabsList>
 

@@ -265,6 +265,9 @@ export const MODELO_PAINEL_PERDAS_AUX: AbaModelo[] = [
       ['INDICADOR', 'NEGOCIO', 'ANO', 'MES', 'UNIDADE', 'VALOR'],
       ['Indisponibilidade', 'CONS', 2026, 1, 'FOZ', '2,35'],
       ['Devolução', 'CONS', 2026, 1, 'FOZ', '1,10'],
+      // Unidade com 2 gerentes (ex: Camaçari) — uma linha por negócio, CDL=Rota/CDR=Armazém.
+      ['Indisponibilidade', 'CDL', 2026, 1, 'CAMACARI', '3,10'],
+      ['Indisponibilidade', 'CDR', 2026, 1, 'CAMACARI', '1,80'],
     ],
   },
 ]

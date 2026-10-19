@@ -4,6 +4,8 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { useUnidades } from '@/hooks/useUnidades'
 import { useSdgJustificativas } from '@/hooks/useSdgJustificativas'
+import { opcoesNegocioSplit, unidadeSplitNegocio } from '@/lib/rv-gente'
+import { normalizarNomeUnidade } from '@/lib/unidade-resolver'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -39,10 +41,18 @@ const BLOCOS: { campo: CampoBloco; titulo: string; cor: string }[] = [
  * admin escolhe a unidade, usuário de unidade fica travado na própria (RLS
  * de `sdg_justificativas` já permite as duas). Um "Salvar" só, grava os 4
  * blocos juntos (mesmo upsert, 1 round-trip).
+ *
+ * Unidade com 2 gerentes reais (Camaçari: CDL=Rota/CDR=Armazém; Ponta
+ * Grossa: Empurrada/Armazém — Estância fica de fora, é 1 gerente só pros 2
+ * negócios) ganha um seletor extra de Negócio (ver `opcoesNegocio`) — cada
+ * negócio grava sua própria linha em `sdg_justificativas` (migration_132),
+ * senão um gerente sobrescrevia o texto do outro. Gerente real fica travado
+ * no próprio negócio (`rvNegocio`, mesmo campo que já trava a apresentação);
+ * admin escolhe livremente.
  */
 export function ResumoExecutivoGerentesTab() {
   const { toast } = useToast()
-  const { role, unidade: minhaUnidade } = useAuth()
+  const { role, unidade: minhaUnidade, rvNegocio } = useAuth()
   const isAdmin = role === 'admin'
   const { unidades } = useUnidades()
   const unidadesFiltro = useMemo(() => unidades.filter(u => u.codigo !== 'AMBEV'), [unidades])
@@ -57,7 +67,37 @@ export function ResumoExecutivoGerentesTab() {
     if (inicial) setSelUnidade(inicial)
   }, [unidadesFiltro, isAdmin, minhaUnidade, selUnidade])
 
-  const { porIndicador, loading, recarregar } = useSdgJustificativas(selUnidade, ano, mes)
+  const nomeUnidadeSel = unidades.find(u => u.codigo === selUnidade)?.nome ?? selUnidade
+
+  // Unidade com 2 gerentes reais (Camaçari: CDL=Rota/CDR=Armazém; Ponta
+  // Grossa: Empurrada/Armazém — Estância NÃO entra aqui, é 1 gerente só pros
+  // 2 negócios) precisa de um Resumo Executivo por negócio, senão um
+  // gerente sobrescreve o texto do outro (mesma régua de `opcoesNegocioSplit`
+  // já usada em Administração > Usuários pra travar a RV). Rótulo "CDL/CDR"
+  // (em vez de "Rota/Armazém") só pra Camaçari, igual já aparece no seletor
+  // de Unidade da apresentação (`SdgGerentesPage.tsx`).
+  const opcoesNegocio = useMemo(() => {
+    if (!unidadeSplitNegocio(selUnidade, nomeUnidadeSel)) return null
+    const opcoes = opcoesNegocioSplit(selUnidade, nomeUnidadeSel)
+    return normalizarNomeUnidade(nomeUnidadeSel).includes('CAMACARI')
+      ? opcoes.map(o => ({ valor: o.valor, label: o.valor === 'ROTA' ? 'CDL Camaçari' : 'CDR Bahia' }))
+      : opcoes
+  }, [selUnidade, nomeUnidadeSel])
+
+  // Gerente real (não-admin) de unidade com split fica travado no próprio
+  // negócio (`rvNegocio`, Administração > Usuários — mesmo campo que já
+  // trava a apresentação) — admin escolhe livremente qual dos dois está
+  // editando.
+  const negocioTravado = !isAdmin && opcoesNegocio ? rvNegocio : null
+  const [selNegocio, setSelNegocio] = useState('')
+  useEffect(() => {
+    if (!opcoesNegocio) { setSelNegocio(''); return }
+    if (negocioTravado) { setSelNegocio(negocioTravado); return }
+    if (!opcoesNegocio.some(o => o.valor === selNegocio)) setSelNegocio(opcoesNegocio[0].valor)
+  }, [opcoesNegocio, negocioTravado, selNegocio])
+  const negocioEfetivo = opcoesNegocio ? selNegocio : 'CONS'
+
+  const { porIndicador, loading, recarregar } = useSdgJustificativas(selUnidade, ano, mes, negocioEfetivo)
 
   const [textos, setTextos] = useState<Record<CampoBloco, string>>({
     pontos_positivos: '', pontos_negativos: '', pontos_atencao: '', pontos_andamento: '',
@@ -75,11 +115,12 @@ export function ResumoExecutivoGerentesTab() {
   const [salvando, setSalvando] = useState(false)
 
   async function salvar() {
-    if (!selUnidade) return
+    if (!selUnidade || (opcoesNegocio && !negocioEfetivo)) return
     setSalvando(true)
     const { error } = await supabase.from('sdg_justificativas').upsert(
       {
         unidade: selUnidade,
+        negocio: negocioEfetivo,
         ano,
         mes,
         indicador: 'assuntos-gerais-gerentes',
@@ -88,7 +129,7 @@ export function ResumoExecutivoGerentesTab() {
         pontos_atencao: textos.pontos_atencao.trim(),
         pontos_andamento: textos.pontos_andamento.trim(),
       },
-      { onConflict: 'unidade,ano,mes,indicador' },
+      { onConflict: 'unidade,negocio,ano,mes,indicador' },
     )
     setSalvando(false)
     if (error) {
@@ -98,8 +139,6 @@ export function ResumoExecutivoGerentesTab() {
     toast({ title: 'Resumo Executivo salvo' })
     await recarregar()
   }
-
-  const nomeUnidadeSel = unidades.find(u => u.codigo === selUnidade)?.nome ?? selUnidade
 
   return (
     <div className="space-y-6">
@@ -124,6 +163,26 @@ export function ResumoExecutivoGerentesTab() {
             <Label className="text-xs text-muted-foreground">Unidade</Label>
             <p className="flex h-9 items-center text-sm font-medium text-foreground">{nomeUnidadeSel}</p>
           </div>
+        )}
+        {opcoesNegocio && (
+          negocioTravado ? (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Negócio</Label>
+              <p className="flex h-9 items-center text-sm font-medium text-foreground">
+                {opcoesNegocio.find(o => o.valor === negocioTravado)?.label ?? negocioTravado}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Negócio</Label>
+              <Select value={selNegocio} onValueChange={setSelNegocio}>
+                <SelectTrigger className="w-40"><SelectValue placeholder="Negócio" /></SelectTrigger>
+                <SelectContent>
+                  {opcoesNegocio.map(o => <SelectItem key={o.valor} value={o.valor}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          )
         )}
         <div className="space-y-1.5">
           <Label className="text-xs text-muted-foreground">Mês</Label>

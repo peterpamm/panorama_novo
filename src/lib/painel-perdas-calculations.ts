@@ -81,8 +81,13 @@ export function metaPerdasMensalTotalUnidade(
 }
 
 /**
- * Valor de UM indicador de Perdas pra uma unidade/mês — DRE usa `somaDif`
- * (sempre CONS), AUX soma `painel_perdas_aux`. Réplica exata de
+ * Valor de UM indicador de Perdas pra uma unidade/mês/negócio — DRE usa
+ * `somaDif` no DRE daquele negócio (`negocio` default 'CONS' = unidade
+ * inteira, comportamento de sempre), AUX soma `painel_perdas_aux` (com
+ * `negocio` diferente de 'CONS', filtra pela linha daquele negócio — unidade
+ * com 2 gerentes reais, ex: Camaçari, grava uma linha por negócio desde a
+ * migration_131; 'CONS' soma todos os negócios, já que AUX não tem uma linha
+ * 'CONS' de verdade pra unidade inteira). Réplica exata de
  * `valorIndicadorUnidadeMes` em `PainelPerdasPage.tsx` (mantida separada de
  * propósito — evita acoplar essa página, já complexa, a outros consumidores
  * como o SDG Gerentes; qualquer mudança de regra precisa espelhar as duas).
@@ -94,23 +99,27 @@ export function valorIndicadorUnidadeMes(
   unidade: string,
   ano: number,
   mes: number,
+  negocio: string = 'CONS',
 ): number | null {
   if (ind.fonte === 'AUX') {
     const indKey = ind.key as PainelPerdasAux['indicador']
-    const rows = rowsAux.filter(r => r.unidade === unidade && r.ano === ano && r.mes === mes && r.indicador === indKey)
+    const rows = rowsAux.filter(r =>
+      r.unidade === unidade && r.ano === ano && r.mes === mes && r.indicador === indKey
+      && (negocio === 'CONS' || r.negocio === negocio),
+    )
     return rows.length > 0 ? rows.reduce((acc, r) => acc + r.valor, 0) : null
   }
   const rowsU = rowsDre.filter(
-    r => r.unidade === unidade && r.negocio === 'CONS' && r.tipo_periodo === 'MENSAL' && r.ano === ano && r.mes === mes,
+    r => r.unidade === unidade && r.negocio === negocio && r.tipo_periodo === 'MENSAL' && r.ano === ano && r.mes === mes,
   )
   if (rowsU.length === 0) return null
   return somaDif(rowsU, ind.contas)
 }
 
-/** Faturamento (conta '001', REMUN em magnitude) de uma unidade/mês, CONS — mesmo denominador de `calcularMatrizPerdas` pro % de Perdas. null = sem dado no mês. */
-export function faturamentoMes(rowsDre: DreLongoRow[], unidade: string, ano: number, mes: number): number | null {
+/** Faturamento (conta '001', REMUN em magnitude) de uma unidade/mês — `negocio` default 'CONS' (unidade inteira, mesmo denominador de `calcularMatrizPerdas` pro % de Perdas); unidade com 2 gerentes reais pode pedir o faturamento só do próprio negócio (ROTA/ARM/EMP), pro % de Perdas bater com o Realizado também filtrado. null = sem dado no mês. */
+export function faturamentoMes(rowsDre: DreLongoRow[], unidade: string, ano: number, mes: number, negocio: string = 'CONS'): number | null {
   const rows = rowsDre.filter(
-    r => r.unidade === unidade && r.negocio === 'CONS' && r.tipo_periodo === 'MENSAL' && r.ano === ano && r.mes === mes && r.conta_codigo.startsWith('001'),
+    r => r.unidade === unidade && r.negocio === negocio && r.tipo_periodo === 'MENSAL' && r.ano === ano && r.mes === mes && r.conta_codigo.startsWith('001'),
   )
   if (rows.length === 0) return null
   return rows.reduce((acc, r) => acc + Math.abs(r.remunerado ?? 0), 0)

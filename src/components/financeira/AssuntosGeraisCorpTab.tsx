@@ -8,17 +8,32 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/components/ui/use-toast'
+import { cn } from '@/lib/utils'
 
 const ANO_ATUAL = new Date().getFullYear()
 const ANOS_OPCOES = [ANO_ATUAL + 1, ANO_ATUAL, ANO_ATUAL - 1]
 const MESES_NOMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
 
+type CampoBloco = 'pontos_positivos' | 'pontos_negativos' | 'pontos_atencao' | 'pontos_andamento'
+
+const BLOCOS: { campo: CampoBloco; titulo: string; cor: string }[] = [
+  { campo: 'pontos_positivos', titulo: 'Pontos Positivos', cor: 'bg-emerald-500' },
+  { campo: 'pontos_negativos', titulo: 'Pontos Negativos', cor: 'bg-red-500' },
+  { campo: 'pontos_atencao', titulo: 'Pontos de Atenção', cor: 'bg-orange-500' },
+  { campo: 'pontos_andamento', titulo: 'Pontos em Andamento', cor: 'bg-blue-500' },
+]
+
 /**
- * Assuntos Gerais do SDG Corporativo — mesma tabela `sdg_justificativas` do
- * SDG Financeiro, só que com `unidade = 'AMBEV'` (sentinela do consolidado —
- * nunca usado como unidade de verdade em nenhuma tela do SDG Financeiro, que
- * sempre a exclui da lista de unidades). Aparece por último, bem
- * centralizado, no modo apresentação corporativo.
+ * Resumo Executivo do SDG Corporativo — era "Assuntos Gerais" (só
+ * `pontos_positivos`, texto livre), virou os mesmos 4 blocos do Resumo
+ * Executivo do SDG Gerentes (`ResumoExecutivoGerentesTab.tsx`), mesmo
+ * indicador `assuntos-gerais` de sempre (sem migração — só passa a gravar
+ * os 3 campos novos, que já existem na tabela desde a migration 121). Mesma
+ * tabela `sdg_justificativas` do SDG Financeiro, com `unidade = 'AMBEV'`
+ * (sentinela do consolidado — nunca usado como unidade de verdade em
+ * nenhuma tela do SDG Financeiro, que sempre a exclui da lista de
+ * unidades). Agora é o PRIMEIRO slide no modo apresentação corporativo
+ * (antes era o último).
  */
 export function AssuntosGeraisCorpTab() {
   const { toast } = useToast()
@@ -27,9 +42,17 @@ export function AssuntosGeraisCorpTab() {
 
   const { porIndicador, loading, recarregar } = useSdgJustificativas('AMBEV', ano, mes)
 
-  const [texto, setTexto] = useState('')
+  const [textos, setTextos] = useState<Record<CampoBloco, string>>({
+    pontos_positivos: '', pontos_negativos: '', pontos_atencao: '', pontos_andamento: '',
+  })
   useEffect(() => {
-    setTexto(porIndicador['assuntos-gerais']?.pontos_positivos ?? '')
+    const atual = porIndicador['assuntos-gerais']
+    setTextos({
+      pontos_positivos: atual?.pontos_positivos ?? '',
+      pontos_negativos: atual?.pontos_negativos ?? '',
+      pontos_atencao: atual?.pontos_atencao ?? '',
+      pontos_andamento: atual?.pontos_andamento ?? '',
+    })
   }, [porIndicador])
 
   const [salvando, setSalvando] = useState(false)
@@ -39,28 +62,31 @@ export function AssuntosGeraisCorpTab() {
     const { error } = await supabase.from('sdg_justificativas').upsert(
       {
         unidade: 'AMBEV',
+        negocio: 'CONS',
         ano,
         mes,
         indicador: 'assuntos-gerais',
-        pontos_positivos: texto.trim(),
-        pontos_negativos: '',
+        pontos_positivos: textos.pontos_positivos.trim(),
+        pontos_negativos: textos.pontos_negativos.trim(),
+        pontos_atencao: textos.pontos_atencao.trim(),
+        pontos_andamento: textos.pontos_andamento.trim(),
       },
-      { onConflict: 'unidade,ano,mes,indicador' },
+      { onConflict: 'unidade,negocio,ano,mes,indicador' },
     )
     setSalvando(false)
     if (error) {
       toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' })
       return
     }
-    toast({ title: 'Assuntos Gerais salvos' })
+    toast({ title: 'Resumo Executivo salvo' })
     await recarregar()
   }
 
   return (
     <div className="space-y-6">
       <p className="max-w-2xl text-sm text-muted-foreground">
-        Assuntos que precisam de ajuda, ou outros assuntos importantes pra diretoria — aparece por último, bem
-        centralizado, no modo apresentação (SDG Corporativo).
+        Pontos Positivos, Negativos, de Atenção e em Andamento — aparece como o primeiro slide no modo apresentação
+        (SDG Corporativo). Um ponto por linha em cada bloco.
       </p>
 
       <Card className="flex flex-wrap items-end gap-4 p-4">
@@ -82,6 +108,10 @@ export function AssuntosGeraisCorpTab() {
             </SelectContent>
           </Select>
         </div>
+        <Button size="sm" onClick={salvar} disabled={salvando || loading} className="gap-2">
+          {salvando && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+          Salvar
+        </Button>
       </Card>
 
       {loading ? (
@@ -90,21 +120,21 @@ export function AssuntosGeraisCorpTab() {
           Carregando...
         </div>
       ) : (
-        <Card className="space-y-3 p-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground">Assuntos Gerais</h3>
-            <Button size="sm" onClick={salvar} disabled={salvando} className="gap-2">
-              {salvando && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              Salvar
-            </Button>
-          </div>
-          <Textarea
-            value={texto}
-            onChange={e => setTexto(e.target.value)}
-            placeholder="Um assunto por linha..."
-            className="min-h-[160px]"
-          />
-        </Card>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {BLOCOS.map(b => (
+            <Card key={b.campo} className="overflow-hidden">
+              <div className={cn('px-4 py-2 text-sm font-semibold uppercase tracking-wide text-white', b.cor)}>
+                {b.titulo}
+              </div>
+              <Textarea
+                value={textos[b.campo]}
+                onChange={e => setTextos(prev => ({ ...prev, [b.campo]: e.target.value }))}
+                placeholder="Um ponto por linha..."
+                className="min-h-[140px] rounded-none border-0 focus-visible:ring-0"
+              />
+            </Card>
+          ))}
+        </div>
       )}
     </div>
   )

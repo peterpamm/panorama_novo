@@ -7,8 +7,10 @@ import { useData } from '@/context/DataContext'
 import { useTheme } from '@/hooks/useTheme'
 import { useSdgJustificativas } from '@/hooks/useSdgJustificativas'
 import { useRelatosSeguranca } from '@/hooks/useRelatosSeguranca'
+import { disponibilidadesDaUnidade } from '@/lib/farol-gerentes'
 import { usePlanoAcaoTags, usePlanosAcao } from '@/hooks/usePlanosAcao'
 import { mapaLogosPorUnidade } from '@/lib/logos-unidades'
+import { CAMACARI_CDL_ID, CAMACARI_CDR_ID, CAMACARI_CODIGO } from '@/lib/ranking-calculations'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { SlideAberturaGerentes } from '@/pages/sdg/SlideAberturaGerentes'
 import { SlideReceitaGerentes } from '@/pages/sdg/SlideReceitaGerentes'
@@ -76,12 +78,12 @@ const SLIDES = [
  * jeito que o SDG Financeiro foi crescendo.
  */
 export function SdgGerentesPage() {
-  const { role, unidade: unidadeUsuario } = useAuth()
+  const { role, unidade: unidadeUsuario, rvNegocio } = useAuth()
   const { isDark, toggleTheme } = useTheme()
   const navigate = useNavigate()
 
   const [selUnidade, setSelUnidade] = useState('')
-  const [selNegocio, setSelNegocio] = useState<'CONS' | 'ROTA' | 'ARM'>('CONS')
+  const [selNegocio, setSelNegocio] = useState<'CONS' | 'ROTA' | 'ARM' | 'EMP'>('CONS')
   const [selAno, setSelAno] = useState(ANO_MES_INICIAL)
   const [selMes, setSelMes] = useState(MES_INICIAL)
   const [slideIdx, setSlideIdx] = useState(0)
@@ -105,7 +107,12 @@ export function SdgGerentesPage() {
 
   const logosPorUnidade = useMemo(() => mapaLogosPorUnidade(unidades), [unidades])
 
-  const { porIndicador: justificativas, loading: loadingJustificativas } = useSdgJustificativas(selUnidade, selAno, selMes)
+  // Resumo Executivo é por negócio em unidade com 2 gerentes reais (Camaçari/
+  // Ponta Grossa, ver ResumoExecutivoGerentesTab.tsx/migration_132) — passa o
+  // `selNegocio` direto (ROTA/ARM/EMP já é o mesmo valor gravado na edição);
+  // CONS não bate com nenhuma linha dessas unidades (de propósito — não tem
+  // "resumo combinado" dos dois gerentes, cada um só vê o próprio).
+  const { porIndicador: justificativas, loading: loadingJustificativas } = useSdgJustificativas(selUnidade, selAno, selMes, selNegocio)
   const { relatos, loading: loadingRelatos } = useRelatosSeguranca(selUnidade, selAno)
   // Só pro slide final "Plano de Ação" — mesmas tabelas/RLS já usadas em
   // Área Financeira > Plano de Ação, independentes do loading geral.
@@ -170,8 +177,62 @@ export function SdgGerentesPage() {
     return () => window.removeEventListener('keydown', onKey)
   }, [navigate])
 
-  const unidadesDisponiveis = unidades.filter(u => u.codigo !== 'AMBEV')
-  const nomeUnidade = unidades.find(u => u.codigo === selUnidade)?.nome ?? selUnidade
+  // Esse seletor só aparece pro admin (role === 'admin', ver abaixo) — Ambev
+  // entra aqui de propósito, pra admin conseguir ver o SDG consolidado dela.
+  const unidadesDisponiveis = unidades
+  const nomeUnidadeReal = unidades.find(u => u.codigo === selUnidade)?.nome ?? selUnidade
+
+  // Camaçari tem 2 gerentes reais e até logo separado por negócio (CDL
+  // Camaçari = Rota, CDR Bahia = Armazém — mesmos IDs sintéticos e rótulos
+  // já usados na página Ranking, ver ranking-calculations.ts/
+  // logos-unidades.ts) — o seletor de Unidade do admin mostra as 2 opções (+
+  // a Camaçari consolidada, pra quem quiser ver as duas juntas) em vez de só
+  // 1 entrada genérica, pra não depender do seletor de Negócio (separado)
+  // pra saber qual dos dois gerentes está sendo revisado. `subUnidadeCamacari`
+  // é null fora de Camaçari (ou Camaçari no Consolidado) — nesse caso tudo
+  // cai no comportamento normal (nome/logo/valor da unidade real).
+  const subUnidadeCamacari = selUnidade === CAMACARI_CODIGO
+    ? (selNegocio === 'ROTA' ? 'CDL' : selNegocio === 'ARM' ? 'CDR' : null)
+    : null
+  const nomeUnidade = subUnidadeCamacari === 'CDL' ? 'CDL Camaçari' : subUnidadeCamacari === 'CDR' ? 'CDR Bahia' : nomeUnidadeReal
+  const valorSelectUnidade = subUnidadeCamacari === 'CDL' ? CAMACARI_CDL_ID : subUnidadeCamacari === 'CDR' ? CAMACARI_CDR_ID : selUnidade
+  function selecionarUnidade(valor: string) {
+    if (valor === CAMACARI_CDL_ID) { setSelUnidade(CAMACARI_CODIGO); setSelNegocio('ROTA'); return }
+    if (valor === CAMACARI_CDR_ID) { setSelUnidade(CAMACARI_CODIGO); setSelNegocio('ARM'); return }
+    setSelUnidade(valor)
+  }
+  const itensSelectUnidade = unidadesDisponiveis.flatMap(u => u.codigo === CAMACARI_CODIGO
+    ? [
+        { value: CAMACARI_CDL_ID, label: 'CDL Camaçari' },
+        { value: CAMACARI_CDR_ID, label: 'CDR Bahia' },
+        { value: u.codigo, label: `${u.nome} (Consolidado)` },
+      ]
+    : [{ value: u.codigo, label: u.nome }])
+
+  // Negócios do seletor variam por unidade — a maioria é Rota+Armazém, mas
+  // Ponta Grossa/Estância são Empurrada+Armazém (nunca tiveram Rota, mesma
+  // regra de `disponibilidadesDaUnidade`, já usada no Farol Gerentes) e Rio
+  // de Janeiro é só Rota. Consolidado sempre aparece, pra qualquer unidade.
+  const negociosDisponiveis = useMemo(
+    () => ['CONS', ...disponibilidadesDaUnidade(nomeUnidade)] as const,
+    [nomeUnidade],
+  )
+  useEffect(() => {
+    if (!negociosDisponiveis.includes(selNegocio)) setSelNegocio('CONS')
+  }, [negociosDisponiveis, selNegocio])
+
+  // Unidade com 2 gerentes reais (hoje: Camaçari — CDL=Rota, CDR=Armazém —
+  // e Ponta Grossa) trava o Negócio no `rvNegocio` de quem está logado
+  // (mesmo campo que já trava o Painel Geral da RV, Administração >
+  // Usuários) — sem isso, cada gerente conseguia trocar o filtro e ver o
+  // resultado do outro. Admin nunca é travado, continua revisando os dois
+  // negócios livremente.
+  const negocioTravado = role !== 'admin' ? rvNegocio : null
+  useEffect(() => {
+    if (negocioTravado) setSelNegocio(negocioTravado as typeof selNegocio)
+  }, [negocioTravado])
+
+  const ROTULO_NEGOCIO: Record<string, string> = { CONS: 'Consolidado', ROTA: 'Rota', ARM: 'Armazém', EMP: 'Empurrada' }
   const slideAtual = SLIDES[slideIdx]
 
   return (
@@ -205,28 +266,30 @@ export function SdgGerentesPage() {
 
         <div className="flex shrink-0 items-center justify-self-end gap-2">
           {role === 'admin' && (
-            <Select value={selUnidade} onValueChange={setSelUnidade}>
+            <Select value={valorSelectUnidade} onValueChange={selecionarUnidade}>
               <SelectTrigger className="h-8 w-44 text-sm">
                 <SelectValue placeholder="Unidade" />
               </SelectTrigger>
               <SelectContent>
-                {unidadesDisponiveis.map(u => (
-                  <SelectItem key={u.codigo} value={u.codigo}>{u.nome}</SelectItem>
+                {itensSelectUnidade.map(i => (
+                  <SelectItem key={i.value} value={i.value}>{i.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           )}
 
-          <Select value={selNegocio} onValueChange={v => setSelNegocio(v as typeof selNegocio)}>
-            <SelectTrigger className="h-8 w-32 text-sm">
-              <SelectValue placeholder="Negócio" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="CONS">Consolidado</SelectItem>
-              <SelectItem value="ROTA">Rota</SelectItem>
-              <SelectItem value="ARM">Armazém</SelectItem>
-            </SelectContent>
-          </Select>
+          {!negocioTravado && (
+            <Select value={selNegocio} onValueChange={v => setSelNegocio(v as typeof selNegocio)}>
+              <SelectTrigger className="h-8 w-32 text-sm">
+                <SelectValue placeholder="Negócio" />
+              </SelectTrigger>
+              <SelectContent>
+                {negociosDisponiveis.map(n => (
+                  <SelectItem key={n} value={n}>{ROTULO_NEGOCIO[n]}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
           <Select value={String(selMes)} onValueChange={v => setSelMes(Number(v))}>
             <SelectTrigger className="h-8 w-24 text-sm">
@@ -284,7 +347,7 @@ export function SdgGerentesPage() {
         ) : (
           <>
             {slideIdx === 0 && (
-              <SlideAberturaGerentes unidade={nomeUnidade} mes={selMes} ano={selAno} logoUrl={logosPorUnidade.get(selUnidade)} />
+              <SlideAberturaGerentes unidade={nomeUnidade} mes={selMes} ano={selAno} logoUrl={logosPorUnidade.get(valorSelectUnidade)} />
             )}
             {slideIdx === 1 && (
               <SlideResumoExecutivoGerentes justificativa={justificativas['assuntos-gerais-gerentes']} />
@@ -294,7 +357,7 @@ export function SdgGerentesPage() {
             )}
             {slideIdx === 3 && (
               <SlideMetasBonusGerentes
-                unidades={unidades} unidade={selUnidade} rows={rowsFarolGerentes} orcamentos={orcamentosFarolGerentes}
+                unidades={unidades} unidade={selUnidade} negocio={selNegocio} rows={rowsFarolGerentes} orcamentos={orcamentosFarolGerentes}
                 resultadosTri={resultadosTri} rowsAux={rowsAuxFarolGerentes} metasPerdasIndicadores={metasPerdasIndicadoresFarolGerentes}
                 disponibilidadeRota={disponibilidadeRota} disponibilidadeArmazem={disponibilidadeArmazem}
                 disponibilidadeEmpurrada={disponibilidadeEmpurrada} posicaoLog20={posicaoLog20}
@@ -327,7 +390,7 @@ export function SdgGerentesPage() {
             )}
             {slideIdx === 11 && (
               <SlidePacoteDePerdasGerentes
-                rowsTodosNegocios={rowsDre} rowsAux={rowsPerdasAux} unidade={selUnidade} ano={selAno} mes={selMes}
+                rowsTodosNegocios={rowsDre} rowsAux={rowsPerdasAux} unidade={selUnidade} negocio={selNegocio} ano={selAno} mes={selMes}
                 metasPerdasAno={metasPerdasAno} dataEntradaUnidade={dataEntradaUnidade}
               />
             )}

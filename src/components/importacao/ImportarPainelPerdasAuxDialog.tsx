@@ -55,7 +55,7 @@ export function ImportarPainelPerdasAuxDialog({ unidades, onImportado }: Importa
         const batch = validas.slice(i, i + BATCH_SIZE)
         const { error } = await supabase
           .from('painel_perdas_aux')
-          .upsert(batch, { onConflict: 'unidade,ano,mes,indicador' })
+          .upsert(batch, { onConflict: 'unidade,negocio,ano,mes,indicador' })
         if (error) throw new Error(error.message)
       }
       toast({ title: `${validas.length} registro(s) importado(s) com sucesso` })
@@ -89,7 +89,8 @@ export function ImportarPainelPerdasAuxDialog({ unidades, onImportado }: Importa
         <p className="text-xs text-muted-foreground">
           Aceita .xlsx ou .csv, colunas <span className="font-mono">INDICADOR;NEGOCIO;ANO;MES;UNIDADE;VALOR</span> (decimal com vírgula no .csv).
           Indicadores: <span className="font-mono">Indisponibilidade</span> ou <span className="font-mono">Devolução</span>.
-          Registros já existentes pro mesmo período são sobrescritos.
+          NEGOCIO: <span className="font-mono">CDL</span> (Rota) ou <span className="font-mono">CDR</span> (Armazém) pra unidades com 2 gerentes (ex: Camaçari) — qualquer outro valor vira Consolidado.
+          Registros já existentes pro mesmo período e negócio são sobrescritos.
         </p>
 
         <div className="flex justify-end">

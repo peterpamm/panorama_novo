@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx'
 import { parseNumeroPtBr } from '@/lib/utils'
+import { negocioPorPrefixo } from '@/lib/unidade-resolver'
 import type { PainelPerdasAux } from '@/types'
 
 export type ParsedPainelPerdasAuxRow = Omit<PainelPerdasAux, 'id'>
@@ -37,7 +38,7 @@ function parsePainelPerdasAuxLinhas(linhas: (string | number)[][]): ParsePainelP
   if (indices.some(i => i === -1)) {
     return { linhas: [], erros: [`Cabeçalho inválido — esperado: ${COLUNAS_ESPERADAS.join(';').toUpperCase()}`] }
   }
-  const [iIndicador, , iAno, iMes, iUnidade, iValor] = indices
+  const [iIndicador, iNegocio, iAno, iMes, iUnidade, iValor] = indices
 
   const resultado: ParsedPainelPerdasAuxRow[] = []
   const erros: string[] = []
@@ -58,6 +59,7 @@ function parsePainelPerdasAuxLinhas(linhas: (string | number)[][]): ParsePainelP
     }
 
     const unidade = toStr(cols[iUnidade]).toUpperCase()
+    const negocio = negocioPorPrefixo(toStr(cols[iNegocio]))
     const ano = Number(toStr(cols[iAno]))
     const mes = Number(toStr(cols[iMes]))
     const valor = parseNumeroPtBr(cols[iValor])
@@ -67,7 +69,7 @@ function parsePainelPerdasAuxLinhas(linhas: (string | number)[][]): ParsePainelP
       continue
     }
 
-    resultado.push({ unidade, ano, mes, indicador, valor })
+    resultado.push({ unidade, negocio, ano, mes, indicador, valor })
   }
 
   return { linhas: resultado, erros }
@@ -76,7 +78,8 @@ function parsePainelPerdasAuxLinhas(linhas: (string | number)[][]): ParsePainelP
 /**
  * Lê o painel_de_perdas.csv no formato herdado do painel antigo:
  * `INDICADOR;NEGOCIO;ANO;MES;UNIDADE;VALOR` (decimal com vírgula).
- * A coluna NEGOCIO é ignorada — sempre CONS.
+ * NEGOCIO resolvido via `negocioPorPrefixo` (mesma convenção CDL=ROTA/
+ * CDR=ARM de outros importadores; qualquer outro valor vira CONS) — migration_131.
  * Indicadores reconhecidos: "Indisponibilidade" e "Devolução" (case-insensitive).
  */
 export function parsePainelPerdasAuxCsv(texto: string): ParsePainelPerdasAuxResultado {

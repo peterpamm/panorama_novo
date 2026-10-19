@@ -648,6 +648,8 @@ export interface PlanoAcaoTag {
 export interface SdgJustificativa {
   id: string
   unidade: string
+  /** CONS (padrão) ou o negócio específico (ROTA/ARM/EMP) — unidades com 2 gerentes reais (Camaçari: CDL=Rota/CDR=Armazém; Ponta Grossa: Empurrada/Armazém) gravam uma linha por negócio pro Resumo Executivo, ver migration_132. Nos demais indicadores/unidades fica sempre 'CONS'. */
+  negocio: string
   ano: number
   mes: number
   indicador: SdgIndicador
@@ -944,6 +946,8 @@ export interface ResumoGeralHistorico {
 export interface PainelPerdasAux {
   id?: string
   unidade: string
+  /** CONS (padrão) ou o negócio específico (ROTA/ARM) — unidades com 2 gerentes reais (ex: Camaçari: CDL=Rota, CDR=Armazém) sobem uma linha por negócio, ver migration_131. */
+  negocio: string
   ano: number
   mes: number
   indicador: 'indisponibilidade' | 'devolucao'

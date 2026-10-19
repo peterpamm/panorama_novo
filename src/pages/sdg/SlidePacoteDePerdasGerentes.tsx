@@ -15,11 +15,13 @@ import type { DreLongoRow, MetaPerdaIndicador, PainelPerdasAux } from '@/types'
 import { corGapRs, MESES_12 } from './abertura-conta-shared'
 
 interface Props {
-  /** TODOS os negócios da unidade (sem filtro) — Perdas é sempre CONS, filtrado aqui dentro, independente do seletor de negócio do cabeçalho. */
+  /** TODOS os negócios da unidade (sem filtro) — filtrado aqui dentro pelo `negocio` selecionado (ver `valorIndicadorUnidadeMes`/`faturamentoMes`). */
   rowsTodosNegocios: DreLongoRow[]
   /** Registros de `painel_perdas_aux` da unidade selecionada (indicadores Indisponibilidade/Devolução, fonte AUX). */
   rowsAux: PainelPerdasAux[]
   unidade: string
+  /** Negócio selecionado no cabeçalho (CONS/ROTA/ARM/EMP) — filtra os 8 indicadores E o Faturamento (denominador do %). Unidade com 2 gerentes reais (Camaçari/Ponta Grossa) só vê o Realizado do próprio negócio com ROTA/ARM/EMP selecionado; CONS mostra a unidade inteira, igual sempre foi. A Meta de Perdas (`metasPerdasAno`) continua sempre da unidade inteira — não tem meta separada por negócio ainda, ver aviso no slide. */
+  negocio: string
   ano: number
   mes: number
   metasPerdasAno: MetaPerdaIndicador[]
@@ -34,10 +36,18 @@ function somaNullSafe(valores: (number | null)[]): number | null {
 /**
  * Slide "Pacote de Perdas" do SDG Gerentes — visão consolidada dos 8
  * indicadores do Painel de Perdas (Vales, Multas, Processos Trabalhistas,
- * Desconto CIVIF, Sinistro de Frota, BNS, Indisponibilidade, Devolução),
- * sempre CONS (mesma convenção de `SlideIndicadorPerdas.tsx`/
- * `painel-perdas-calculations.ts`, independente do seletor de negócio do
- * cabeçalho). Mesmo espírito da seção Vales do Pacote de Gente: o que importa
+ * Desconto CIVIF, Sinistro de Frota, BNS, Indisponibilidade, Devolução).
+ * Todos os 8 (+ Faturamento, denominador do %) seguem o `negocio` selecionado
+ * no cabeçalho — unidade com 2 gerentes reais (Camaçari — CDL=Rota,
+ * CDR=Armazém; Ponta Grossa — Empurrada/Armazém) só mostra o Realizado do
+ * próprio negócio quando ROTA/ARM/EMP tá selecionado (os 6 de fonte DRE
+ * batem no DRE daquele negócio direto; os 2 de fonte AUX batem na linha
+ * própria daquele negócio em `painel_perdas_aux`, ver migration_131); CONS
+ * mostra a unidade inteira, igual sempre foi. A Meta de Perdas continua
+ * sempre da unidade inteira (ainda não existe meta por negócio) — por isso o
+ * % Realizado×Meta não é 100% comparável com um negócio específico
+ * selecionado (aviso disso aparece no próprio slide). Mesmo espírito da
+ * seção Vales do Pacote de Gente: o que importa
  * é a dispersão/"perda" em R$ (positivo é bom, negativo = estourou), não um
  * % de custo com meta orçada. 2 cards (Total de Perdas em R$ + Meta%/
  * Realizado% do faturamento — Mês e Ano), gráfico de linha (Total × Meta,
@@ -45,19 +55,17 @@ function somaNullSafe(valores: (number | null)[]): number | null {
  * e a tabela com um indicador por linha (+ Total e Meta no final), mês a mês
  * + Acumulado.
  */
-export function SlidePacoteDePerdasGerentes({ rowsTodosNegocios, rowsAux, unidade, ano, mes, metasPerdasAno, dataEntradaUnidade }: Props) {
+export function SlidePacoteDePerdasGerentes({ rowsTodosNegocios, rowsAux, unidade, negocio, ano, mes, metasPerdasAno, dataEntradaUnidade }: Props) {
   const { cursor } = getChartColors()
-
-  const rowsCons = useMemo(() => rowsTodosNegocios.filter(r => r.negocio === 'CONS'), [rowsTodosNegocios])
 
   function construirPorMes(anoAlvo: number) {
     return INDICADORES_PERDAS.map(ind => ({
       ind,
-      porMes: MESES_12.map(m => valorIndicadorUnidadeMes(rowsCons, rowsAux, ind, unidade, anoAlvo, m)),
+      porMes: MESES_12.map(m => valorIndicadorUnidadeMes(rowsTodosNegocios, rowsAux, ind, unidade, anoAlvo, m, negocio)),
     }))
   }
-  const matrizAtual = useMemo(() => construirPorMes(ano), [rowsCons, rowsAux, unidade, ano])
-  const matrizAnterior = useMemo(() => construirPorMes(ano - 1), [rowsCons, rowsAux, unidade, ano])
+  const matrizAtual = useMemo(() => construirPorMes(ano), [rowsTodosNegocios, rowsAux, unidade, ano, negocio])
+  const matrizAnterior = useMemo(() => construirPorMes(ano - 1), [rowsTodosNegocios, rowsAux, unidade, ano, negocio])
 
   const totalPorMes = useMemo(() => MESES_12.map(m => somaNullSafe(matrizAtual.map(l => l.porMes[m - 1]))), [matrizAtual])
   const totalPorMesAnterior = useMemo(() => MESES_12.map(m => somaNullSafe(matrizAnterior.map(l => l.porMes[m - 1]))), [matrizAnterior])
@@ -79,7 +87,7 @@ export function SlidePacoteDePerdasGerentes({ rowsTodosNegocios, rowsAux, unidad
   const totalAcumulado = acumuladoAte(totalPorMes, mes)
   const totalAcumuladoAnterior = acumuladoAte(totalPorMesAnterior, mes)
 
-  const fatPorMes = useMemo(() => MESES_12.map(m => faturamentoMes(rowsCons, unidade, ano, m)), [rowsCons, unidade, ano])
+  const fatPorMes = useMemo(() => MESES_12.map(m => faturamentoMes(rowsTodosNegocios, unidade, ano, m, negocio)), [rowsTodosNegocios, unidade, ano, negocio])
   const fatMesAtual = fatPorMes[mes - 1]
   const fatAcumulado = acumuladoAte(fatPorMes, mes)
 
@@ -131,6 +139,11 @@ export function SlidePacoteDePerdasGerentes({ rowsTodosNegocios, rowsAux, unidad
   return (
     <div className="h-full overflow-y-auto">
       <div className="flex flex-col gap-5 p-6">
+        {negocio !== 'CONS' && (
+          <p className="text-center text-xs italic text-gray-400 dark:text-slate-500">
+            Realizado é só do negócio selecionado — a Meta de Perdas é da unidade inteira (ainda não tem meta separada por negócio).
+          </p>
+        )}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <div className="rounded-2xl bg-white shadow dark:bg-slate-800/60 p-5">
             <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-slate-400">

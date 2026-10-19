@@ -37,6 +37,8 @@ interface Props {
   unidades: Unidade[]
   /** Código da unidade selecionada no cabeçalho da apresentação. */
   unidade: string
+  /** Negócio selecionado no cabeçalho (CONS/ROTA/ARM/EMP) — unidade com split (ex: Camaçari CDL/CDR) só mostra o card do negócio escolhido; CONS mostra os 2 (resumo soma os dois, comportamento de sempre). */
+  negocio: string
   /** Dataset do Farol Gerentes — TODAS as unidades (não só a selecionada), buscado via `useFarolGerentesDados` — precisa disso pro EBITDA Global (sempre o resultado da AMBEV). */
   rows: DreLongoRow[]
   orcamentos: OrcamentoLinha[]
@@ -61,10 +63,13 @@ interface Props {
  * usado na seção Unidades Operacionais do Farol Gerentes, aqui centralizado
  * e maior já que é só uma unidade por vez (não uma grade). Unidades com
  * split de negócio (Camaçari/Ponta Grossa) mostram os 2 cards (um por
- * negócio) e o resumo soma os dois.
+ * negócio) só quando o negócio selecionado no cabeçalho é Consolidado — com
+ * ROTA/ARM/EMP selecionado, só o card daquele negócio aparece (gerente
+ * travado no próprio `rvNegocio`, ver `SdgGerentesPage.tsx`, nunca vê o
+ * card do outro).
  */
 export function SlideMetasBonusGerentes({
-  unidades, unidade, rows, orcamentos, resultadosTri, rowsAux, metasPerdasIndicadores, disponibilidadeRota,
+  unidades, unidade, negocio, rows, orcamentos, resultadosTri, rowsAux, metasPerdasIndicadores, disponibilidadeRota,
   disponibilidadeArmazem, disponibilidadeEmpurrada, posicaoLog20, ano, loading,
 }: Props) {
   const { cards } = useMemo(
@@ -77,7 +82,19 @@ export function SlideMetasBonusGerentes({
       disponibilidadeArmazem, disponibilidadeEmpurrada, posicaoLog20, ano,
     ],
   )
-  const cardsUnidade = useMemo(() => cards.filter(c => c.card.unidadeCodigo === unidade), [cards, unidade])
+  // Unidade com split (Camaçari/Ponta Grossa) tem 1 card por negócio
+  // (`card.negocio` = 'ROTA'/'ARM'/'EMP') — com um negócio específico
+  // selecionado no cabeçalho (ex: CDR = ARM), só o card daquele negócio
+  // aparece, senão o bônus do outro gerente (CDL) vazava aqui também, mesmo
+  // filtrando só Armazém. Consolidado (CONS) continua mostrando os 2, igual
+  // sempre foi (resumo soma os dois). Unidade sem split sempre tem só 1
+  // card (`card.negocio === null`), passa direto em qualquer negócio.
+  const cardsUnidade = useMemo(
+    () => cards.filter(c =>
+      c.card.unidadeCodigo === unidade && (negocio === 'CONS' || c.card.negocio === null || c.card.negocio === negocio),
+    ),
+    [cards, unidade, negocio],
+  )
 
   const semestreTotal = cardsUnidade.reduce((acc, c) => acc + c.semestre.length, 0)
   const semestreBatidos = cardsUnidade.reduce((acc, c) => acc + c.semestre.filter(l => l.status === 'bateu').length, 0)

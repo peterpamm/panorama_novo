@@ -119,9 +119,8 @@ export function SlideResumoExecutivoGerentes({
         <div
           className="
             grid
-            h-[74%]
-            w-[84%]
-            max-w-5xl
+            h-[92%]
+            w-[95%]
             grid-cols-2
             grid-rows-2
             gap-5

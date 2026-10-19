@@ -19,9 +19,20 @@ describe('parsePainelPerdasAuxCsv', () => {
     const { linhas, erros } = parsePainelPerdasAuxCsv(texto)
     expect(erros).toEqual([])
     expect(linhas).toEqual([
-      { unidade: 'DIADEMA', ano: 2025, mes: 1, indicador: 'indisponibilidade', valor: -1234.56 },
-      { unidade: 'DIADEMA', ano: 2025, mes: 1, indicador: 'devolucao',         valor: -567.89 },
+      { unidade: 'DIADEMA', negocio: 'CONS', ano: 2025, mes: 1, indicador: 'indisponibilidade', valor: -1234.56 },
+      { unidade: 'DIADEMA', negocio: 'CONS', ano: 2025, mes: 1, indicador: 'devolucao',         valor: -567.89 },
     ])
+  })
+
+  it('resolve NEGOCIO via negocioPorPrefixo — CDL vira ROTA, CDR vira ARM (unidade com 2 gerentes)', () => {
+    const texto = [
+      'INDICADOR;NEGOCIO;ANO;MES;UNIDADE;VALOR',
+      'Indisponibilidade;CDL;2025;1;CAMACARI;-100,00',
+      'Indisponibilidade;CDR;2025;1;CAMACARI;-50,00',
+    ].join('\n')
+    const { linhas, erros } = parsePainelPerdasAuxCsv(texto)
+    expect(erros).toEqual([])
+    expect(linhas.map(l => l.negocio)).toEqual(['ROTA', 'ARM'])
   })
 
   it('header é case-insensitive', () => {
@@ -75,8 +86,8 @@ describe('parsePainelPerdasAuxXlsx', () => {
     const { linhas, erros } = await parsePainelPerdasAuxXlsx(file)
     expect(erros).toEqual([])
     expect(linhas).toEqual([
-      { unidade: 'DIADEMA', ano: 2025, mes: 1, indicador: 'indisponibilidade', valor: -1234.56 },
-      { unidade: 'DIADEMA', ano: 2025, mes: 1, indicador: 'devolucao', valor: -567.89 },
+      { unidade: 'DIADEMA', negocio: 'CONS', ano: 2025, mes: 1, indicador: 'indisponibilidade', valor: -1234.56 },
+      { unidade: 'DIADEMA', negocio: 'CONS', ano: 2025, mes: 1, indicador: 'devolucao', valor: -567.89 },
     ])
   })
 
@@ -86,7 +97,7 @@ describe('parsePainelPerdasAuxXlsx', () => {
       ['Indisponibilidade', 'CONS', 2025, 3, 'FOZ', '-100,00'],
     ])
     const { linhas } = await parsePainelPerdasAuxXlsx(file)
-    expect(linhas).toEqual([{ unidade: 'FOZ', ano: 2025, mes: 3, indicador: 'indisponibilidade', valor: -100 }])
+    expect(linhas).toEqual([{ unidade: 'FOZ', negocio: 'CONS', ano: 2025, mes: 3, indicador: 'indisponibilidade', valor: -100 }])
   })
 
   it('ignora linhas em branco no meio ou no fim da planilha', async () => {

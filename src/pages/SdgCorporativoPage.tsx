@@ -13,12 +13,17 @@ import { SlideIndicadorFarol } from '@/pages/sdg-corporativo/SlideIndicadorFarol
 import { SlideLucro } from '@/pages/sdg-corporativo/SlideLucro'
 import { SlideDespesaAdministrativa } from '@/pages/sdg-corporativo/SlideDespesaAdministrativa'
 import { SlideIndicadorPerdas } from '@/pages/sdg-corporativo/SlideIndicadorPerdas'
-import { SlideAssuntosGerais } from '@/pages/sdg/SlideAssuntosGerais'
+import { SlidePainelPerdas } from '@/pages/sdg-corporativo/SlidePainelPerdas'
+import { SlideResumoExecutivoGerentes } from '@/pages/sdg/SlideResumoExecutivoGerentes'
 import { cn } from '@/lib/utils'
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
 
-const SLIDES = [
+/** Esconde o slide "Lucro" temporariamente (pedido do usuário: não vai dar tempo de atualizar os dados desse mês) — é só tirar esse `true` quando voltar a atualizar. */
+const OCULTAR_LUCRO_ESTE_MES = true
+
+const TODOS_SLIDES = [
+  { id: 'resumo-executivo', titulo: 'Resumo Executivo'    },
   { id: 'receita',       titulo: 'Receita Líquida'       },
   { id: 'caixa',         titulo: 'Geração de Caixa'       },
   { id: 'ebitda',        titulo: 'EBITDA'                 },
@@ -27,16 +32,19 @@ const SLIDES = [
   { id: 'despesas',      titulo: 'Despesa Administrativa' },
   { id: 'vales',         titulo: 'Vales'                   },
   { id: 'multas',        titulo: 'Multas'                  },
-  { id: 'assuntos-gerais', titulo: 'Assuntos Gerais'      },
+  { id: 'painel-perdas', titulo: 'Painel de Perdas'        },
 ] as const
+
+const SLIDES = TODOS_SLIDES.filter(s => !(OCULTAR_LUCRO_ESTE_MES && s.id === 'lucro'))
 
 function unicos<T>(arr: T[]): T[] { return Array.from(new Set(arr)) }
 
 /**
  * SDG Corporativo — apresentação pra diretoria, consolidando todas as
- * unidades (visão AMBEV) por setor, na ordem: Receita Líquida, Geração de
- * Caixa, EBITDA, Lucro (Ambev), Gastos Totais, Despesa Administrativa,
- * Vales, Multas e Assuntos Gerais. Só o dono do sistema acessa (ver rota em
+ * unidades (visão AMBEV) por setor, na ordem: Resumo Executivo, Receita
+ * Líquida, Geração de Caixa, EBITDA, Lucro (Ambev), Gastos Totais, Despesa
+ * Administrativa, Vales, Multas e Painel de Perdas (resumo — TOTAL + PERDAS
+ * ACUMULADAS %, ver `SlidePainelPerdas.tsx`). Só o dono do sistema acessa (ver rota em
  * App.tsx, `ProtectedRoute donoApenas`). Diferente do SDG Financeiro (uma
  * unidade por vez, busca própria fora do DataProvider), aqui os dados vêm do
  * cache global (`DataContext`) porque o próprio propósito é mostrar todas as
@@ -46,7 +54,7 @@ export function SdgCorporativoPage() {
   const { unidades } = useUnidades()
   const { rows, loading } = useDreLongoTodasUnidades()
   const { orcamentos } = useOrcamentoTodasUnidades()
-  const { revalidar } = useData()
+  const { rowsAux, revalidar } = useData()
   const { isDark, toggleTheme } = useTheme()
   const navigate = useNavigate()
 
@@ -54,9 +62,10 @@ export function SdgCorporativoPage() {
   const [selMes, setSelMes] = useState<number | null>(null)
   const [slideIdx, setSlideIdx] = useState(0)
 
-  // Assuntos Gerais é conteúdo global da empresa (não por unidade) — reaproveita
-  // a mesma tabela/hook do SDG Financeiro com `unidade='AMBEV'` como sentinela,
-  // já que AMBEV existe em `unidades` mas nunca é usada por nenhum fluxo por
+  // Resumo Executivo (indicador `assuntos-gerais`, mesmo nome de sempre) é
+  // conteúdo global da empresa (não por unidade) — reaproveita a mesma
+  // tabela/hook do SDG Financeiro com `unidade='AMBEV'` como sentinela, já
+  // que AMBEV existe em `unidades` mas nunca é usada por nenhum fluxo por
   // unidade (é sempre excluída dos seletores de unidade do SDG Financeiro).
   const { porIndicador: justificativasCorp } = useSdgJustificativas('AMBEV', selAno, selMes)
 
@@ -213,7 +222,10 @@ export function SdgCorporativoPage() {
           </div>
         ) : (
           <>
-            {slideIdx === 0 && (
+            {slideAtual.id === 'resumo-executivo' && (
+              <SlideResumoExecutivoGerentes justificativa={justificativasCorp['assuntos-gerais']} />
+            )}
+            {slideAtual.id === 'receita' && (
               <SlideReceita
                 rowsAno={rowsAno}
                 orcamentoAno={orcamentoAno}
@@ -223,7 +235,7 @@ export function SdgCorporativoPage() {
                 mes={selMes}
               />
             )}
-            {slideIdx === 1 && (
+            {slideAtual.id === 'caixa' && (
               <SlideIndicadorFarol
                 titulo="Geração de Caixa"
                 codigo="276"
@@ -235,7 +247,7 @@ export function SdgCorporativoPage() {
                 mes={selMes}
               />
             )}
-            {slideIdx === 2 && (
+            {slideAtual.id === 'ebitda' && (
               <SlideIndicadorFarol
                 titulo="EBITDA"
                 codigo="233"
@@ -247,10 +259,10 @@ export function SdgCorporativoPage() {
                 mes={selMes}
               />
             )}
-            {slideIdx === 3 && (
+            {slideAtual.id === 'lucro' && (
               <SlideLucro unidades={unidades} ano={selAno} mes={selMes} />
             )}
-            {slideIdx === 4 && (
+            {slideAtual.id === 'gastos-totais' && (
               <SlideIndicadorFarol
                 titulo="Gastos Totais"
                 codigo="900"
@@ -262,7 +274,7 @@ export function SdgCorporativoPage() {
                 mes={selMes}
               />
             )}
-            {slideIdx === 5 && (
+            {slideAtual.id === 'despesas' && (
               <SlideDespesaAdministrativa
                 rowsAno={rowsAno}
                 orcamentoAno={orcamentoAno}
@@ -272,7 +284,7 @@ export function SdgCorporativoPage() {
                 mes={selMes}
               />
             )}
-            {slideIdx === 6 && (
+            {slideAtual.id === 'vales' && (
               <SlideIndicadorPerdas
                 titulo="Vales"
                 indicador="vales"
@@ -283,7 +295,7 @@ export function SdgCorporativoPage() {
                 mes={selMes}
               />
             )}
-            {slideIdx === 7 && (
+            {slideAtual.id === 'multas' && (
               <SlideIndicadorPerdas
                 titulo="Multas"
                 indicador="multas"
@@ -294,8 +306,14 @@ export function SdgCorporativoPage() {
                 mes={selMes}
               />
             )}
-            {slideIdx === 8 && (
-              <SlideAssuntosGerais justificativa={justificativasCorp['assuntos-gerais']} />
+            {slideAtual.id === 'painel-perdas' && (
+              <SlidePainelPerdas
+                rowsAnoTodosNegocios={rowsAnoTodosNegocios}
+                rowsAux={rowsAux}
+                unidades={unidades}
+                ano={selAno}
+                mes={selMes}
+              />
             )}
           </>
         )}
