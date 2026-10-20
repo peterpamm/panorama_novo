@@ -40,6 +40,20 @@ export interface DreCalculoRow {
   avr: number
   /** Meta (%) por conta vinda do GInfo, mesmo sinal/inversão do avr; null quando o período não tem AVO (ex: importado antes da migração 001). */
   avo: number | null
+  /**
+   * Realizado com o sinal ORIGINAL do GInfo, sem `Math.abs()` — ao contrário
+   * de `real`, que é sempre magnitude (positivo). Normalmente uma conta de
+   * custo vem negativa (débito > crédito), mas às vezes vem positiva (mês em
+   * que uma conta teve mais crédito que débito, ex: estorno/devolução) — `real`
+   * mascara essa diferença de propósito (pros cálculos do resto do Farol, que
+   * tratam custo sempre como magnitude), mas isso faz as tabelas de
+   * "acompanhamento" (que mostram o Realizado cru, não um Gap já calculado)
+   * mentirem sobre o sinal de verdade. Use esse campo só nessas tabelas de
+   * exibição; o resto do app continua usando `real` (abs) sem mudança.
+   * Opcional pra não quebrar quem monta um `DreCalculoRow` à mão (testes) sem
+   * essa informação — só `normalizarParaCalculo` preenche de verdade.
+   */
+  realComSinal?: number
 }
 
 export interface Meta {

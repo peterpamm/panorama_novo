@@ -19,16 +19,16 @@ const CONTAS_PNEUS = Array.from({ length: 135 - 133 + 1 }, (_, i) => 133 + i)
 const CONTAS_OUTROS_GASTOS_FROTA = [137, 138, 139, 141, 142, 143, 145, 146, 152]
 
 /**
- * Combustível (116) + folhas de Manutenção/Pneus/Outros Gastos com Frota
- * numa lista só, pra "Análise por Conta" — 116 entra pela própria conta-mãe
- * (não pelas folhas: sua única folha é 117 Óleo Diesel, que mostraria o
- * mesmo valor de novo, sem informação nova), já que Combustível é custo
- * grande demais pra sumir da apresentação objetiva. Sem par operacional/
- * administrativo aqui (diferente do Pacote de Gente) — Frota não tem esse
- * corte, `PACOTES['116']/['118']/['132']` são todos prefixo único — por isso
- * é `codigos` direto, não `grupos`.
+ * Óleo Diesel (117) + folhas de Manutenção/Pneus/Outros Gastos com Frota
+ * numa lista só, pra "Análise por Conta" — 117 entra no lugar da conta-mãe
+ * Combustível (116): o realizado é idêntico (116 só tem essa única folha),
+ * mas o Orçado só existe cadastrado na conta-filha (117/054 bespoke) — 116 é
+ * puro subtotal, sem orçamento próprio, o que deixava a linha sempre zerada.
+ * Sem par operacional/administrativo aqui (diferente do Pacote de Gente) —
+ * Frota não tem esse corte, `PACOTES['118']/['132']` são todos prefixo único
+ * — por isso é `codigos` direto, não `grupos`.
  */
-const CONTAS_ANALISE_POR_CONTA = [116, ...CONTAS_MANUTENCAO, ...CONTAS_PNEUS, ...CONTAS_OUTROS_GASTOS_FROTA]
+const CONTAS_ANALISE_POR_CONTA = [117, ...CONTAS_MANUTENCAO, ...CONTAS_PNEUS, ...CONTAS_OUTROS_GASTOS_FROTA]
 
 interface Props {
   /** Todas as linhas da unidade selecionada, sem filtro de ano (precisa do ano anterior pro comparativo acumulado) — já filtradas pro `negocio` selecionado (CONS por padrão, ou Rota/Armazém). */

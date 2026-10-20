@@ -390,7 +390,7 @@ export function SdgGerentesPage() {
             )}
             {slideIdx === 11 && (
               <SlidePacoteDePerdasGerentes
-                rowsTodosNegocios={rowsDre} rowsAux={rowsPerdasAux} unidade={selUnidade} negocio={selNegocio} ano={selAno} mes={selMes}
+                rowsTodosNegocios={rowsDre} rowsAux={rowsPerdasAux} unidade={selUnidade} nomeUnidade={nomeUnidadeReal} negocio={selNegocio} ano={selAno} mes={selMes}
                 metasPerdasAno={metasPerdasAno} dataEntradaUnidade={dataEntradaUnidade}
               />
             )}

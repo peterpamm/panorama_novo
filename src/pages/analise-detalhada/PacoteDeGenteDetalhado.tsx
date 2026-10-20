@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Bar, BarChart, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { IndicadorChart } from '@/components/farol/IndicadorChart'
 import { COR_META, COR_NEGATIVO, COR_POSITIVO, MES_ABREV, getChartColors } from '@/components/farol/chart-shared'
-import { normalizarParaCalculo, somaReal } from '@/lib/farol-calculations'
+import { normalizarParaCalculo, somaReal, somaRealComSinal } from '@/lib/farol-calculations'
 import { buscarOrcadoRs } from '@/lib/orcamento-farol'
 import { metaPerdasMensalUnidade, somaDif } from '@/lib/painel-perdas-calculations'
 import { useContas } from '@/hooks/useContas'
@@ -122,24 +122,30 @@ function BlocoGapOrcamentoMensal({
     let acumuladoOrcado = 0
     let acumuladoRemunerado = 0
     let acumuladoRealizado = 0
+    let acumuladoRealizadoComSinal = 0
     return MESES_12.map(m => {
       const rowsMes = rowsAno.filter(r => r.tipo_periodo === 'MENSAL' && r.mes === m)
       const calc = rowsMes.length > 0 ? normalizarParaCalculo(rowsMes) : null
       const remunerado = calc ? somaRemunerado(calc, prefixos) : null
       const realizado = calc ? somaReal(calc, prefixos) : null
+      // Sinal original do GInfo, só pra exibição — ver `DreCalculoRow.realComSinal`.
+      const realizadoComSinal = calc ? somaRealComSinal(calc, prefixos) : null
       if (remunerado !== null) acumuladoRemunerado += remunerado
       if (realizado !== null) acumuladoRealizado += realizado
-      const gap = remunerado !== null && realizado !== null ? remunerado - realizado : null
+      if (realizadoComSinal !== null) acumuladoRealizadoComSinal += realizadoComSinal
+      // remunerado + realizadoComSinal, não `- realizado` (magnitude) — ver comentário em `comPercentualEDelta` (abertura-conta-shared.tsx).
+      const gap = remunerado !== null && realizadoComSinal !== null ? remunerado + realizadoComSinal : null
 
       const orcado = buscarOrcadoRs(orcamentoAno, { ...ctx, mes: m }, indiceSegmento)
       if (orcado !== null) acumuladoOrcado += orcado
 
       return {
-        mes: m, orcado, remunerado, realizado, gap,
+        mes: m, orcado, remunerado, realizado, realizadoComSinal, gap,
         acumuladoOrcado: orcado !== null ? acumuladoOrcado : null,
         acumuladoRemunerado: remunerado !== null ? acumuladoRemunerado : null,
         acumuladoRealizado: realizado !== null ? acumuladoRealizado : null,
-        acumuladoGap: gap !== null ? acumuladoRemunerado - acumuladoRealizado : null,
+        acumuladoRealizadoComSinal: realizadoComSinal !== null ? acumuladoRealizadoComSinal : null,
+        acumuladoGap: gap !== null ? acumuladoRemunerado + acumuladoRealizadoComSinal : null,
       }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -240,13 +246,22 @@ function BlocoGapOrcamentoMensal({
             </TableRow>
             <TableRow className="border-gray-200/30 dark:border-gray-700/30">
               <TableCell className="text-sm font-medium">Realizado</TableCell>
+              {/* Mostra com o sinal ORIGINAL do GInfo (`realizadoComSinal`),
+                  não a magnitude (`realizado`, usada só no Gap/cálculo) —
+                  sem isso, um mês com Remunerado zerado (ex: Camaçari
+                  Armazém) mostrava o Realizado sempre "positivo" e o gerente
+                  lia como se tivesse sobrado, mesmo sendo 100% estouro. Mas
+                  forçar sempre negativo (tentativa anterior) também mentia
+                  nos poucos casos em que a conta teve mais crédito que
+                  débito no período de verdade (ex: Vales Financeiros em
+                  Praia Grande) — o sinal de verdade é positivo nesse caso. */}
               {serie.map(p => (
                 <TableCell key={p.mes} className="text-center text-sm tabular-nums">
-                  {p.mes > mes || p.realizado === null ? '—' : formatInteiroPtBr(p.realizado)}
+                  {p.mes > mes || p.realizadoComSinal === null ? '—' : formatInteiroPtBr(p.realizadoComSinal)}
                 </TableCell>
               ))}
               <TableCell className="text-center text-sm font-semibold tabular-nums">
-                {linhaMesSel.acumuladoRealizado === null ? '—' : formatInteiroPtBr(linhaMesSel.acumuladoRealizado)}
+                {linhaMesSel.acumuladoRealizadoComSinal === null ? '—' : formatInteiroPtBr(linhaMesSel.acumuladoRealizadoComSinal)}
               </TableCell>
             </TableRow>
             <TableRow className="border-gray-200/30 bg-muted/40 dark:border-gray-700/30">

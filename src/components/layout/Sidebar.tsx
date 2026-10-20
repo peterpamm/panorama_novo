@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import {
-  Gauge, LineChart, TrafficCone, Trophy, Upload,
+  Home, Gauge, LineChart, TrafficCone, Trophy, Upload,
   Settings, AlertTriangle, HandCoins, Banknote, Award, MonitorPlay, ChevronDown, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -26,7 +26,8 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { to: '/',              icon: Gauge,         label: 'Farol de Metas' },
+  { to: '/',              icon: Home,          label: 'Início' },
+  { to: '/farol-metas',   icon: Gauge,         label: 'Farol de Metas' },
   { to: '/farol-gerentes', icon: TrafficCone,   label: 'Farol Gerentes' },
   {
     to: '/analise-detalhada', icon: LineChart, label: 'Análise Detalhada',

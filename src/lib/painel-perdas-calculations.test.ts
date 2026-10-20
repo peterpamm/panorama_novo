@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calcularMatrizPerdas, faturamentoMes, INDICADORES_PERDAS, valorIndicadorUnidadeMes } from './painel-perdas-calculations'
+import { calcularMatrizPerdas, faturamentoMes, INDICADORES_PERDAS, perdasPctPorNegocio, valorIndicadorUnidadeMes } from './painel-perdas-calculations'
 import type { DreLongoRow, MetaPerdaIndicador, PainelPerdasAux } from '@/types'
 
 function rowDre(override: Partial<DreLongoRow>): DreLongoRow {
@@ -243,5 +243,59 @@ describe('faturamentoMes', () => {
     ]
     expect(faturamentoMes(dre, 'CAMACARI', 2025, 1, 'ROTA')).toBeCloseTo(50000)
     expect(faturamentoMes(dre, 'CAMACARI', 2025, 1, 'ARM')).toBeCloseTo(40000)
+  })
+})
+
+describe('perdasPctPorNegocio', () => {
+  it('soma as perdas (DRE+AUX) e divide pela receita, só do negócio pedido (CDR Bahia = Camaçari ARM)', () => {
+    const dre = [
+      rowDre({ unidade: 'CAMACARI', negocio: 'ARM', conta_codigo: '052', mes: 1, diferenca: -400 }), // Vales
+      rowDre({ unidade: 'CAMACARI', negocio: 'ROTA', conta_codigo: '052', mes: 1, diferenca: -99999 }), // Rota não pode vazar pro ARM
+      rowDre({ unidade: 'CAMACARI', negocio: 'ARM', conta_codigo: '001', mes: 1, remunerado: -40000 }), // Receita
+    ]
+    const aux = [rowAux({ unidade: 'CAMACARI', negocio: 'ARM', indicador: 'indisponibilidade', ano: 2025, mes: 1, valor: -100 })]
+    const pct = perdasPctPorNegocio(dre, aux, 'CAMACARI', 'ARM', 2025)
+    expect(pct).toBeCloseTo((-400 - 100) / 40000) // (-500) / 40000
+  })
+
+  it('sem DRE do negócio pedido no ano, retorna null', () => {
+    const dre = [rowDre({ unidade: 'CAMACARI', negocio: 'ROTA', conta_codigo: '001', mes: 1, remunerado: -1000 })]
+    expect(perdasPctPorNegocio(dre, [], 'CAMACARI', 'ARM', 2025)).toBeNull()
+  })
+
+  it('NÃO cai pro faturamento CONS da unidade — negócio sem Receita própria (sem linha) fica null, mesmo com CONS disponível', () => {
+    // Decisão do usuário: usar sempre o dado do próprio negócio, nunca o
+    // consolidado, mesmo quando o negócio não tem Receita própria (caso real
+    // do Armazém de Camaçari — problema de origem no GInfo, não é pra
+    // "emprestar" a Receita do Consolidado/Rota enquanto isso não for corrigido).
+    const dre = [
+      rowDre({ unidade: 'CAMACARI', negocio: 'ARM', conta_codigo: '052', mes: 1, diferenca: -400 }),
+      rowDre({ unidade: 'CAMACARI', negocio: 'CONS', conta_codigo: '001', mes: 1, remunerado: -80000 }),
+    ]
+    expect(perdasPctPorNegocio(dre, [], 'CAMACARI', 'ARM', 2025)).toBeNull()
+  })
+
+  it('linha de Receita do negócio existe mas com remunerado=0 (não ausente) — também fica null, sem tratamento especial', () => {
+    const dre = [
+      rowDre({ unidade: 'CAMACARI', negocio: 'ARM', conta_codigo: '052', mes: 1, diferenca: -400 }),
+      rowDre({ unidade: 'CAMACARI', negocio: 'ARM', conta_codigo: '001', mes: 1, remunerado: 0 }),
+    ]
+    expect(perdasPctPorNegocio(dre, [], 'CAMACARI', 'ARM', 2025)).toBeNull()
+  })
+
+  it('sem Receita nenhuma no negócio, retorna null (divisão por zero)', () => {
+    const dre = [rowDre({ unidade: 'CAMACARI', negocio: 'ARM', conta_codigo: '052', mes: 1, diferenca: -400 })]
+    expect(perdasPctPorNegocio(dre, [], 'CAMACARI', 'ARM', 2025)).toBeNull()
+  })
+
+  it('acumula vários meses do ano', () => {
+    const dre = [
+      rowDre({ unidade: 'CAMACARI', negocio: 'ARM', conta_codigo: '052', mes: 1, diferenca: -200 }),
+      rowDre({ unidade: 'CAMACARI', negocio: 'ARM', conta_codigo: '001', mes: 1, remunerado: -20000 }),
+      rowDre({ unidade: 'CAMACARI', negocio: 'ARM', conta_codigo: '052', mes: 2, diferenca: -300 }),
+      rowDre({ unidade: 'CAMACARI', negocio: 'ARM', conta_codigo: '001', mes: 2, remunerado: -20000 }),
+    ]
+    const pct = perdasPctPorNegocio(dre, [], 'CAMACARI', 'ARM', 2025)
+    expect(pct).toBeCloseTo(-500 / 40000)
   })
 })

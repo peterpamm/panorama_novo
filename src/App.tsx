@@ -4,6 +4,7 @@ import { DataProvider } from '@/context/DataContext'
 import { ProtectedRoute } from '@/components/layout/ProtectedRoute'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/pages/LoginPage'
+import { HomePage } from '@/pages/HomePage'
 import { FarolDeMetasPage } from '@/pages/FarolDeMetasPage'
 import { FarolGerentesPage } from '@/pages/FarolGerentesPage'
 import { AnalisePorContaPage } from '@/pages/AnalisePorContaPage'
@@ -126,119 +127,126 @@ export default function App() {
           <Route
             element={
               <ProtectedRoute>
-                <DataProvider>
-                  <AppShell />
-                </DataProvider>
+                <AppShell />
               </ProtectedRoute>
             }
           >
-            <Route index element={<FarolDeMetasPage />} />
-            <Route path="farol-gerentes" element={<FarolGerentesPage />} />
-            <Route path="analise-conta" element={<Navigate to="/analise-detalhada/conta" replace />} />
-            <Route
-              path="analise-detalhada"
-              element={
-                <ProtectedRoute>
-                  <Outlet />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<AnaliseDetalhadaPage />} />
-              <Route path="conta" element={<AnalisePorContaPage />} />
-              <Route path="pacote-de-gente" element={<AnaliseDetalhadaPacoteDeGentePage />} />
-              <Route path="pacote-de-frota" element={<AnaliseDetalhadaPacoteDeFrotaPage />} />
-            </Route>
-            <Route path="ranking" element={<RankingPage />} />
-            <Route path="painel-perdas" element={<PainelPerdasPage />} />
-            <Route path="remuneracao-variavel">
-              <Route index element={<RemuneracaoVariavelPage />} />
-              <Route path="gente" element={<ProtectedRoute adminOnly pagina="rv_gente"><RvGentePage /></ProtectedRoute>} />
-              <Route path="financeiro" element={<ProtectedRoute adminOnly pagina="rv_financeiro"><RvFinanceiroPage /></ProtectedRoute>} />
-              <Route path="frota" element={<ProtectedRoute adminOnly pagina="rv_frota"><RvFrotaPage /></ProtectedRoute>} />
-              <Route path="seguranca" element={<ProtectedRoute adminOnly pagina="rv_seguranca"><RvSegurancaPage /></ProtectedRoute>} />
-              <Route path="distribuicao" element={<ProtectedRoute adminOnly pagina="rv_distribuicao"><RvDistribuicaoPage /></ProtectedRoute>} />
-              <Route path="armazem" element={<ProtectedRoute adminOnly pagina="rv_armazem"><RvArmazemPage /></ProtectedRoute>} />
-              <Route path="empurrada" element={<ProtectedRoute adminOnly pagina="rv_empurrada"><RvEmpurradaPage /></ProtectedRoute>} />
-              <Route path="painel-geral" element={<ProtectedRoute pagina="rv_painel_geral"><PainelGeralRvPage /></ProtectedRoute>} />
-              <Route path="matriz" element={<ProtectedRoute adminOnly pagina="rv_matriz"><MatrizRvPage /></ProtectedRoute>} />
+            {/* Home (/) fica FORA do DataProvider de propósito — é só uma
+                tela de links, não precisa de DRE/Orçamento/Painel de Perdas
+                carregado (ver HomePage.tsx). Todo o resto do app "normal"
+                (Farol de Metas pra baixo) mora dentro do DataProvider
+                aninhado logo abaixo, que só monta (e só então dispara a
+                busca pesada) quando a pessoa entra numa dessas rotas. */}
+            <Route index element={<HomePage />} />
+            <Route element={<DataProvider><Outlet /></DataProvider>}>
+              <Route path="farol-metas" element={<FarolDeMetasPage />} />
+              <Route path="farol-gerentes" element={<FarolGerentesPage />} />
+              <Route path="analise-conta" element={<Navigate to="/analise-detalhada/conta" replace />} />
               <Route
-                path="metas"
+                path="analise-detalhada"
                 element={
-                  <ProtectedRoute adminOnly>
+                  <ProtectedRoute>
                     <Outlet />
                   </ProtectedRoute>
                 }
               >
-                <Route index element={<MetasPage />} />
-                <Route path="gerais" element={<ProtectedRoute pagina="metas_gerais"><MetasGeraisPage /></ProtectedRoute>} />
-                <Route path="perdas" element={<ProtectedRoute pagina="metas_perdas"><MetasPerdasPage /></ProtectedRoute>} />
-                <Route path="gente" element={<ProtectedRoute pagina="metas_gente"><MetasGentePage /></ProtectedRoute>} />
-                <Route path="financeiro" element={<ProtectedRoute pagina="metas_financeiro"><MetasFinanceiroPage /></ProtectedRoute>} />
-                <Route path="frota" element={<ProtectedRoute pagina="metas_frota"><MetasFrotaPage /></ProtectedRoute>} />
-                <Route path="seguranca" element={<ProtectedRoute pagina="metas_seguranca"><MetasSegurancaPage /></ProtectedRoute>} />
-                <Route path="distribuicao" element={<ProtectedRoute pagina="metas_distribuicao"><MetasDistribuicaoPage /></ProtectedRoute>} />
-                <Route path="armazem" element={<ProtectedRoute pagina="metas_armazem"><MetasArmazemPage /></ProtectedRoute>} />
-                <Route path="empurrada" element={<ProtectedRoute pagina="metas_empurrada"><MetasEmpurradaPage /></ProtectedRoute>} />
+                <Route index element={<AnaliseDetalhadaPage />} />
+                <Route path="conta" element={<AnalisePorContaPage />} />
+                <Route path="pacote-de-gente" element={<AnaliseDetalhadaPacoteDeGentePage />} />
+                <Route path="pacote-de-frota" element={<AnaliseDetalhadaPacoteDeFrotaPage />} />
               </Route>
+              <Route path="ranking" element={<RankingPage />} />
+              <Route path="painel-perdas" element={<PainelPerdasPage />} />
+              <Route path="remuneracao-variavel">
+                <Route index element={<RemuneracaoVariavelPage />} />
+                <Route path="gente" element={<ProtectedRoute adminOnly pagina="rv_gente"><RvGentePage /></ProtectedRoute>} />
+                <Route path="financeiro" element={<ProtectedRoute adminOnly pagina="rv_financeiro"><RvFinanceiroPage /></ProtectedRoute>} />
+                <Route path="frota" element={<ProtectedRoute adminOnly pagina="rv_frota"><RvFrotaPage /></ProtectedRoute>} />
+                <Route path="seguranca" element={<ProtectedRoute adminOnly pagina="rv_seguranca"><RvSegurancaPage /></ProtectedRoute>} />
+                <Route path="distribuicao" element={<ProtectedRoute adminOnly pagina="rv_distribuicao"><RvDistribuicaoPage /></ProtectedRoute>} />
+                <Route path="armazem" element={<ProtectedRoute adminOnly pagina="rv_armazem"><RvArmazemPage /></ProtectedRoute>} />
+                <Route path="empurrada" element={<ProtectedRoute adminOnly pagina="rv_empurrada"><RvEmpurradaPage /></ProtectedRoute>} />
+                <Route path="painel-geral" element={<ProtectedRoute pagina="rv_painel_geral"><PainelGeralRvPage /></ProtectedRoute>} />
+                <Route path="matriz" element={<ProtectedRoute adminOnly pagina="rv_matriz"><MatrizRvPage /></ProtectedRoute>} />
+                <Route
+                  path="metas"
+                  element={
+                    <ProtectedRoute adminOnly>
+                      <Outlet />
+                    </ProtectedRoute>
+                  }
+                >
+                  <Route index element={<MetasPage />} />
+                  <Route path="gerais" element={<ProtectedRoute pagina="metas_gerais"><MetasGeraisPage /></ProtectedRoute>} />
+                  <Route path="perdas" element={<ProtectedRoute pagina="metas_perdas"><MetasPerdasPage /></ProtectedRoute>} />
+                  <Route path="gente" element={<ProtectedRoute pagina="metas_gente"><MetasGentePage /></ProtectedRoute>} />
+                  <Route path="financeiro" element={<ProtectedRoute pagina="metas_financeiro"><MetasFinanceiroPage /></ProtectedRoute>} />
+                  <Route path="frota" element={<ProtectedRoute pagina="metas_frota"><MetasFrotaPage /></ProtectedRoute>} />
+                  <Route path="seguranca" element={<ProtectedRoute pagina="metas_seguranca"><MetasSegurancaPage /></ProtectedRoute>} />
+                  <Route path="distribuicao" element={<ProtectedRoute pagina="metas_distribuicao"><MetasDistribuicaoPage /></ProtectedRoute>} />
+                  <Route path="armazem" element={<ProtectedRoute pagina="metas_armazem"><MetasArmazemPage /></ProtectedRoute>} />
+                  <Route path="empurrada" element={<ProtectedRoute pagina="metas_empurrada"><MetasEmpurradaPage /></ProtectedRoute>} />
+                </Route>
+              </Route>
+              <Route
+                path="area-financeira"
+                element={
+                  <ProtectedRoute>
+                    <Outlet />
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<AreaFinanceiraPage />} />
+                <Route path="rotinas" element={<RotinasFinanceirasPage />} />
+                <Route path="plano-de-acao" element={<PlanoDeAcaoPage />} />
+                <Route path="encontro-de-contas" element={<EncontroDeContasPage />} />
+                <Route path="limpa-pauta" element={<LimpaPautaPage />} />
+                {/* Migradas pra /sdg — redirects abaixo pra quem tinha o link antigo salvo. */}
+                <Route path="sdg-financeiro" element={<Navigate to="/sdg/financeiro" replace />} />
+                <Route path="sdg-corp-fin" element={<Navigate to="/sdg/corp-fin" replace />} />
+              </Route>
+              <Route
+                path="sdg"
+                element={
+                  <ProtectedRoute>
+                    <Outlet />
+                  </ProtectedRoute>
+                }
+              >
+                <Route index element={<SdgPage />} />
+                <Route path="financeiro" element={<SdgFinanceiroGestaoPage />} />
+                <Route path="corp-fin" element={<ProtectedRoute donoApenas><SdgCorpFinGestaoPage /></ProtectedRoute>} />
+                <Route path="gerentes" element={<SdgGerentesGestaoPage />} />
+              </Route>
+              <Route path="reuniao-resultados">
+                <Route index element={<ReuniaoResultadosPage />} />
+                <Route path="financeiro" element={<ProtectedRoute adminOnly pagina="reuniao_financeiro"><ReuniaoFinanceiroPage /></ProtectedRoute>} />
+                <Route path="gente" element={<ProtectedRoute adminOnly pagina="reuniao_gente"><ReuniaoGentePage /></ProtectedRoute>} />
+                <Route path="frota" element={<ProtectedRoute adminOnly pagina="reuniao_frota"><ReuniaoFrotaPage /></ProtectedRoute>} />
+                <Route path="seguranca" element={<ProtectedRoute adminOnly pagina="reuniao_seguranca"><ReuniaoSegurancaPage /></ProtectedRoute>} />
+                <Route path="distribuicao" element={<ProtectedRoute adminOnly pagina="reuniao_distribuicao"><ReuniaoDistribuicaoPage /></ProtectedRoute>} />
+                <Route path="armazem" element={<ProtectedRoute adminOnly pagina="reuniao_armazem"><ReuniaoArmazemPage /></ProtectedRoute>} />
+                <Route path="resumo-geral" element={<ProtectedRoute pagina="reuniao_resumo_geral"><ReuniaoResumoGeralPage /></ProtectedRoute>} />
+                {/* Pagamento lida com cartão/conta — sempre adminOnly, diferente do Resumo Geral (que pode ser concedido pra unidade). */}
+                <Route path="pagamento" element={<ProtectedRoute adminOnly pagina="reuniao_pagamento"><ReuniaoPagamentoPage /></ProtectedRoute>} />
+              </Route>
+              <Route
+                path="importacao"
+                element={
+                  <ProtectedRoute adminOnly pagina="importacao">
+                    <ImportacaoDrePage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="admin"
+                element={
+                  <ProtectedRoute donoApenas>
+                    <AdministracaoPage />
+                  </ProtectedRoute>
+                }
+              />
             </Route>
-            <Route
-              path="area-financeira"
-              element={
-                <ProtectedRoute>
-                  <Outlet />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<AreaFinanceiraPage />} />
-              <Route path="rotinas" element={<RotinasFinanceirasPage />} />
-              <Route path="plano-de-acao" element={<PlanoDeAcaoPage />} />
-              <Route path="encontro-de-contas" element={<EncontroDeContasPage />} />
-              <Route path="limpa-pauta" element={<LimpaPautaPage />} />
-              {/* Migradas pra /sdg — redirects abaixo pra quem tinha o link antigo salvo. */}
-              <Route path="sdg-financeiro" element={<Navigate to="/sdg/financeiro" replace />} />
-              <Route path="sdg-corp-fin" element={<Navigate to="/sdg/corp-fin" replace />} />
-            </Route>
-            <Route
-              path="sdg"
-              element={
-                <ProtectedRoute>
-                  <Outlet />
-                </ProtectedRoute>
-              }
-            >
-              <Route index element={<SdgPage />} />
-              <Route path="financeiro" element={<SdgFinanceiroGestaoPage />} />
-              <Route path="corp-fin" element={<ProtectedRoute donoApenas><SdgCorpFinGestaoPage /></ProtectedRoute>} />
-              <Route path="gerentes" element={<SdgGerentesGestaoPage />} />
-            </Route>
-            <Route path="reuniao-resultados">
-              <Route index element={<ReuniaoResultadosPage />} />
-              <Route path="financeiro" element={<ProtectedRoute adminOnly pagina="reuniao_financeiro"><ReuniaoFinanceiroPage /></ProtectedRoute>} />
-              <Route path="gente" element={<ProtectedRoute adminOnly pagina="reuniao_gente"><ReuniaoGentePage /></ProtectedRoute>} />
-              <Route path="frota" element={<ProtectedRoute adminOnly pagina="reuniao_frota"><ReuniaoFrotaPage /></ProtectedRoute>} />
-              <Route path="seguranca" element={<ProtectedRoute adminOnly pagina="reuniao_seguranca"><ReuniaoSegurancaPage /></ProtectedRoute>} />
-              <Route path="distribuicao" element={<ProtectedRoute adminOnly pagina="reuniao_distribuicao"><ReuniaoDistribuicaoPage /></ProtectedRoute>} />
-              <Route path="armazem" element={<ProtectedRoute adminOnly pagina="reuniao_armazem"><ReuniaoArmazemPage /></ProtectedRoute>} />
-              <Route path="resumo-geral" element={<ProtectedRoute pagina="reuniao_resumo_geral"><ReuniaoResumoGeralPage /></ProtectedRoute>} />
-              {/* Pagamento lida com cartão/conta — sempre adminOnly, diferente do Resumo Geral (que pode ser concedido pra unidade). */}
-              <Route path="pagamento" element={<ProtectedRoute adminOnly pagina="reuniao_pagamento"><ReuniaoPagamentoPage /></ProtectedRoute>} />
-            </Route>
-            <Route
-              path="importacao"
-              element={
-                <ProtectedRoute adminOnly pagina="importacao">
-                  <ImportacaoDrePage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="admin"
-              element={
-                <ProtectedRoute donoApenas>
-                  <AdministracaoPage />
-                </ProtectedRoute>
-              }
-            />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

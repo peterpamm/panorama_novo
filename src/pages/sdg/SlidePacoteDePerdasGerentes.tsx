@@ -8,6 +8,7 @@ import {
 import {
   faturamentoMes, INDICADORES_PERDAS, metaPerdasMensalTotalUnidade, valorIndicadorUnidadeMes,
 } from '@/lib/painel-perdas-calculations'
+import { unidadeSplitNegocio } from '@/lib/rv-gente'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { TableCard } from '@/components/ui/table-card'
 import { cn, formatInteiroPtBr, formatPercent } from '@/lib/utils'
@@ -20,7 +21,9 @@ interface Props {
   /** Registros de `painel_perdas_aux` da unidade selecionada (indicadores Indisponibilidade/Devolução, fonte AUX). */
   rowsAux: PainelPerdasAux[]
   unidade: string
-  /** Negócio selecionado no cabeçalho (CONS/ROTA/ARM/EMP) — filtra os 8 indicadores E o Faturamento (denominador do %). Unidade com 2 gerentes reais (Camaçari/Ponta Grossa) só vê o Realizado do próprio negócio com ROTA/ARM/EMP selecionado; CONS mostra a unidade inteira, igual sempre foi. A Meta de Perdas (`metasPerdasAno`) continua sempre da unidade inteira — não tem meta separada por negócio ainda, ver aviso no slide. */
+  /** Nome da unidade (o de verdade, não o rótulo CDL/CDR da apresentação) — só usado pra identificar Camaçari/Ponta Grossa em `unidadeSplitNegocio` (ver `metaZeradaArmazem`). */
+  nomeUnidade: string
+  /** Negócio selecionado no cabeçalho (CONS/ROTA/ARM/EMP) — filtra os 8 indicadores E o Faturamento (denominador do %). Unidade com 2 gerentes reais (Camaçari/Ponta Grossa) só vê o Realizado do próprio negócio com ROTA/ARM/EMP selecionado; CONS mostra a unidade inteira, igual sempre foi. A Meta de Perdas (`metasPerdasAno`) continua sempre da unidade inteira — não tem meta separada por negócio ainda — EXCETO no Armazém de Camaçari/Ponta Grossa, que usa 0% de propósito (ver `metaZeradaArmazem`). */
   negocio: string
   ano: number
   mes: number
@@ -55,7 +58,7 @@ function somaNullSafe(valores: (number | null)[]): number | null {
  * e a tabela com um indicador por linha (+ Total e Meta no final), mês a mês
  * + Acumulado.
  */
-export function SlidePacoteDePerdasGerentes({ rowsTodosNegocios, rowsAux, unidade, negocio, ano, mes, metasPerdasAno, dataEntradaUnidade }: Props) {
+export function SlidePacoteDePerdasGerentes({ rowsTodosNegocios, rowsAux, unidade, nomeUnidade, negocio, ano, mes, metasPerdasAno, dataEntradaUnidade }: Props) {
   const { cursor } = getChartColors()
 
   function construirPorMes(anoAlvo: number) {
@@ -91,9 +94,17 @@ export function SlidePacoteDePerdasGerentes({ rowsTodosNegocios, rowsAux, unidad
   const fatMesAtual = fatPorMes[mes - 1]
   const fatAcumulado = acumuladoAte(fatPorMes, mes)
 
+  // Orçamento de Perdas só é feito pro consolidado da unidade — unidade com
+  // 2 gerentes reais (Camaçari/Ponta Grossa) não tem meta separada por
+  // negócio. No lado Armazém especificamente, o volume de perdas é baixo o
+  // bastante (pedido do usuário) pra considerar a meta 0% em vez de herdar a
+  // meta da unidade inteira (que inflaria o "bateu meta" do Armazém sem uma
+  // meta de verdade pra ele). Rota/Empurrada continuam com a meta da unidade
+  // inteira, sem mudança — é onde o orçamento consolidado de fato se aplica.
+  const metaZeradaArmazem = negocio === 'ARM' && unidadeSplitNegocio(unidade, nomeUnidade)
   const metaMensalTotal = useMemo(
-    () => metaPerdasMensalTotalUnidade(metasPerdasAno, unidade, ano, dataEntradaUnidade),
-    [metasPerdasAno, unidade, ano, dataEntradaUnidade],
+    () => metaZeradaArmazem ? 0 : metaPerdasMensalTotalUnidade(metasPerdasAno, unidade, ano, dataEntradaUnidade),
+    [metaZeradaArmazem, metasPerdasAno, unidade, ano, dataEntradaUnidade],
   )
   const metaAcumulada = metaMensalTotal !== null ? metaMensalTotal * mes : null
 
@@ -141,7 +152,9 @@ export function SlidePacoteDePerdasGerentes({ rowsTodosNegocios, rowsAux, unidad
       <div className="flex flex-col gap-5 p-6">
         {negocio !== 'CONS' && (
           <p className="text-center text-xs italic text-gray-400 dark:text-slate-500">
-            Realizado é só do negócio selecionado — a Meta de Perdas é da unidade inteira (ainda não tem meta separada por negócio).
+            {metaZeradaArmazem
+              ? 'Realizado é só do Armazém — Meta considerada 0% nesse negócio (o orçamento de Perdas é feito só pro consolidado da unidade).'
+              : 'Realizado é só do negócio selecionado — a Meta de Perdas é da unidade inteira (ainda não tem meta separada por negócio).'}
           </p>
         )}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">

@@ -40,6 +40,8 @@ export function somaRemunerado(calc: DreCalculoRow[], prefixos: string | string[
 export interface LinhaAberturaConta {
   codigo: string
   realizado: number
+  /** Realizado com o sinal original do GInfo (ver `DreCalculoRow.realComSinal`) — só pra exibição na coluna Realizado, não entra em nenhum cálculo (Delta/%/barra continuam usando `realizado`, magnitude). */
+  realizadoComSinal: number
   remunerado: number
   /** Orçado (R$) dessa conta-filha específica — ver `buscarOrcadoContaFilha` (orcamento-conta-filha.ts). 0 quando a conta não tem orçado cadastrado/mapeado pra essa unidade (nunca null — pedido explícito: "contas que não tem orçado mostra 0, sem problema"). */
   orcado: number
@@ -52,6 +54,8 @@ export interface LinhaAberturaConta {
 export interface ContaBruta {
   codigo: string
   realizado: number
+  /** Realizado com o sinal original do GInfo — ver `LinhaAberturaConta.realizadoComSinal`. */
+  realizadoComSinal: number
   remunerado: number
   orcado: number
 }
@@ -77,8 +81,9 @@ export function agruparContasBrutas(
   for (const r of calc) {
     const num = Number(r.conta_codigo)
     if (!Number.isInteger(num) || !alvo.has(num)) continue
-    const atual = porConta.get(r.conta_codigo) ?? { codigo: r.conta_codigo, realizado: 0, remunerado: 0, orcado: orcadoPorConta.get(r.conta_codigo) ?? 0 }
+    const atual = porConta.get(r.conta_codigo) ?? { codigo: r.conta_codigo, realizado: 0, realizadoComSinal: 0, remunerado: 0, orcado: orcadoPorConta.get(r.conta_codigo) ?? 0 }
     atual.realizado += r.real
+    atual.realizadoComSinal += (r.realComSinal ?? r.real)
     atual.remunerado += r.remun
     porConta.set(r.conta_codigo, atual)
   }
@@ -104,6 +109,7 @@ export function agruparContasBrutasPorGrupo(
       return {
         codigo: g.rotulo,
         realizado: brutas.reduce((acc, c) => acc + c.realizado, 0),
+        realizadoComSinal: brutas.reduce((acc, c) => acc + c.realizadoComSinal, 0),
         remunerado: brutas.reduce((acc, c) => acc + c.remunerado, 0),
         orcado: brutas.reduce((acc, c) => acc + c.orcado, 0),
       }
@@ -115,9 +121,17 @@ export function comPercentualEDelta(brutas: ContaBruta[], realizadoMae: number, 
   return brutas.map(c => ({
     codigo: c.codigo,
     realizado: c.realizado,
+    realizadoComSinal: c.realizadoComSinal,
     remunerado: c.remunerado,
     orcado: c.orcado,
-    delta: (comparativo === 'orcado' ? c.orcado : c.remunerado) - c.realizado,
+    // comparativo + realizadoComSinal (não `- c.realizado`, a magnitude) —
+    // no caso normal (conta de custo, realizadoComSinal negativo) dá
+    // exatamente o mesmo resultado de `comparativo - realizado`, mas nos
+    // poucos casos em que a conta teve mais crédito que débito no período
+    // (realizadoComSinal positivo), o Gap também inverte certo (positivo =
+    // sobrou, não "estourou" — ver print do usuário, conta Vales
+    // Financeiros com Realizado positivo e Gap que devia ser positivo).
+    delta: (comparativo === 'orcado' ? c.orcado : c.remunerado) + c.realizadoComSinal,
     percentualDoCusto: realizadoMae === 0 ? 0 : (c.realizado / realizadoMae) * 100,
   }))
 }
@@ -523,6 +537,12 @@ export function BlocoPacote({
             </TableRow>
             <TableRow className="border-gray-200/30 dark:border-gray-700/30">
               <TableCell className="text-sm font-medium">Realizado</TableCell>
+              {/* Sem ajuste de sinal aqui, de propósito — diferente de
+                  `TabelaAberturaConta` (soma direta de uma conta do DRE),
+                  esse "Realizado" é reconstruído a partir do AVR (%) × a
+                  receita do mês (`avr/100 * receitaMes`), não um passthrough
+                  do valor bruto de uma conta — não existe um "sinal original
+                  do GInfo" pra preservar aqui. */}
               {serie.map(p => (
                 <TableCell key={p.mes} className="text-center text-sm tabular-nums">
                   {p.mes > mes || p.realizado === null ? '—' : formatInteiroPtBr(p.realizado)}
@@ -742,7 +762,14 @@ export function TabelaAberturaConta({
                   </div>
                 </div>
               </TableCell>
-              <TableCell className="text-center text-sm tabular-nums">{formatInteiroPtBr(l.realizado)}</TableCell>
+              {/* Sinal original do GInfo (`realizadoComSinal`), não a
+                  magnitude (`realizado`, usada só pro cálculo/barra/Delta) —
+                  sem isso, com o comparativo (Orçado/Remunerado) em 0, o
+                  Realizado sempre aparecia "positivo" mesmo sendo estouro de
+                  custo; e forçar sempre negativo (tentativa anterior) também
+                  mentia nos poucos casos em que a conta teve mais crédito
+                  que débito no período (sinal de verdade é positivo aí). */}
+              <TableCell className="text-center text-sm tabular-nums">{formatInteiroPtBr(l.realizadoComSinal)}</TableCell>
               <TableCell className="text-center text-sm tabular-nums">{formatInteiroPtBr(comparativo === 'orcado' ? l.orcado : l.remunerado)}</TableCell>
               <TableCell className={cn('text-center text-sm font-semibold tabular-nums', corGapRs(l.delta))}>
                 {formatInteiroPtBr(l.delta)}
@@ -785,22 +812,28 @@ export function AcompanhamentoConta({ rowsAno, codigos, nomesConta, contaPadrao,
 
   const serie = useMemo(() => {
     let acumuladoRealizado = 0
+    let acumuladoRealizadoComSinal = 0
     let acumuladoRemunerado = 0
     let acumuladoGap = 0
     return MESES_12.map(m => {
       const rowsMes = rowsAno.filter(r => r.tipo_periodo === 'MENSAL' && r.mes === m)
       if (rowsMes.length === 0) {
-        return { mes: m, realizado: null, remunerado: null, gap: null, acumuladoRealizado: null, acumuladoRemunerado: null, acumuladoGap: null }
+        return {
+          mes: m, realizado: null, realizadoComSinal: null, remunerado: null, gap: null,
+          acumuladoRealizado: null, acumuladoRealizadoComSinal: null, acumuladoRemunerado: null, acumuladoGap: null,
+        }
       }
       const calc = normalizarParaCalculo(rowsMes)
-      const bruta = agruparContasBrutas(calc, [Number(conta)])[0] ?? { realizado: 0, remunerado: 0 }
-      const gap = bruta.remunerado - bruta.realizado
+      const bruta = agruparContasBrutas(calc, [Number(conta)])[0] ?? { realizado: 0, realizadoComSinal: 0, remunerado: 0 }
+      // remunerado + realizadoComSinal, não `- bruta.realizado` (magnitude) — ver comentário em `comPercentualEDelta`.
+      const gap = bruta.remunerado + bruta.realizadoComSinal
       acumuladoRealizado += bruta.realizado
+      acumuladoRealizadoComSinal += bruta.realizadoComSinal
       acumuladoRemunerado += bruta.remunerado
       acumuladoGap += gap
       return {
-        mes: m, realizado: bruta.realizado, remunerado: bruta.remunerado, gap,
-        acumuladoRealizado, acumuladoRemunerado, acumuladoGap,
+        mes: m, realizado: bruta.realizado, realizadoComSinal: bruta.realizadoComSinal, remunerado: bruta.remunerado, gap,
+        acumuladoRealizado, acumuladoRealizadoComSinal, acumuladoRemunerado, acumuladoGap,
       }
     })
   }, [rowsAno, conta])
@@ -849,13 +882,14 @@ export function AcompanhamentoConta({ rowsAno, codigos, nomesConta, contaPadrao,
           </TableRow>
           <TableRow className="border-gray-200/30 dark:border-gray-700/30">
             <TableCell className="text-sm font-medium">Realizado</TableCell>
+            {/* Sinal original do GInfo (`realizadoComSinal`) — ver comentário em `LinhaAberturaConta`. */}
             {serie.map(p => (
               <TableCell key={p.mes} className="text-center text-sm tabular-nums">
-                {p.mes > mes || p.realizado === null ? '—' : formatInteiroPtBr(p.realizado)}
+                {p.mes > mes || p.realizadoComSinal === null ? '—' : formatInteiroPtBr(p.realizadoComSinal)}
               </TableCell>
             ))}
             <TableCell className="text-center text-sm font-semibold tabular-nums">
-              {linhaMesSel.acumuladoRealizado === null ? '—' : formatInteiroPtBr(linhaMesSel.acumuladoRealizado)}
+              {linhaMesSel.acumuladoRealizadoComSinal === null ? '—' : formatInteiroPtBr(linhaMesSel.acumuladoRealizadoComSinal)}
             </TableCell>
           </TableRow>
           <TableRow className="border-gray-200/30 bg-muted/40 dark:border-gray-700/30">

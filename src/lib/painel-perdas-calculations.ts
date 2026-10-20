@@ -125,6 +125,52 @@ export function faturamentoMes(rowsDre: DreLongoRow[], unidade: string, ano: num
   return rows.reduce((acc, r) => acc + Math.abs(r.remunerado ?? 0), 0)
 }
 
+/**
+ * Perdas acumuladas (%) de um NEGÓCIO específico de uma unidade, pro ano
+ * inteiro (todos os meses com DRE daquele negócio, igual `calcularMatrizPerdas`
+ * faz pra CONS) — soma os 8 indicadores (DRE+AUX, via `valorIndicadorUnidadeMes`)
+ * já filtrados pelo `negocio`, dividido pela Receita Líquida (`faturamentoMes`)
+ * do mesmo negócio — SEM fallback pro CONS da unidade (cogitado e descartado:
+ * o usuário confirmou que é pra usar só o dado do próprio negócio mesmo,
+ * nunca o consolidado). O Armazém de Camaçari hoje vem com REMUNERADO da
+ * conta 001 sempre zerado — problema de origem no GInfo (não está exportando
+ * esse valor pro Armazém), não daqui; até ser corrigido na importação, essa
+ * function retorna null (linha "Pacote de Perdas" mostra "—") pra esse caso,
+ * o que é o comportamento certo (melhor "sem dado" do que um número errado).
+ * Diferente de `calcularMatrizPerdas`/`calcularPacotePerdasPorUnidade`
+ * (farol-gerentes.ts), que são sempre CONS — essa function existe só pro
+ * card do Armazém de Camaçari/Ponta Grossa no Farol Gerentes, onde o usuário
+ * pediu pra ver o Realizado de Perdas separado por negócio mesmo sem
+ * orçamento/meta própria (a Meta nesse card vem zerada à parte, não daqui).
+ * null = sem DRE daquele negócio no ano, ou sem faturamento do próprio negócio.
+ */
+export function perdasPctPorNegocio(
+  rowsDre: DreLongoRow[],
+  rowsAux: PainelPerdasAux[],
+  unidade: string,
+  negocio: string,
+  ano: number,
+): number | null {
+  const meses = Array.from(new Set(
+    rowsDre.filter(r => r.unidade === unidade && r.negocio === negocio && r.tipo_periodo === 'MENSAL' && r.ano === ano).map(r => r.mes),
+  ))
+  if (meses.length === 0) return null
+
+  let totalPerdas = 0
+  let totalFaturamento = 0
+  let temPerdas = false
+  for (const m of meses) {
+    for (const ind of INDICADORES_PERDAS) {
+      const valor = valorIndicadorUnidadeMes(rowsDre, rowsAux, ind, unidade, ano, m, negocio)
+      if (valor !== null) { totalPerdas += valor; temPerdas = true }
+    }
+    const fat = faturamentoMes(rowsDre, unidade, ano, m, negocio)
+    if (fat !== null) totalFaturamento += fat
+  }
+  if (!temPerdas || totalFaturamento === 0) return null
+  return totalPerdas / totalFaturamento
+}
+
 function somaAux(rows: PainelPerdasAux[], unidade: string | null, indicador: PainelPerdasAux['indicador']): number {
   return rows
     .filter(r => (unidade === null || r.unidade === unidade) && r.indicador === indicador)

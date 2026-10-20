@@ -63,6 +63,7 @@ export function normalizarParaCalculo(rows: DreLongoRow[]): DreCalculoRow[] {
       // avo vem do GInfo com o mesmo sinal bruto do avr (negativo p/ custo) — mesma inversão,
       // mas preserva null (sem dado) em vez de 0, pra distinguir "meta zero" de "sem AVO no período".
       avo: r.avo === null ? null : (ehPerformance ? r.avo : -r.avo),
+      realComSinal: r.realizado ?? 0,
     }
   })
 }
@@ -71,6 +72,19 @@ export function somaReal(rows: DreCalculoRow[], prefixos: string[]): number {
   return rows
     .filter(r => startsWithAny(r.conta_codigo, prefixos))
     .reduce((acc, r) => acc + r.real, 0)
+}
+
+/**
+ * Como `somaReal`, mas com o sinal ORIGINAL do GInfo (ver `DreCalculoRow.realComSinal`)
+ * — pras tabelas de "acompanhamento" que mostram o Realizado cru (não um Gap
+ * já calculado), onde forçar magnitude mentiria quando a conta teve mais
+ * crédito que débito no período. `?? r.real` cobre quem monta um
+ * `DreCalculoRow` à mão (testes) sem preencher `realComSinal`.
+ */
+export function somaRealComSinal(rows: DreCalculoRow[], prefixos: string[]): number {
+  return rows
+    .filter(r => startsWithAny(r.conta_codigo, prefixos))
+    .reduce((acc, r) => acc + (r.realComSinal ?? r.real), 0)
 }
 
 /**

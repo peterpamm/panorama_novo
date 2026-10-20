@@ -242,6 +242,7 @@ export const CONTA_FILHA_ORCAMENTO_BESPOKE: Record<string, string> = {
   '227': '128', // LAVAÇÃO FROTA LEVE
 
   // Pacote de Frota (119-152 nativo → 056-073 bespoke)
+  '117': '054', // ÓLEO DIESEL — mesma conta bespoke já usada em PACOTE_CONTA_ORCAMENTO['115'] (Combustível = Óleo Diesel pro orçamento antigo, nunca teve conta-mãe separada)
   '119': '056', // MANUTENÇÃO DE VEÍCULOS PRÓPRIOS
   '125': '057', // AVARIAS E SINISTROS
   '133': '058', // PNEUS

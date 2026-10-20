@@ -2,7 +2,7 @@ import { normalizarNomeUnidade } from '@/lib/unidade-resolver'
 import { opcoesNegocioSplit, unidadeSplitNegocio } from '@/lib/rv-gente'
 import { PACOTES } from '@/lib/constants'
 import { calcularRankingIndicador, type RankingLinhaIndicador } from '@/lib/ranking-calculations'
-import { calcularMatrizPerdas } from '@/lib/painel-perdas-calculations'
+import { calcularMatrizPerdas, perdasPctPorNegocio } from '@/lib/painel-perdas-calculations'
 import { formatPercent } from '@/lib/utils'
 import type {
   DisponibilidadeArmazemAcumulada, DisponibilidadeEmpurradaAcumulada, DisponibilidadeRotaAcumulada, DreLongoRow,
@@ -228,9 +228,11 @@ export interface PacotePerdasItem {
  * Pacote de Perdas (% de perdas acumuladas sobre o faturamento, mesmo
  * cálculo do Painel de Perdas — `calcularMatrizPerdas`) acumulado do ano
  * (todos os meses com dado, igual a aba Consolidado sem filtro de mês) —
- * sempre CONS, nunca quebra por negócio (Vales/Multas/Indisponibilidade
- * etc. não são apurados por gerente), então as duas metades de uma unidade
- * com split mostram o mesmo valor. Chave do mapa: código da unidade.
+ * sempre CONS (a Meta/orçamento de Perdas só existe pro consolidado da
+ * unidade). Chave do mapa: código da unidade. `montarCardsFarolGerentes` usa
+ * esse valor pra todo card, EXCETO o do Armazém de Camaçari/Ponta Grossa —
+ * ali o Realizado vem de `perdasPctPorNegocio` (painel-perdas-calculations.ts,
+ * já filtrado pro negócio) e a Meta vira 0% (sem orçamento próprio).
  */
 export function calcularPacotePerdasPorUnidade(
   rowsDre: DreLongoRow[],
@@ -413,7 +415,19 @@ export function montarCardsFarolGerentes(params: {
       ],
       ano: [
         linhaPosicaoLog20Global,
-        linhaPacotePerdas(mapaPerdas.get(card.unidadeCodigo)),
+        // Pacote de Perdas só tem orçamento pro consolidado da unidade
+        // (`calcularPacotePerdasPorUnidade` é sempre CONS) — mas no card do
+        // Armazém de Camaçari/Ponta Grossa (único `card.negocio` possível
+        // além de ROTA/EMP, ver `unidadesCardsFarol`) dá pra calcular o
+        // Realizado de verdade só daquele negócio (`perdasPctPorNegocio`,
+        // mesma soma dos 8 indicadores ÷ Receita Líquida, só que filtrados
+        // pro negócio em vez de CONS); a Meta continua 0% (não existe
+        // orçamento de Perdas por negócio, só pro consolidado).
+        linhaPacotePerdas(
+          card.negocio === 'ARM'
+            ? { realPct: perdasPctPorNegocio(rows, rowsAux, card.unidadeCodigo, 'ARM', ano), metaPct: 0 }
+            : mapaPerdas.get(card.unidadeCodigo),
+        ),
         linhaIndicadorDre('EBITDA Unidade', mapaEbitda.get(chaveNegocio)),
         linhaEbitdaGlobal,
       ],

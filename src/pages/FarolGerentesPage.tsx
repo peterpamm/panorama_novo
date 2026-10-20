@@ -10,6 +10,7 @@ import {
   linhaAcidentesTri, linhaDisponibilidadeArmazem, linhaDisponibilidadeEmpurrada, linhaDisponibilidadeRota,
   linhaIndicadorDre, linhaPacotePerdas, linhaPosicaoLog20, type LinhaFarolGerente, participaContagemEbitda, unidadesCardsFarol,
 } from '@/lib/farol-gerentes'
+import { perdasPctPorNegocio } from '@/lib/painel-perdas-calculations'
 
 const ANO_ATUAL = new Date().getFullYear()
 
@@ -20,10 +21,12 @@ const ANO_ATUAL = new Date().getFullYear()
  * com os mesmos indicadores (Gastos Totais, Acidentes TRI, Disponibilidade
  * ARM/ROTA/EMP no Semestre; Posição LOG20, Pacote de Perdas, EBITDA Unidade/
  * Global no Ano). Posição LOG20 e EBITDA Global são sempre o mesmo valor em
- * todo card (empresa toda); Pacote de Perdas também é sempre igual nos 2
- * cards de uma mesma unidade com split (não quebra por negócio); só Gastos
- * Totais e EBITDA Unidade variam de fato entre os 2 cards de Camaçari/Ponta
- * Grossa (cada gerente responde pelo resultado do próprio negócio).
+ * todo card (empresa toda); Gastos Totais e EBITDA Unidade variam de fato
+ * entre os 2 cards de Camaçari/Ponta Grossa (cada gerente responde pelo
+ * resultado do próprio negócio). Pacote de Perdas: Meta sempre 0% no card do
+ * Armazém (sem orçamento de Perdas por negócio, só pro consolidado), mas o
+ * Realizado já vem separado por negócio nesse card (`perdasPctPorNegocio`);
+ * no card de Rota/Empurrada continua o Realizado/Meta da unidade inteira.
  *
  * Camaçari e Ponta Grossa (unidades com 2 gerentes) não têm card
  * consolidado — aparecem como 2 cards cada, um por negócio (Rota/Armazém
@@ -35,7 +38,8 @@ const ANO_ATUAL = new Date().getFullYear()
  * o resultado da AMBEV consolidada, mesmo valor em todo card), Acidentes
  * TRI (registro manual, RV de Segurança > Importação > TRI — meta sempre 0),
  * Pacote de Perdas (% de perdas sobre faturamento, mesmo cálculo do Painel
- * de Perdas — sempre CONS, não quebra por negócio), Disp. Rota, Disp.
+ * de Perdas — sempre CONS, exceto no card do Armazém de Camaçari/Ponta
+ * Grossa, ver docstring acima), Disp. Rota, Disp.
  * Armazém e Disp. Empurrada (snapshots únicos importados em Importação >
  * Financeiro > Disponibilidade Rota/Armazém/Empurrada — a de Armazém pode
  * ficar sem meta se a planilha não trouxer essa coluna; a de Empurrada só
@@ -113,12 +117,21 @@ export function FarolGerentesPage() {
       ],
       ano: [
         linhaPosicaoLog20Global,
-        linhaPacotePerdas(mapaPerdas.get(card.unidadeCodigo)),
+        // Pacote de Perdas só tem orçamento pro consolidado da unidade — no
+        // card do Armazém de Camaçari/Ponta Grossa o Realizado vem separado
+        // por negócio (`perdasPctPorNegocio`) e a Meta vira 0% (sem
+        // orçamento próprio pra ela), mesma régua do slide Metas Bônus
+        // (`montarCardsFarolGerentes`, farol-gerentes.ts).
+        linhaPacotePerdas(
+          card.negocio === 'ARM'
+            ? { realPct: perdasPctPorNegocio(rows, rowsAux, card.unidadeCodigo, 'ARM', ANO_ATUAL), metaPct: 0 }
+            : mapaPerdas.get(card.unidadeCodigo),
+        ),
         linhaIndicadorDre('EBITDA Unidade', mapaEbitda.get(chaveNegocio)),
         linhaEbitdaGlobal,
       ],
     }
-  }), [unidades, mapaGastos, mapaEbitda, mapaTri, mapaPerdas, mapaDispRota, mapaDispArmazem, mapaDispEmpurrada, linhaPosicaoLog20Global, linhaEbitdaGlobal])
+  }), [unidades, rows, rowsAux, mapaGastos, mapaEbitda, mapaTri, mapaPerdas, mapaDispRota, mapaDispArmazem, mapaDispEmpurrada, linhaPosicaoLog20Global, linhaEbitdaGlobal])
 
   const resumo = useMemo<LinhaResumoFarolGerente[]>(() => cards.map(c => ({
     unidade: c.card.chave,
