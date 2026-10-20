@@ -78,7 +78,7 @@ const SLIDES = [
  * jeito que o SDG Financeiro foi crescendo.
  */
 export function SdgGerentesPage() {
-  const { role, unidade: unidadeUsuario, rvNegocio } = useAuth()
+  const { role, unidade: unidadeUsuario } = useAuth()
   const { isDark, toggleTheme } = useTheme()
   const navigate = useNavigate()
 
@@ -221,17 +221,13 @@ export function SdgGerentesPage() {
     if (!negociosDisponiveis.includes(selNegocio)) setSelNegocio('CONS')
   }, [negociosDisponiveis, selNegocio])
 
-  // Unidade com 2 gerentes reais (hoje: Camaçari — CDL=Rota, CDR=Armazém —
-  // e Ponta Grossa) trava o Negócio no `rvNegocio` de quem está logado
-  // (mesmo campo que já trava o Painel Geral da RV, Administração >
-  // Usuários) — sem isso, cada gerente conseguia trocar o filtro e ver o
-  // resultado do outro. Admin nunca é travado, continua revisando os dois
-  // negócios livremente.
-  const negocioTravado = role !== 'admin' ? rvNegocio : null
-  useEffect(() => {
-    if (negocioTravado) setSelNegocio(negocioTravado as typeof selNegocio)
-  }, [negocioTravado])
-
+  // Unidade com 2 gerentes reais (hoje: Camaçari — CDL=Rota, CDR=Armazém — e
+  // Ponta Grossa) já tinha o Negócio travado no `rvNegocio` de quem está
+  // logado, mas isso deixava o gerente sem conseguir nem ver o próprio
+  // Resumo Executivo quando o `rvNegocio` cadastrado não bate exatamente
+  // (ex: unidade antiga sem essa separação ainda, ou campo não preenchido) —
+  // pedido do usuário pra tirar a trava: o seletor fica sempre disponível
+  // pra qualquer um, gerente ou admin, livre pra escolher qualquer negócio.
   const ROTULO_NEGOCIO: Record<string, string> = { CONS: 'Consolidado', ROTA: 'Rota', ARM: 'Armazém', EMP: 'Empurrada' }
   const slideAtual = SLIDES[slideIdx]
 
@@ -278,18 +274,16 @@ export function SdgGerentesPage() {
             </Select>
           )}
 
-          {!negocioTravado && (
-            <Select value={selNegocio} onValueChange={v => setSelNegocio(v as typeof selNegocio)}>
-              <SelectTrigger className="h-8 w-32 text-sm">
-                <SelectValue placeholder="Negócio" />
-              </SelectTrigger>
-              <SelectContent>
-                {negociosDisponiveis.map(n => (
-                  <SelectItem key={n} value={n}>{ROTULO_NEGOCIO[n]}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          <Select value={selNegocio} onValueChange={v => setSelNegocio(v as typeof selNegocio)}>
+            <SelectTrigger className="h-8 w-32 text-sm">
+              <SelectValue placeholder="Negócio" />
+            </SelectTrigger>
+            <SelectContent>
+              {negociosDisponiveis.map(n => (
+                <SelectItem key={n} value={n}>{ROTULO_NEGOCIO[n]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           <Select value={String(selMes)} onValueChange={v => setSelMes(Number(v))}>
             <SelectTrigger className="h-8 w-24 text-sm">
