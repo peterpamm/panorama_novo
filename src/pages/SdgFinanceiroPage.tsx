@@ -7,6 +7,7 @@ import { useTheme } from '@/hooks/useTheme'
 import { useEncontroContas } from '@/hooks/useEncontroContas'
 import { usePlanosAcao, usePlanoAcaoTags } from '@/hooks/usePlanosAcao'
 import { useSdgJustificativas } from '@/hooks/useSdgJustificativas'
+import { disponibilidadesDaUnidade } from '@/lib/farol-gerentes'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Slide01Ebitda } from '@/pages/sdg/Slide01Ebitda'
 import { SlideIndicador } from '@/pages/sdg/SlideIndicador'
@@ -21,6 +22,7 @@ import { cn } from '@/lib/utils'
 import type { PlanoAcao, SdgIndicador } from '@/types'
 
 const MESES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez']
+const ROTULO_NEGOCIO: Record<string, string> = { CONS: 'Consolidado', ROTA: 'Rota', ARM: 'Armazém', EMP: 'Empurrada' }
 
 const SLIDES = [
   { id: 'ebitda',              titulo: 'EBITDA'                },
@@ -47,6 +49,7 @@ export function SdgFinanceiroPage() {
 
   // ── Filtros ──────────────────────────────────────────────────────────────
   const [selUnidade, setSelUnidade] = useState<string>('')
+  const [selNegocio, setSelNegocio] = useState<'CONS' | 'ROTA' | 'ARM' | 'EMP'>('CONS')
   const [selAno, setSelAno] = useState<number | null>(null)
   const [selMes, setSelMes] = useState<number | null>(null)
   const [slideIdx, setSlideIdx] = useState(0)
@@ -94,7 +97,24 @@ export function SdgFinanceiroPage() {
     return planos.filter(p => p.unidade === selUnidade && p.status !== 'validado' && nomes.has(p.tag))
   }
 
-  const rowsNegocio = useMemo(() => rows.filter(r => r.negocio === 'CONS'), [rows])
+  const nomeUnidade = unidades.find(u => u.codigo === selUnidade)?.nome ?? selUnidade
+
+  // Negócios do seletor variam por unidade — a maioria é Rota+Armazém, mas
+  // Ponta Grossa/Estância são Empurrada+Armazém e Rio de Janeiro é só Rota
+  // (mesma regra de `disponibilidadesDaUnidade`, já usada no Farol/SDG
+  // Gerentes). Consolidado sempre aparece, pra qualquer unidade. Sem trava
+  // por perfil — qualquer um (gerente ou admin) escolhe livremente, mesmo
+  // ajuste feito no SDG Gerentes (usuários de Camaçari não conseguiam
+  // escolher o próprio negócio por falta desse seletor aqui).
+  const negociosDisponiveis = useMemo(
+    () => ['CONS', ...disponibilidadesDaUnidade(nomeUnidade)] as const,
+    [nomeUnidade],
+  )
+  useEffect(() => {
+    if (!negociosDisponiveis.includes(selNegocio)) setSelNegocio('CONS')
+  }, [negociosDisponiveis, selNegocio])
+
+  const rowsNegocio = useMemo(() => rows.filter(r => r.negocio === selNegocio), [rows, selNegocio])
 
   const anosDisponiveis = useMemo(
     () => unicos(rowsNegocio.map(r => r.ano)).sort((a, b) => a - b),
@@ -118,8 +138,8 @@ export function SdgFinanceiroPage() {
   // contas usadas por algum pacote (`CONTAS_ORCAMENTO_USADAS`) e aos
   // últimos ~2 anos — suficiente pra tudo que esses slides calculam.
   const orcamentoRows = useMemo(
-    () => orcamentos.filter(o => o.unidade === selUnidade && o.negocio === 'CONS' && o.ano === selAno),
-    [orcamentos, selUnidade, selAno],
+    () => orcamentos.filter(o => o.unidade === selUnidade && o.negocio === selNegocio && o.ano === selAno),
+    [orcamentos, selUnidade, selNegocio, selAno],
   )
 
   const mesesDisponiveis = useMemo(
@@ -153,7 +173,6 @@ export function SdgFinanceiroPage() {
     () => unidades.filter(u => u.codigo !== 'AMBEV'),
     [unidades],
   )
-  const nomeUnidade = unidades.find(u => u.codigo === selUnidade)?.nome ?? selUnidade
 
   const slideAtual = SLIDES[slideIdx]
 
@@ -198,6 +217,17 @@ export function SdgFinanceiroPage() {
               </SelectContent>
             </Select>
           )}
+
+          <Select value={selNegocio} onValueChange={v => setSelNegocio(v as typeof selNegocio)}>
+            <SelectTrigger className="h-8 w-32 text-sm">
+              <SelectValue placeholder="Negócio" />
+            </SelectTrigger>
+            <SelectContent>
+              {negociosDisponiveis.map(n => (
+                <SelectItem key={n} value={n}>{ROTULO_NEGOCIO[n]}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           <Select value={selMes?.toString() ?? ''} onValueChange={v => setSelMes(Number(v))}>
             <SelectTrigger className="h-8 w-24 text-sm">
@@ -262,7 +292,7 @@ export function SdgFinanceiroPage() {
                 rowsAno={rowsAno}
                 orcamentoRows={orcamentoRows}
                 unidade={selUnidade}
-                negocio="CONS"
+                negocio={selNegocio}
                 ano={selAno}
                 mes={selMes}
                 mesAcumMax={mesAcumMax}
@@ -276,7 +306,7 @@ export function SdgFinanceiroPage() {
                 rowsAno={rowsAno}
                 orcamentoRows={orcamentoRows}
                 unidade={selUnidade}
-                negocio="CONS"
+                negocio={selNegocio}
                 ano={selAno}
                 mes={selMes}
                 mesAcumMax={mesAcumMax}
@@ -289,7 +319,7 @@ export function SdgFinanceiroPage() {
                 rowsAno={rowsAno}
                 orcamentoRows={orcamentoRows}
                 unidade={selUnidade}
-                negocio="CONS"
+                negocio={selNegocio}
                 ano={selAno}
                 mes={selMes}
                 mesAcumMax={mesAcumMax}

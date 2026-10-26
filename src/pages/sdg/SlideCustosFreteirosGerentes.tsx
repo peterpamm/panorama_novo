@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Bar, BarChart, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { IndicadorChart } from '@/components/farol/IndicadorChart'
 import {
@@ -6,15 +6,17 @@ import {
   normalizarParaCalculo, type Semaforo,
 } from '@/lib/farol-calculations'
 import { buscarMetaOrcamento } from '@/lib/orcamento-farol'
+import { acumulados, somaRemunerado } from '@/pages/sdg/abertura-conta-shared'
 import {
   COR_META, COR_META_DESTAQUE, COR_NEGATIVO, COR_POSITIVO, MES_ABREV, TickComparativoAcumulado, domainComparativo, getChartColors,
   type BarraComparativo,
 } from '@/components/farol/chart-shared'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { TableCard } from '@/components/ui/table-card'
+import { PillToggle } from '@/components/ui/pill-toggle'
 import { cn, formatCurrencyInteiro, formatInteiroPtBr, formatPercent } from '@/lib/utils'
 import { PACOTES } from '@/lib/constants'
-import type { DreLongoRow, OrcamentoLinha } from '@/types'
+import type { DreCalculoRow, DreLongoRow, OrcamentoLinha } from '@/types'
 
 const CODIGO = '023'
 const INFO = PACOTES[CODIGO]
@@ -44,32 +46,6 @@ function corGapRs(gap: number | null): string {
 }
 
 /**
- * Custos com Freteiros (R$, conta 023 — Frete Pago a Terceiros e Agregados) e
- * Receita Líquida (R$) acumuladas de Jan até `mesCorte` num ano — soma o
- * realizado mês a mês, mesma técnica (e mesmo motivo: a linha ACUMULADO_ANO
- * do DRE não vem confiável pra toda unidade/mês) já usada em
- * `SlideDespesaAdministrativaGerentes.tsx`. Conta de CUSTO, então `real`/
- * `remun` já são magnitude (abs) por convenção em toda a base. null = nenhum
- * mês com dado no intervalo.
- */
-function acumulados(rowsUnidadeCons: DreLongoRow[], ano: number, mesCorte: number): { gastos: number; receita: number } | null {
-  let gastos = 0
-  let receita = 0
-  let temDado = false
-  for (let m = 1; m <= mesCorte; m++) {
-    const rowsMes = rowsUnidadeCons.filter(r => r.ano === ano && r.tipo_periodo === 'MENSAL' && r.mes === m)
-    if (rowsMes.length === 0) continue
-    const calc = normalizarParaCalculo(rowsMes)
-    const receitaMes = calcularReceita(calc)
-    const avrMes = avrPorPrefixo(calc, INFO.prefixos)
-    gastos += (avrMes / 100) * receitaMes
-    receita += receitaMes
-    temDado = true
-  }
-  return temDado ? { gastos, receita } : null
-}
-
-/**
  * Slide "Custos com Freteiros" do SDG Gerentes — mesmo escopo do
  * `SlideDespesaAdministrativaGerentes.tsx`: 2 cards (% Mensal e % YTD,
  * realizado x meta + gap à esquerda, gap em R$ à direita), comparativo de
@@ -80,12 +56,30 @@ function acumulados(rowsUnidadeCons: DreLongoRow[], ano: number, mesCorte: numbe
  * própria: o gráfico de Acompanhamento Mensal mostra REALIZADO × META em R$
  * (não AVR%) — pedido explícito do usuário, formatado sem o símbolo "R$"
  * (`formatInteiroPtBr`, ex: "100.215"), já que os dois cards continuam em %.
+ *
+ * Comparativo (Remunerado × Orçado) — toggle único no topo do slide (ver
+ * `comparativo`/`PillToggle`) que afeta TODOS os acompanhamentos (cards,
+ * gráfico R$, comparativo YTD e tabela mensal), mesmo padrão de
+ * `fonteMeta`/`metaPercentPorFonte` já usado em `BlocoPacote`
+ * (abertura-conta-shared.tsx). Default 'remunerado' (pedido do usuário).
+ * Orçado sem cadastro pra essa conta/período vira 0 (não null) — "não foi
+ * orçado nada" é uma meta real de R$ 0, não "sem dado pra comparar": com
+ * Realizado negativo (custo) e Orçado 0, o Gap fica negativo (estourou do
+ * zero), igual já é tratado pras contas-filha de Abertura por Conta.
  */
 export function SlideCustosFreteirosGerentes({ rowsUnidadeCons, orcamentoAno, unidade, negocio, ano, mes }: Props) {
   const { cursor } = getChartColors()
   const ctx = { unidade, negocio, ano, codigo: CODIGO }
+  const [comparativo, setComparativo] = useState<'remunerado' | 'orcado'>('remunerado')
 
   const rowsAno = useMemo(() => rowsUnidadeCons.filter(r => r.ano === ano), [rowsUnidadeCons, ano])
+
+  function metaPercentPorFonte(calc: DreCalculoRow[] | null, receitaMes: number | null, mesAlvo: number): number | null {
+    if (comparativo === 'remunerado') {
+      return calc && receitaMes ? (somaRemunerado(calc, INFO.prefixos) / receitaMes) * 100 : null
+    }
+    return buscarMetaOrcamento(orcamentoAno, { ...ctx, mes: mesAlvo }) ?? 0
+  }
 
   // Card mensal (%) — AVR do mês selecionado (mesmo cálculo por trás da tabela/gráfico em R$).
   const calcMes = useMemo(
@@ -93,26 +87,30 @@ export function SlideCustosFreteirosGerentes({ rowsUnidadeCons, orcamentoAno, un
     [rowsAno, mes],
   )
   const mensalAvr = useMemo(() => avrPorPrefixo(calcMes, INFO.prefixos), [calcMes])
-  const mensalMeta = buscarMetaOrcamento(orcamentoAno, { ...ctx, mes })
+  const mensalMeta = metaPercentPorFonte(calcMes, calcularReceita(calcMes), mes)
   const mensalSemaforo = calcularSemaforo(mensalAvr, mensalMeta, INFO.natureza)
 
   // Card YTD (%) — Custos com Freteiros acumulados / Receita acumulada, não a média ponderada do AVR mensal.
-  const acumuladoAtual = useMemo(() => acumulados(rowsUnidadeCons, ano, mes), [rowsUnidadeCons, ano, mes])
-  const acumuladoAnterior = useMemo(() => acumulados(rowsUnidadeCons, ano - 1, mes), [rowsUnidadeCons, ano, mes])
+  const acumuladoAtual = useMemo(() => acumulados(rowsUnidadeCons, ano, mes, INFO.prefixos), [rowsUnidadeCons, ano, mes])
+  const acumuladoAnterior = useMemo(() => acumulados(rowsUnidadeCons, ano - 1, mes, INFO.prefixos), [rowsUnidadeCons, ano, mes])
   const ytdAvrAtual = acumuladoAtual && acumuladoAtual.receita !== 0 ? (acumuladoAtual.gastos / acumuladoAtual.receita) * 100 : null
   const ytdAvrAnterior = acumuladoAnterior && acumuladoAnterior.receita !== 0 ? (acumuladoAnterior.gastos / acumuladoAnterior.receita) * 100 : null
-  const ytdMeta = buscarMetaOrcamento(orcamentoAno, { ...ctx, mes: 0 })
+  const ytdMeta = comparativo === 'remunerado'
+    ? (acumuladoAtual && acumuladoAtual.receita !== 0 ? (acumuladoAtual.remunerado / acumuladoAtual.receita) * 100 : null)
+    : (buscarMetaOrcamento(orcamentoAno, { ...ctx, mes: 0 }) ?? 0)
   const ytdSemaforo = ytdAvrAtual !== null ? calcularSemaforo(ytdAvrAtual, ytdMeta, INFO.natureza) : null
 
   // Comparativo acumulado (%) — Gastos/Receita YTD do ano anterior × ano atual
-  // × Orçado. Custo: menor % é melhor, por isso o "melhorou"/delta compara ao
-  // contrário do EBITDA. Ano atual fica no MEIO (referência); ano anterior à
-  // esquerda e Orçado à direita, cada um com seu delta (p.p.) embaixo da
-  // barra, via `TickComparativoAcumulado` (ver chart-shared.tsx).
+  // × Remunerado/Orçado (conforme o toggle). Custo: menor % é melhor, por
+  // isso o "melhorou"/delta compara ao contrário do EBITDA. Ano atual fica
+  // no MEIO (referência); ano anterior à esquerda e Remunerado/Orçado à
+  // direita, cada um com seu delta (p.p.) embaixo da barra, via
+  // `TickComparativoAcumulado` (ver chart-shared.tsx).
+  const rotuloBarraMeta = comparativo === 'remunerado' ? 'Remunerado' : 'Orçado'
   const melhorou = ytdAvrAtual !== null && ytdAvrAnterior !== null && ytdAvrAtual <= ytdAvrAnterior
   const diferencaPP = ytdAvrAtual !== null && ytdAvrAnterior !== null ? ytdAvrAtual - ytdAvrAnterior : null
-  const melhorouOrcado = ytdAvrAtual !== null && ytdMeta !== null && ytdAvrAtual <= ytdMeta
-  const diferencaPPOrcado = ytdAvrAtual !== null && ytdMeta !== null ? ytdAvrAtual - ytdMeta : null
+  const melhorouMeta = ytdAvrAtual !== null && ytdMeta !== null && ytdAvrAtual <= ytdMeta
+  const diferencaPPMeta = ytdAvrAtual !== null && ytdMeta !== null ? ytdAvrAtual - ytdMeta : null
   const barrasComparativo: BarraComparativo[] = [
     {
       rotulo: `${ano - 1}`, valor: ytdAvrAnterior, cor: COR_META,
@@ -120,8 +118,8 @@ export function SlideCustosFreteirosGerentes({ rowsUnidadeCons, orcamentoAno, un
     },
     { rotulo: `${ano}`, valor: ytdAvrAtual, cor: ytdAvrAtual === null ? COR_META : melhorou ? COR_POSITIVO : COR_NEGATIVO },
     {
-      rotulo: 'Orçado', valor: ytdMeta, cor: COR_META_DESTAQUE,
-      delta: diferencaPPOrcado === null ? undefined : { linhas: [`${diferencaPPOrcado >= 0 ? '+' : ''}${diferencaPPOrcado.toFixed(1)} p.p.`], positivo: melhorouOrcado },
+      rotulo: rotuloBarraMeta, valor: ytdMeta, cor: COR_META_DESTAQUE,
+      delta: diferencaPPMeta === null ? undefined : { linhas: [`${diferencaPPMeta >= 0 ? '+' : ''}${diferencaPPMeta.toFixed(1)} p.p.`], positivo: melhorouMeta },
     },
   ]
 
@@ -135,10 +133,11 @@ export function SlideCustosFreteirosGerentes({ rowsUnidadeCons, orcamentoAno, un
   }
 
   // Tabela/gap em R$ — Meta x Realizado x Gap mês a mês, com acumulado
-  // correndo pra linha final e pros cards. Meta em R$ NÃO é o `orcado` bruto
-  // da planilha (esse reflete a receita ORÇADA, não a realizada) — é o %
-  // orçado (`buscarMetaOrcamento`) multiplicado pela receita REALIZADA do
-  // próprio mês. Realizado em R$ vem do mesmo AVR% que o Farol de Metas usa
+  // correndo pra linha final e pros cards. Meta em R$ vem do % de
+  // `metaPercentPorFonte` (Remunerado ou Orçado, conforme o toggle)
+  // multiplicado pela receita REALIZADA do próprio mês — nunca o `orcado`
+  // bruto da planilha (esse reflete a receita ORÇADA, não a realizada).
+  // Realizado em R$ vem do mesmo AVR% que o Farol de Metas usa
   // (`avrPorPrefixo`) multiplicado pela mesma receita, e o Gap usa
   // `calcularImpactoFinanceiro` (a MESMA função que o Farol de Metas chama
   // pro card de impacto financeiro) — garante bater com o Farol de Metas.
@@ -153,7 +152,7 @@ export function SlideCustosFreteirosGerentes({ rowsUnidadeCons, orcamentoAno, un
       const avr = calc ? avrPorPrefixo(calc, INFO.prefixos) : null
       const realizado = avr !== null && receitaMes !== null ? (avr / 100) * receitaMes : null
       if (realizado !== null) acumuladoRealizado += realizado
-      const metaPercent = buscarMetaOrcamento(orcamentoAno, { ...ctx, mes: m })
+      const metaPercent = metaPercentPorFonte(calc, receitaMes, m)
       const meta = metaPercent !== null && receitaMes !== null ? (metaPercent / 100) * receitaMes : null
       if (meta !== null) acumuladoMeta += meta
       // Gap acumulado soma o gap de CADA mês (já natureza-aware via
@@ -172,7 +171,7 @@ export function SlideCustosFreteirosGerentes({ rowsUnidadeCons, orcamentoAno, un
         acumuladoGap: gap !== null ? acumuladoGap : null,
       }
     })
-  }, [rowsAno, orcamentoAno, unidade, ano])
+  }, [rowsAno, orcamentoAno, unidade, ano, comparativo])
 
   // Gráfico de Acompanhamento Mensal — Realizado × Meta em R$ (não AVR%,
   // diferente do resto do deck), formatado sem o símbolo "R$"
@@ -196,6 +195,15 @@ export function SlideCustosFreteirosGerentes({ rowsUnidadeCons, orcamentoAno, un
   return (
     <div className="h-full overflow-y-auto">
       <div className="flex flex-col gap-5 p-6">
+        {/* Toggle Remunerado/Orçado — afeta cards, gráfico, comparativo YTD e tabela abaixo */}
+        <div className="flex items-center justify-end gap-2">
+          <PillToggle
+            opcoes={[{ value: 'remunerado', label: 'Remunerado' }, { value: 'orcado', label: 'Orçado' }] as const}
+            value={comparativo}
+            onChange={setComparativo}
+          />
+        </div>
+
         {/* Cards do mês selecionado — % à esquerda, gap em R$ à direita */}
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <div className="flex items-center justify-between gap-4 rounded-2xl bg-white shadow dark:bg-slate-800/60 p-5">
@@ -205,7 +213,7 @@ export function SlideCustosFreteirosGerentes({ rowsUnidadeCons, orcamentoAno, un
               </p>
               <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">{formatPercent(mensalAvr, 2)}</p>
               <p className={cn('mt-1 text-sm font-semibold', corSemaforo(mensalSemaforo.corClasse))}>
-                Meta: {mensalMeta === null ? '—' : formatPercent(mensalMeta, 2)}
+                {rotuloBarraMeta}: {mensalMeta === null ? '—' : formatPercent(mensalMeta, 2)}
                 {' · '}
                 Gap: {mensalSemaforo.delta === null ? '—' : formatPercent(mensalSemaforo.delta, 2)}
               </p>
@@ -224,7 +232,7 @@ export function SlideCustosFreteirosGerentes({ rowsUnidadeCons, orcamentoAno, un
               </p>
               <p className="mt-2 text-3xl font-bold text-gray-900 dark:text-white">{formatPercent(ytdAvrAtual, 2)}</p>
               <p className={cn('mt-1 text-sm font-semibold', corSemaforo(ytdSemaforo?.corClasse ?? 'semCor'))}>
-                Meta: {ytdMeta === null ? '—' : formatPercent(ytdMeta, 2)}
+                {rotuloBarraMeta}: {ytdMeta === null ? '—' : formatPercent(ytdMeta, 2)}
                 {' · '}
                 Gap: {ytdSemaforo?.delta == null ? '—' : formatPercent(ytdSemaforo.delta, 2)}
               </p>
@@ -282,12 +290,15 @@ export function SlideCustosFreteirosGerentes({ rowsUnidadeCons, orcamentoAno, un
           </div>
         </div>
 
-        <TableCard titulo="Custos com Freteiros por mês" subtitulo={`Meta (% orçado × receita realizada) vs Realizado — gap em R$ · linha final acumula Jan a ${MES_ABREV[mes]}`}>
+        <TableCard
+          titulo="Custos com Freteiros por mês"
+          subtitulo={`${rotuloBarraMeta} (% × receita realizada) vs Realizado — gap em R$ · linha final acumula Jan a ${MES_ABREV[mes]}`}
+        >
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Mês</TableHead>
-                <TableHead className="text-center">Meta</TableHead>
+                <TableHead className="text-center">{rotuloBarraMeta}</TableHead>
                 <TableHead className="text-center">Realizado</TableHead>
                 <TableHead className="text-center">Gap</TableHead>
               </TableRow>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Moon, Sun, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Moon, Sun, X } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthContext'
 import { useData } from '@/context/DataContext'
@@ -396,6 +396,22 @@ export function SdgGerentesPage() {
             )}
           </>
         )}
+
+        {/* Navegação prev/next */}
+        <button
+          onClick={() => setSlideIdx(i => Math.max(i - 1, 0))}
+          disabled={slideIdx === 0}
+          className="absolute left-3 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-white/80 text-gray-500 shadow backdrop-blur-sm transition hover:bg-gray-100 disabled:opacity-20 dark:bg-slate-800/80 dark:text-slate-300 dark:hover:bg-slate-700"
+        >
+          <ChevronLeft className="h-5 w-5" />
+        </button>
+        <button
+          onClick={() => setSlideIdx(i => Math.min(i + 1, SLIDES.length - 1))}
+          disabled={slideIdx === SLIDES.length - 1}
+          className="absolute right-3 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-white/80 text-gray-500 shadow backdrop-blur-sm transition hover:bg-gray-100 disabled:opacity-20 dark:bg-slate-800/80 dark:text-slate-300 dark:hover:bg-slate-700"
+        >
+          <ChevronRight className="h-5 w-5" />
+        </button>
       </main>
 
       {/* ── Footer ──────────────────────────────────────────────────────── */}
